@@ -147,12 +147,62 @@ export default function App() {
     lockedTimestamp: '10:45 AM (Verified)',
   });
 
-  // Wallet & Income State
-  const [walletConnected, setWalletConnected] = useState<boolean>(true);
-  const [walletAddress, setWalletAddress] = useState<string>('0x71C8a94F16d823E489e2');
+  // Wallet & Income State (Loads persisted wallet if present, or checks injected web3)
+  const [walletConnected, setWalletConnected] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return !!localStorage.getItem('nxbc_connected_wallet');
+    }
+    return false;
+  });
+  const [walletAddress, setWalletAddress] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('nxbc_connected_wallet') || '';
+    }
+    return '';
+  });
   const [claimableBalanceUsd, setClaimableBalanceUsd] = useState<number>(1248.50);
   const [levelIncomeUsd, setLevelIncomeUsd] = useState<number>(860.00);
   const [matrixIncomeUsd, setMatrixIncomeUsd] = useState<number>(388.50);
+
+  // Auto-detect injected Web3 (MetaMask / Trust Wallet / Binance Web3 / OKX)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const eth =
+        (window as any).trustwallet?.ethereum ||
+        (window as any).ethereum ||
+        (window as any).binancew3w?.ethereum ||
+        (window as any).okxwallet;
+
+      if (eth) {
+        // Check if accounts already authorized
+        eth
+          .request({ method: 'eth_accounts' })
+          .then((accounts: string[]) => {
+            if (accounts && accounts.length > 0) {
+              setWalletAddress(accounts[0]);
+              setWalletConnected(true);
+              localStorage.setItem('nxbc_connected_wallet', accounts[0]);
+            }
+          })
+          .catch((err: any) => console.log('Web3 silent account check:', err));
+
+        // Listen to account switch in Trust Wallet / MetaMask
+        const handleAccountsChanged = (accounts: string[]) => {
+          if (accounts && accounts.length > 0) {
+            setWalletAddress(accounts[0]);
+            setWalletConnected(true);
+            localStorage.setItem('nxbc_connected_wallet', accounts[0]);
+          } else {
+            setWalletConnected(false);
+            setWalletAddress('');
+            localStorage.removeItem('nxbc_connected_wallet');
+          }
+        };
+
+        eth.on?.('accountsChanged', handleAccountsChanged);
+      }
+    }
+  }, []);
 
   // Sync user with PostgreSQL backend when wallet connects
   useEffect(() => {
