@@ -12,16 +12,33 @@
   }
 }
 
+/* Force Solid Dark Theme on entire document to prevent white flashing in DApp webviews */
+html, body, #root {
+  background-color: #070312 !important;
+  color: #f8fafc;
+  min-height: 100%;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* GPU Accelerated Smooth Touch Scrolling */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.scroll-touch {
+  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
+}
+
 /* Futuristic Analytical Background with Golden Charts & Ambient Gradients */
 .bg-crypto-grid {
   background-image: 
-    linear-gradient(to right, rgba(217, 119, 6, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(217, 119, 6, 0.05) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-
-.bg-radial-ambient {
-  background: radial-gradient(circle at 50% 20%, rgba(217, 70, 239, 0.12) 0%, rgba(245, 158, 11, 0.08) 35%, rgba(13, 7, 26, 0.98) 75%);
+    linear-gradient(to right, rgba(217, 119, 6, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(217, 119, 6, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
 }
 
 .gold-gradient-text {
@@ -38,35 +55,25 @@
 
 .neon-border-gold {
   border-color: rgba(245, 158, 11, 0.35);
-  box-shadow: 0 0 15px rgba(245, 158, 11, 0.15), inset 0 0 12px rgba(245, 158, 11, 0.05);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.15);
 }
 
 .neon-border-magenta {
   border-color: rgba(232, 121, 249, 0.35);
-  box-shadow: 0 0 15px rgba(217, 70, 239, 0.2), inset 0 0 12px rgba(217, 70, 239, 0.05);
+  box-shadow: 0 0 12px rgba(217, 70, 239, 0.15);
 }
 
 .glass-card {
-  background: rgba(19, 12, 34, 0.85);
-  backdrop-filter: blur(16px);
+  background: #110724;
   border: 1px solid rgba(245, 158, 11, 0.15);
-}
-
-.glass-card-hover {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.glass-card-hover:hover {
-  border-color: rgba(245, 158, 11, 0.4);
-  box-shadow: 0 8px 30px rgba(245, 158, 11, 0.12);
-  transform: translateY(-2px);
 }
 
 /* Custom glowing gold coin styling */
 .gold-coin-3d {
   background: radial-gradient(circle at 35% 35%, #FDE68A 0%, #F59E0B 40%, #B45309 85%, #78350F 100%);
   box-shadow: 
-    0 10px 25px rgba(245, 158, 11, 0.35),
-    inset 0 2px 4px rgba(255, 255, 255, 0.6),
+    0 8px 20px rgba(245, 158, 11, 0.3),
+    inset 0 2px 4px rgba(255, 255, 255, 0.5),
     inset 0 -3px 6px rgba(0, 0, 0, 0.4);
 }
 
@@ -90,19 +97,10 @@
 
 @keyframes float-levitate {
   0%, 100% {
-    transform: translateY(0px) rotateX(4deg);
+    transform: translateY(0px);
   }
   50% {
-    transform: translateY(-8px) rotateX(-4deg);
-  }
-}
-
-@keyframes shimmer-sweep {
-  0% {
-    transform: translateX(-100%) rotate(45deg);
-  }
-  100% {
-    transform: translateX(200%) rotate(45deg);
+    transform: translateY(-6px);
   }
 }
 
@@ -110,22 +108,14 @@
   animation: spin-3d-y 8s linear infinite;
 }
 
-.animate-spin-3d-fast {
-  animation: spin-3d-y 4s linear infinite;
-}
-
 .animate-float-levitate {
   animation: float-levitate 3.5s ease-in-out infinite;
 }
 
-.animate-shimmer-sweep {
-  animation: shimmer-sweep 2.5s ease-in-out infinite;
-}
-
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
   background: rgba(10, 5, 20, 0.8);
@@ -136,18 +126,4 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(245, 158, 11, 0.6);
-}
-
-/* Pulse Glow Keyframes */
-@keyframes pulse-glow-gold {
-  0%, 100% {
-    box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 30px rgba(245, 158, 11, 0.6), 0 0 10px rgba(232, 121, 249, 0.4);
-  }
-}
-
-.animate-glow-gold {
-  animation: pulse-glow-gold 3s infinite ease-in-out;
 }

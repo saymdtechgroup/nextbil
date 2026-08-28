@@ -256,7 +256,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
           id="screen3-click-to-withdraw-btn"
           disabled={isProcessing}
           onClick={handleWithdrawClick}
-          className="w-full py-3 rounded-xl bg-gradient-to-r from-fuchsia-600 via-purple-600 to-amber-500 hover:from-fuchsia-500 hover:to-amber-400 text-white font-black text-xs tracking-widest uppercase transition-all shadow-[0_0_25px_rgba(217,70,239,0.4)] flex items-center justify-center gap-2 transform active:scale-98 animate-glow-gold"
+          className="w-full py-3 rounded-xl bg-gradient-to-r from-fuchsia-600 via-purple-600 to-amber-500 hover:from-fuchsia-500 hover:to-amber-400 text-white font-black text-xs tracking-widest uppercase transition-all shadow-[0_4px_15px_rgba(217,70,239,0.3)] flex items-center justify-center gap-2 transform active:scale-98 cursor-pointer"
         >
           {isProcessing ? (
             <span className="flex items-center gap-2">

@@ -63,8 +63,35 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
 
   return (
     <div className="flex-1 p-3.5 space-y-4 relative">
-      {/* Top Header: Logo + 3D Coin */}
-      <div className="flex flex-col items-center justify-center py-4 border-b border-purple-500/10 gap-2">
+      {/* Top Header: Logo + 3D Coin + Quick Connect Wallet Bar */}
+      <div className="flex flex-col items-center justify-center py-3 border-b border-purple-500/10 gap-2">
+        <div className="w-full flex items-center justify-between px-1 mb-1">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+            <span className="text-[11px] font-bold text-amber-300 font-mono-crypto uppercase">
+              BSC Mainnet
+            </span>
+          </div>
+
+          {walletConnected && walletAddress ? (
+            <button
+              onClick={onOpenWalletModal}
+              className="px-2.5 py-1 rounded-xl bg-emerald-950/80 border border-emerald-400/60 text-emerald-300 text-[10px] font-mono-crypto font-bold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+            >
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span>{walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}</span>
+            </button>
+          ) : (
+            <button
+              onClick={onOpenWalletModal}
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-[11px] uppercase tracking-wider font-rajdhani flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.4)] active:scale-95 transition-all cursor-pointer"
+            >
+              <Wallet className="w-3.5 h-3.5 fill-black text-black" />
+              <span>Connect Wallet</span>
+            </button>
+          )}
+        </div>
+
         <GoldCoinGraphic size="xl" animated={true} glow={true} showBadge={false} />
         <h1 className="text-2xl font-black tracking-widest text-slate-100 font-cinzel">
           NXBC<span className="text-amber-400"> COIN</span>

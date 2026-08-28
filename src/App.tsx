@@ -751,8 +751,34 @@ export default function App() {
             </div>
           </div>
 
-          {/* Top Controls: Removed Admin buttons and view mode switcher per user request */}
+          {/* Top Controls & Connect Wallet Button */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* Direct Connect Wallet Action Button */}
+            {walletConnected && walletAddress ? (
+              <button
+                id="header-wallet-connected-btn"
+                onClick={() => setWalletModalOpen(true)}
+                className="px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600/30 to-teal-600/30 hover:from-emerald-600/40 hover:to-teal-600/40 border border-emerald-400 text-emerald-300 text-xs font-mono-crypto font-bold flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+              >
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>
+                  {walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}
+                </span>
+                <span className="text-[10px] text-emerald-200/70 border-l border-emerald-400/40 pl-1.5 hidden sm:inline">
+                  Change
+                </span>
+              </button>
+            ) : (
+              <button
+                id="header-connect-wallet-btn"
+                onClick={() => setWalletModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider font-rajdhani flex items-center gap-2 transition-all shadow-[0_0_20px_rgba(245,158,11,0.4)] active:scale-95 cursor-pointer"
+              >
+                <Wallet className="w-4 h-4 fill-black text-black" />
+                <span>Connect Wallet</span>
+              </button>
+            )}
+
             {/* Quick Demo Simulator Buttons */}
             <div className="flex items-center gap-1.5">
               <button
