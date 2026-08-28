@@ -123,7 +123,7 @@ export default function App() {
       name: 'Live DEX Launch',
       shortName: 'DEX',
       rate: 1500.00,
-      rateLabel: '$1500 - $3000',
+      rateLabel: '$1,500 – $3,000',
       totalSupply: 50000000, // 50,000,000 NXBC
       tokensSold: 0,
       status: 'locked',

@@ -112,14 +112,14 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
             </div>
           </div>
 
-          <div className="text-right">
+          <div className="text-right shrink-0 ml-2">
             <p className="text-[9px] font-medium text-purple-300/70 uppercase">
               {nextPhase ? `Next (${nextPhase.shortName}) Rate` : 'Final Target'}
             </p>
-            <p className="text-xs font-black text-fuchsia-400 font-mono-crypto mt-0.5">
-              {nextPhase ? `${nextPhase.shortName}: $${nextPhase.rate.toFixed(2)} (${nextPhase.multiplier})` : 'DEX Launch'}
+            <p className="text-xs font-black text-fuchsia-400 font-mono-crypto mt-0.5 whitespace-nowrap">
+              {nextPhase ? `${nextPhase.shortName}: ${nextPhase.rateLabel || '$' + nextPhase.rate.toFixed(2)} (${nextPhase.multiplier})` : 'DEX: $1,500 – $3,000'}
             </p>
-            <span className="text-[9px] text-emerald-400 font-mono-crypto block">
+            <span className="text-[9px] text-emerald-400 font-mono-crypto block whitespace-nowrap">
               100% Auto-Unlock
             </span>
           </div>
@@ -347,11 +347,11 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                   </div>
 
                   {/* Token Price & Multiplier */}
-                  <div className="text-right">
+                  <div className="text-right shrink-0 ml-2 flex flex-col items-end justify-center">
                     <span
-                      className={`text-sm font-black font-mono-crypto block ${
+                      className={`text-xs sm:text-sm font-black font-mono-crypto block whitespace-nowrap ${
                         isActive
-                          ? 'text-amber-300 text-base font-extrabold'
+                          ? 'text-amber-300 text-sm sm:text-base font-extrabold'
                           : isCompleted
                           ? 'text-emerald-400'
                           : 'text-slate-200'
@@ -360,7 +360,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                       {phase.rateLabel || `$${phase.rate.toFixed(2)}`}
                       {!phase.rateLabel && <span className="text-[9px] font-normal text-purple-300/70 ml-1">USD</span>}
                     </span>
-                    <span className="text-[9px] font-mono-crypto text-fuchsia-300 font-semibold block">
+                    <span className="text-[9px] font-mono-crypto text-fuchsia-300 font-semibold block whitespace-nowrap">
                       {phase.multiplier}
                     </span>
                   </div>

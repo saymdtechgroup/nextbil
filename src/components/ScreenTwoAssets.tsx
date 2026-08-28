@@ -220,11 +220,11 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               Live DEX
             </span>
             <div className="my-1">
-              <span className="text-xs font-black font-mono-crypto text-slate-100 block">
+              <span className="text-xs font-black font-mono-crypto text-slate-100 block whitespace-nowrap">
                 {showValues ? `${dexTokens.toLocaleString()} NXBC` : '••••'}
               </span>
-              <span className="text-[9px] font-mono-crypto text-fuchsia-300 font-semibold">
-                @ TBA (Launch)
+              <span className="text-[9px] font-mono-crypto text-fuchsia-300 font-semibold block whitespace-nowrap">
+                @ $1,500 – $3,000 (DEX)
               </span>
             </div>
             <div className="text-[8px] text-purple-300/70 font-mono-crypto flex justify-between border-t border-purple-500/15 pt-1 mt-1">
