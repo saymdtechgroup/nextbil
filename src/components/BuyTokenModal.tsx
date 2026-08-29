@@ -282,6 +282,19 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                 <span>2. You Pay ({currency})</span>
                 <span className="text-amber-400 font-mono-crypto font-bold">≈ ${usdValue.toFixed(2)} USD</span>
               </label>
+
+              {/* MLM Milestone Indicator */}
+              <div className={`p-2 rounded-xl border text-[9px] font-mono-crypto flex items-center justify-between ${
+                usdValue >= 100 
+                  ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                  : 'bg-amber-950/40 border-amber-500/30 text-amber-300'
+              }`}>
+                <span>{usdValue >= 100 ? '👑 MLM Leader Level ($100+)' : 'Investor Tier (< $100)'}</span>
+                <span className="text-[8px] opacity-85">
+                  {usdValue >= 100 ? '10-Level Commissions Eligible' : 'Cumulative $100 unlocks MLM'}
+                </span>
+              </div>
+
               <div className="relative">
                 <input
                   type="number"

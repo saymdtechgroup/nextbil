@@ -7,6 +7,8 @@ interface ScreenMineProps {
   walletConnected: boolean;
   onToggleWallet: () => void;
   onOpenAdmin?: () => void;
+  totalInvestedUsd?: number;
+  minMlmQualifyUsd?: number;
 }
 
 export const ScreenMine: React.FC<ScreenMineProps> = ({
@@ -14,7 +16,11 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
   walletConnected,
   onToggleWallet,
   onOpenAdmin,
+  totalInvestedUsd = 5000,
+  minMlmQualifyUsd = 100,
 }) => {
+  const isMlmQualified = totalInvestedUsd >= minMlmQualifyUsd;
+
   return (
     <div className="flex-1 p-3.5 space-y-3.5 relative">
       {/* Header */}
@@ -44,17 +50,26 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
           N
         </div>
         <div className="flex-1">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center justify-between">
             <h2 className="text-xs font-black text-slate-100 font-cinzel">
               NXBC MEMBER #8891
             </h2>
+            <span className={`text-[8px] font-mono-crypto px-1.5 py-0.5 rounded border font-bold ${
+              isMlmQualified
+                ? 'bg-emerald-950 text-emerald-300 border-emerald-400/50'
+                : 'bg-amber-950 text-amber-300 border-amber-400/50'
+            }`}>
+              {isMlmQualified ? '👑 MLM Qualified' : 'Investor'}
+            </span>
           </div>
           <p className="text-[9px] font-mono-crypto text-purple-300/80">
             {walletAddress || '0x71C...a89F'}
           </p>
-          <span className="inline-block text-[8px] font-mono-crypto text-amber-300 bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-500/30 mt-1">
-            VIP Tier 2 Contributor
-          </span>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-[8px] font-mono-crypto text-amber-300 bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-500/30">
+              Total Invested: ${totalInvestedUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD
+            </span>
+          </div>
         </div>
       </div>
 

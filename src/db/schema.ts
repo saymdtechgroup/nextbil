@@ -9,6 +9,8 @@ export const users = pgTable('users', {
   referredBy: text('referred_by'), // sponsor referral code or wallet address
   matrixLevel: integer('matrix_level').notNull().default(1),
   isMatrixActive: boolean('is_matrix_active').notNull().default(false),
+  isMlmQualified: boolean('is_mlm_qualified').notNull().default(false), // True once user cumulative investment >= $100 USD
+  totalInvestedUsdt: doublePrecision('total_invested_usdt').notNull().default(0),
   directCount: integer('direct_count').notNull().default(0),
   totalTeamCount: integer('total_team_count').notNull().default(0),
   totalPurchasedTokens: doublePrecision('total_purchased_tokens').notNull().default(0),

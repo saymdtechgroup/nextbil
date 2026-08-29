@@ -1,6 +1,6 @@
 {
-  "name": "NXBC Community Token Presale Platform",
-  "description": "Futuristic mobile crypto presale platform for NXBC Community Token, featuring 3D animated coin, 3 interconnected screens for token acquisition, phase sell-through allocation, asset analytics with 6-box sell schedule, and instant smart-contract withdrawal.",
+  "name": "NXBC COIN",
+  "description": "NXBC COIN - Official Community Presale, P2P Trading, Asset Allocation & Instant Smart Contract Platform.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

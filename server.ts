@@ -240,49 +240,75 @@ async function startServer() {
         txHash: `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`,
       }).returning();
 
-      // Update user purchased token totals
+      // Update user investment & qualification
+      const prevInvested = Number(user.totalInvestedUsdt || 0);
+      const purchaseUsdt = Number(amountUsdt);
+      const newInvested = prevInvested + purchaseUsdt;
+      const wasMlmQualified = user.isMlmQualified || (prevInvested >= 100);
+      const isNowMlmQualified = newInvested >= 100;
+
+      // Update user purchased token totals and MLM qualification status
       await db.update(users)
         .set({
           totalPurchasedTokens: user.totalPurchasedTokens + Number(tokenAmount),
+          totalInvestedUsdt: newInvested,
+          isMlmQualified: isNowMlmQualified,
           updatedAt: new Date(),
         })
         .where(eq(users.id, user.id));
 
-      // 10-Level Commission Distribution Logic
-      const levelPercentages = [0.10, 0.05, 0.03, 0.02, 0.01, 0.01, 0.005, 0.005, 0.005, 0.005]; // Level 1 to 10
-      let currentSponsorCode = user.referredBy;
-      
-      for (let lvl = 0; lvl < levelPercentages.length && currentSponsorCode; lvl++) {
-        const uplineUser = await db.query.users.findFirst({
-          where: eq(users.referralCode, currentSponsorCode),
-        });
-
-        if (!uplineUser) break;
-
-        const commissionAmount = Number(amountUsdt) * levelPercentages[lvl];
-        if (commissionAmount > 0) {
-          await db.insert(levelEarnings).values({
-            beneficiaryId: uplineUser.id,
-            sourceUserId: user.id,
-            levelNumber: lvl + 1,
-            percentage: levelPercentages[lvl] * 100,
-            commissionUsdt: commissionAmount,
-            txType: 'token_purchase',
+      // 10-Level Commission Distribution Logic (ONLY when user reaches >= $100 Cumulative Investment Threshold)
+      if (isNowMlmQualified) {
+        // If user just crossed the $100 threshold (e.g., 50 + 50 = 100), commission is distributed on the eligible amount
+        const commissionBaseAmount = wasMlmQualified ? purchaseUsdt : newInvested;
+        const levelPercentages = [0.10, 0.05, 0.03, 0.02, 0.01, 0.01, 0.005, 0.005, 0.005, 0.005]; // Level 1 to 10
+        let currentSponsorCode = user.referredBy;
+        
+        for (let lvl = 0; lvl < levelPercentages.length && currentSponsorCode; lvl++) {
+          const uplineUser = await db.query.users.findFirst({
+            where: eq(users.referralCode, currentSponsorCode),
           });
 
-          await db.update(users)
-            .set({
-              totalEarnedUsdt: uplineUser.totalEarnedUsdt + commissionAmount,
-              availableUsdt: uplineUser.availableUsdt + commissionAmount,
-              updatedAt: new Date(),
-            })
-            .where(eq(users.id, uplineUser.id));
-        }
+          if (!uplineUser) break;
 
-        currentSponsorCode = uplineUser.referredBy;
+          // Upline only receives MLM benefits if upline has also invested >= $100 (isMlmQualified)
+          const isUplineQualified = uplineUser.isMlmQualified || ((uplineUser.totalInvestedUsdt || 0) >= 100);
+
+          if (isUplineQualified) {
+            const commissionAmount = commissionBaseAmount * levelPercentages[lvl];
+            if (commissionAmount > 0) {
+              await db.insert(levelEarnings).values({
+                beneficiaryId: uplineUser.id,
+                sourceUserId: user.id,
+                levelNumber: lvl + 1,
+                percentage: levelPercentages[lvl] * 100,
+                commissionUsdt: commissionAmount,
+                txType: 'token_purchase',
+              });
+
+              await db.update(users)
+                .set({
+                  totalEarnedUsdt: uplineUser.totalEarnedUsdt + commissionAmount,
+                  availableUsdt: uplineUser.availableUsdt + commissionAmount,
+                  updatedAt: new Date(),
+                })
+                .where(eq(users.id, uplineUser.id));
+            }
+          }
+
+          currentSponsorCode = uplineUser.referredBy;
+        }
       }
 
-      res.json({ success: true, transaction: tx });
+      res.json({ 
+        success: true, 
+        transaction: tx,
+        totalInvestedUsdt: newInvested,
+        isMlmQualified: isNowMlmQualified,
+        statusNotice: isNowMlmQualified 
+          ? "MLM Leader Qualified ($100+ Total Investment)" 
+          : `Investor Mode ($${newInvested.toFixed(2)} / $100 USD to qualify for MLM commissions)`
+      });
     } catch (error: any) {
       console.error("Error in /api/presale/buy:", error);
       res.status(500).json({ error: error.message });

@@ -373,10 +373,39 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     </div>
                   </div>
 
+                  {/* Minimum Cumulative MLM Qualification Setting ($100) */}
+                  <div className="space-y-2 pt-2 border-t border-purple-500/20">
+                    <label className="text-[10px] uppercase text-amber-300 font-rajdhani font-bold block">
+                      Minimum MLM Qualification Threshold (USD)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="5"
+                        min="10"
+                        max="1000"
+                        value={localSystem.minMlmQualifyUsd || 100}
+                        onChange={(e) =>
+                          setLocalSystem({
+                            ...localSystem,
+                            minMlmQualifyUsd: parseFloat(e.target.value) || 100,
+                          })
+                        }
+                        className="w-full bg-[#06020c] border border-amber-500/60 focus:border-amber-400 rounded-xl py-2.5 pl-7 pr-3 text-base font-black font-mono-crypto text-amber-300 focus:outline-none"
+                      />
+                      <span className="absolute left-3 top-2.5 text-sm text-amber-400 font-bold font-mono-crypto">
+                        $
+                      </span>
+                    </div>
+                    <p className="text-[8px] text-purple-300/80 font-mono-crypto leading-tight">
+                      *Users with cumulative purchases below this threshold act solely as investors. Reaching ${localSystem.minMlmQualifyUsd || 100} unlocks MLM commission earnings and counts towards upline rewards.
+                    </p>
+                  </div>
+
                   <div className="p-2.5 rounded-xl bg-[#0e0420] border border-amber-500/20 text-[10px] font-mono-crypto text-purple-200 space-y-1">
                     <span className="text-amber-300 font-bold block">How it works:</span>
                     <p className="text-[9px] text-purple-300/90 leading-tight">
-                      When a user purchases NXBC coins via a direct referral link, the direct inviter instantly receives <strong>{localSystem.directSponsorPercent}%</strong> of the purchase amount in their wallet.
+                      When a qualified user purchases NXBC coins via a direct referral link, the direct inviter instantly receives <strong>{localSystem.directSponsorPercent}%</strong> of the purchase amount in their wallet.
                     </p>
                   </div>
                 </div>
@@ -833,7 +862,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               value={phase.multiplier}
                               onChange={(e) => handlePhaseChange(idx, 'multiplier', e.target.value)}
                               className="w-full bg-[#06020c] border border-purple-500/40 focus:border-amber-400 rounded-xl py-1.5 px-2.5 text-xs font-mono-crypto text-purple-200 focus:outline-none"
-                              placeholder="e.g. 10x (+900% ROI)"
+                              placeholder="e.g. 10x Growth"
                             />
                           </div>
                         </div>
@@ -1060,7 +1089,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 </div>
               </div>
 
-              {/* P2P 80/20 Liquidity Setting */}
+              {/* P2P Liquidity Setting */}
               <div className="p-3.5 rounded-2xl bg-[#090316] border border-purple-500/20 space-y-3">
                 <div>
                   <h3 className="text-xs font-bold text-slate-100 uppercase font-rajdhani tracking-wider flex items-center gap-2">

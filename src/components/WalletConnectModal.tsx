@@ -11,6 +11,7 @@ import {
   Wallet,
   Sparkles,
   Copy,
+  Zap,
 } from 'lucide-react';
 
 interface WalletConnectModalProps {

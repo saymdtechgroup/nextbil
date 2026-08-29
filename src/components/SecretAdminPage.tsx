@@ -821,6 +821,35 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                   </div>
                 </div>
 
+                {/* Minimum Cumulative MLM Qualification Setting */}
+                <div className="space-y-2 pt-3 border-t border-purple-500/20">
+                  <label className="text-xs uppercase text-amber-300 font-rajdhani font-bold block">
+                    Minimum Cumulative MLM Qualification Threshold (USD)
+                  </label>
+                  <div className="relative max-w-sm">
+                    <input
+                      type="number"
+                      step="5"
+                      min="10"
+                      max="1000"
+                      value={localSystem.minMlmQualifyUsd || 100}
+                      onChange={(e) =>
+                        setLocalSystem({
+                          ...localSystem,
+                          minMlmQualifyUsd: parseFloat(e.target.value) || 100,
+                        })
+                      }
+                      className="w-full bg-[#06020c] border-2 border-amber-500/60 focus:border-amber-400 rounded-2xl py-3 pl-8 pr-4 text-xl font-black font-mono-crypto text-amber-300 focus:outline-none"
+                    />
+                    <span className="absolute left-4 top-3 text-lg text-amber-400 font-bold font-mono-crypto">
+                      $
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-purple-300/80 font-mono-crypto">
+                    *Users with total purchases &lt; ${localSystem.minMlmQualifyUsd || 100} act solely as token investors. Reaching ${localSystem.minMlmQualifyUsd || 100} (cumulative) automatically activates 10-level MLM commissions and upline bonuses.
+                  </p>
+                </div>
+
                 <div className="p-4 rounded-2xl bg-[#080214] border border-amber-500/20 space-y-2">
                   <h4 className="text-xs font-bold text-amber-300 uppercase font-rajdhani">
                     Current Rule & Payout Example:
@@ -1239,7 +1268,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                     P2P Liquidity Control (Matched Order Book)
                   </h4>
                   <p className="text-[10px] text-purple-300 font-mono-crypto mt-1">
-                    System-wide 80/20 rule: 20% of new purchase volume goes to clearing oldest user sell orders first (FIFO), 80% to System treasury.
+                    System-wide FIFO queue rule: User sell orders are cleared on a First-In, First-Out basis with automated treasury liquidity routing.
                   </p>
                 </div>
                 

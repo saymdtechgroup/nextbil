@@ -20,6 +20,9 @@ interface ScreenTeamProps {
   onOpenTeamModal: () => void;
   onOpenMatrixModal: () => void;
   levelIncomeUsd: number;
+  totalInvestedUsd?: number;
+  minMlmQualifyUsd?: number;
+  onOpenBuyModal?: () => void;
 }
 
 export const ScreenTeam: React.FC<ScreenTeamProps> = ({
@@ -29,10 +32,17 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
   onOpenTeamModal,
   onOpenMatrixModal,
   levelIncomeUsd,
+  totalInvestedUsd = 5000,
+  minMlmQualifyUsd = 100,
+  onOpenBuyModal,
 }) => {
   const [copied, setCopied] = useState<boolean>(false);
   const totalMembers = levels.reduce((acc, l) => acc + l.directMembers, 0);
   const totalTierPercent = levels.reduce((acc, l) => acc + l.commissionPercent, 0);
+
+  const isMlmQualified = totalInvestedUsd >= minMlmQualifyUsd;
+  const progressPercent = Math.min(100, Math.round((totalInvestedUsd / minMlmQualifyUsd) * 100));
+  const remainingToQualify = Math.max(0, minMlmQualifyUsd - totalInvestedUsd);
 
   const copyRef = () => {
     navigator.clipboard.writeText('https://nxbc.network?ref=NXBC-COMMUNITY-8891');
@@ -65,6 +75,68 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
           {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Share2 className="w-3 h-3" />}
           <span>{copied ? 'Copied' : 'Invite'}</span>
         </button>
+      </div>
+
+      {/* MLM Qualification Status Banner */}
+      <div className={`p-3 rounded-2xl border transition-all ${
+        isMlmQualified 
+          ? 'bg-gradient-to-r from-emerald-950/60 via-[#10241e] to-[#071a13] border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.15)]' 
+          : 'bg-gradient-to-r from-amber-950/60 via-[#241708] to-[#140b04] border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.15)]'
+      }`}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className={`p-1.5 rounded-xl ${isMlmQualified ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+              <Crown className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs font-bold text-slate-100 font-rajdhani uppercase tracking-wider">
+                  MLM Participation Status
+                </h3>
+                <span className={`text-[9px] font-mono-crypto px-2 py-0.2 rounded-full font-bold border ${
+                  isMlmQualified
+                    ? 'bg-emerald-950 text-emerald-300 border-emerald-400/50'
+                    : 'bg-amber-950 text-amber-300 border-amber-400/50'
+                }`}>
+                  {isMlmQualified ? '👑 MLM Qualified Leader' : 'Investor Tier'}
+                </span>
+              </div>
+              <p className="text-[9px] text-purple-200/80 font-mono-crypto mt-0.5">
+                {isMlmQualified 
+                  ? `Total Investment: $${totalInvestedUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD • 10-Level Commissions Active`
+                  : `Total Investment: $${totalInvestedUsd.toFixed(2)} USD • Min $${minMlmQualifyUsd} required for MLM eligibility`}
+              </p>
+            </div>
+          </div>
+
+          {!isMlmQualified && onOpenBuyModal && (
+            <button
+              onClick={onOpenBuyModal}
+              className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-500 text-black font-mono-crypto font-bold text-[10px] shrink-0 active:scale-95 shadow-sm"
+            >
+              +${remainingToQualify.toFixed(0)} Qualify
+            </button>
+          )}
+        </div>
+
+        {/* Progress Bar towards $100 Qualification */}
+        {!isMlmQualified && (
+          <div className="mt-2 space-y-1">
+            <div className="flex justify-between text-[8px] font-mono-crypto text-amber-300/90">
+              <span>Investment Progress</span>
+              <span>${totalInvestedUsd.toFixed(2)} / ${minMlmQualifyUsd.toFixed(2)} USD ({progressPercent}%)</span>
+            </div>
+            <div className="w-full h-1.5 rounded-full bg-[#06020c] overflow-hidden border border-amber-500/30">
+              <div
+                className="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-500"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <p className="text-[8px] text-amber-200/70 leading-tight mt-1">
+              *Users with &lt; $100 total investment act as token investors only. Once total purchase reaches $100, MLM commissions unlock and count in team network.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Network Stats Card */}

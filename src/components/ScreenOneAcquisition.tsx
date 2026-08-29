@@ -140,14 +140,21 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
           </div>
 
           <div className="text-right shrink-0 ml-2">
-            <p className="text-[9px] font-medium text-purple-300/70 uppercase">
-              {nextPhase ? `Next (${nextPhase.shortName}) Rate` : 'Final Target'}
+            <p className="text-[9px] font-bold text-purple-300/80 uppercase tracking-wider font-rajdhani">
+              {nextPhase ? `Next (${nextPhase.name})` : 'Target Listing Rate'}
             </p>
-            <p className="text-xs font-black text-fuchsia-400 font-mono-crypto mt-0.5 whitespace-nowrap">
-              {nextPhase ? `${nextPhase.shortName}: ${nextPhase.rateLabel || '$' + nextPhase.rate.toFixed(2)} (${nextPhase.multiplier})` : 'DEX: $1,500 – $3,000'}
-            </p>
-            <span className="text-[9px] text-emerald-400 font-mono-crypto block whitespace-nowrap">
-              100% Auto-Unlock
+            <div className="flex items-center justify-end gap-1.5 mt-0.5">
+              <span className="text-sm font-black text-fuchsia-300 font-mono-crypto">
+                {nextPhase ? (nextPhase.rateLabel || `$${nextPhase.rate.toFixed(2)}`) : '$1,500 – $3,000'}
+              </span>
+              {nextPhase?.multiplier && (
+                <span className="text-[9px] text-emerald-400 font-bold font-mono-crypto bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40">
+                  {nextPhase.multiplier}
+                </span>
+              )}
+            </div>
+            <span className="text-[8px] text-purple-300/70 font-mono-crypto block mt-0.5">
+              Automated Next Stage Unlock
             </span>
           </div>
         </div>
@@ -233,7 +240,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
           <div className="p-2.5 rounded-xl bg-fuchsia-900/20 border border-fuchsia-500/30 flex items-start gap-2">
             <RefreshCw className="w-4 h-4 text-fuchsia-400 shrink-0 mt-0.5" />
             <p className="text-[10px] text-fuchsia-200/90 leading-tight">
-              <strong>P2P 80/20 & FIFO System:</strong> Coins you <strong>Sell</strong> in upcoming phases will enter a global <strong>FIFO (First-In, First-Out)</strong> queue. Orders placed first are executed first. Every new coin purchase allocates <strong>20% to clear the user sell queue</strong> and <strong>80% to the platform reserve</strong> (Instant USDT payout).
+              <strong>P2P FIFO System:</strong> Coins you <strong>Sell</strong> in upcoming phases will enter a global <strong>FIFO (First-In, First-Out)</strong> queue. Orders placed first are executed first with automated instant USDT payout upon match.
             </p>
           </div>
         </div>

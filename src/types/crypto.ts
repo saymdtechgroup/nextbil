@@ -71,6 +71,7 @@ export interface AdminSystemConfig {
   contractAddress: string;
   minPurchaseUsd: number;
   maxPurchaseUsd: number;
+  minMlmQualifyUsd: number; // Minimum cumulative investment to qualify for MLM commissions (default $100)
   presalePaused: boolean;
   directSponsorPercent: number;
   withdrawalFeePercent: number;

@@ -121,6 +121,22 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
             </span>
           </div>
 
+          {/* $100 Minimum Cumulative MLM Qualification Rule Box */}
+          <div className="p-3 rounded-2xl bg-[#0e051d] border border-amber-500/30 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
+              <h4 className="text-xs font-bold text-slate-100 font-rajdhani uppercase tracking-wider">
+                MLM Eligibility Rule: $100 Minimum Investment
+              </h4>
+            </div>
+            <p className="text-[10px] text-purple-200/90 leading-relaxed font-mono-crypto">
+              • <strong>Investor Mode (&lt; $100):</strong> Any user with total purchases under $100 acts solely as an investor. They do not earn MLM commissions, nor do their purchases trigger upline MLM commissions.
+            </p>
+            <p className="text-[10px] text-purple-200/90 leading-relaxed font-mono-crypto">
+              • <strong>Cumulative Qualification ($100+):</strong> Once total purchases reach <strong>$100 USD</strong> (e.g. $50 + $50 = $100), the user is instantly recognized as an active MLM participant and upline commissions are generated.
+            </p>
+          </div>
+
           {/* Referral Link Copy Section */}
           <div className="space-y-1.5">
             <label className="text-[10px] font-semibold text-purple-200 uppercase tracking-wider">

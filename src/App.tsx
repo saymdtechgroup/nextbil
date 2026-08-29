@@ -14,6 +14,7 @@ import {
   Award,
   Crown,
   Settings,
+  Wallet,
 } from 'lucide-react';
 import {
   AllocationState,
@@ -75,7 +76,7 @@ export default function App() {
       totalSupply: 15000000, // 15,000,000 NXBC
       tokensSold: 0,
       status: 'locked',
-      multiplier: '10x (+900% ROI)',
+      multiplier: '10x Growth',
       unlockRequirement: 'Phase 1 must be 100% sold to unlock',
     },
     {
@@ -88,7 +89,7 @@ export default function App() {
       totalSupply: 20000000, // 20,000,000 NXBC
       tokensSold: 0,
       status: 'locked',
-      multiplier: '20x (+1,900% ROI)',
+      multiplier: '20x Growth',
       unlockRequirement: 'Phase 2 must be 100% sold to unlock',
     },
     {
@@ -101,7 +102,7 @@ export default function App() {
       totalSupply: 25000000, // 25,000,000 NXBC
       tokensSold: 0,
       status: 'locked',
-      multiplier: '30x (+2,900% ROI)',
+      multiplier: '30x Growth',
       unlockRequirement: 'Phase 3 must be 100% sold to unlock',
     },
     {
@@ -114,7 +115,7 @@ export default function App() {
       totalSupply: 30000000, // 30,000,000 NXBC
       tokensSold: 0,
       status: 'locked',
-      multiplier: '40x (+3,900% ROI)',
+      multiplier: '40x Growth',
       unlockRequirement: 'Phase 4 must be 100% sold to unlock',
     },
     {
@@ -163,6 +164,13 @@ export default function App() {
   const [claimableBalanceUsd, setClaimableBalanceUsd] = useState<number>(1248.50);
   const [levelIncomeUsd, setLevelIncomeUsd] = useState<number>(860.00);
   const [matrixIncomeUsd, setMatrixIncomeUsd] = useState<number>(388.50);
+  const [totalInvestedUsd, setTotalInvestedUsd] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('nxbc_total_invested');
+      if (stored) return parseFloat(stored) || 5000;
+    }
+    return 5000;
+  });
 
   // Auto-detect injected Web3 (MetaMask / Trust Wallet / Binance Web3 / OKX)
   useEffect(() => {
@@ -371,6 +379,7 @@ export default function App() {
     contractAddress: '0x71C8a94F16d823E489e273039d54B3F118a89F',
     minPurchaseUsd: 10,
     maxPurchaseUsd: 50000,
+    minMlmQualifyUsd: 100,
     presalePaused: false,
     directSponsorPercent: 5,
     withdrawalFeePercent: 2,
@@ -480,13 +489,27 @@ export default function App() {
       );
     });
 
-    // Credit direct sponsor and level 1 bonuses based on Admin dynamic percentages
-    const directBonus = (usdAmount * systemConfig.directSponsorPercent) / 100;
-    const l1Bonus = (usdAmount * (referralLevels[0]?.commissionPercent || 10)) / 100;
-    const totalBonus = directBonus + l1Bonus;
+    // Update cumulative investment
+    const newTotalInvested = totalInvestedUsd + usdAmount;
+    setTotalInvestedUsd(newTotalInvested);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_total_invested', newTotalInvested.toString());
+    }
 
-    setClaimableBalanceUsd((prev) => prev + totalBonus);
-    setLevelIncomeUsd((prev) => prev + totalBonus);
+    // $100 Cumulative Qualification Rule Check:
+    // Only distribute / credit MLM referral commissions if user meets the cumulative threshold ($100 default)
+    const minQualify = systemConfig.minMlmQualifyUsd || 100;
+    const isNowQualified = newTotalInvested >= minQualify;
+
+    if (isNowQualified) {
+      // Credit direct sponsor and level 1 bonuses based on Admin dynamic percentages
+      const directBonus = (usdAmount * systemConfig.directSponsorPercent) / 100;
+      const l1Bonus = (usdAmount * (referralLevels[0]?.commissionPercent || 10)) / 100;
+      const totalBonus = directBonus + l1Bonus;
+
+      setClaimableBalanceUsd((prev) => prev + totalBonus);
+      setLevelIncomeUsd((prev) => prev + totalBonus);
+    }
 
     // Record Transaction in PostgreSQL Backend
     fetch('/api/presale/buy', {
@@ -567,7 +590,7 @@ export default function App() {
         totalSupply: 15000000,
         tokensSold: 0,
         status: 'locked',
-        multiplier: '10x (+900% ROI)',
+        multiplier: '10x Growth',
         unlockRequirement: 'Phase 1 must be 100% sold to unlock',
       },
       {
@@ -580,7 +603,7 @@ export default function App() {
         totalSupply: 20000000,
         tokensSold: 0,
         status: 'locked',
-        multiplier: '20x (+1,900% ROI)',
+        multiplier: '20x Growth',
         unlockRequirement: 'Phase 2 must be 100% sold to unlock',
       },
       {
@@ -593,7 +616,7 @@ export default function App() {
         totalSupply: 25000000,
         tokensSold: 0,
         status: 'locked',
-        multiplier: '30x (+2,900% ROI)',
+        multiplier: '30x Growth',
         unlockRequirement: 'Phase 3 must be 100% sold to unlock',
       },
       {
@@ -606,7 +629,7 @@ export default function App() {
         totalSupply: 30000000,
         tokensSold: 0,
         status: 'locked',
-        multiplier: '40x (+3,900% ROI)',
+        multiplier: '40x Growth',
         unlockRequirement: 'Phase 4 must be 100% sold to unlock',
       },
       {
@@ -746,69 +769,8 @@ export default function App() {
                 )}
               </div>
               <p className="text-xs text-purple-200/90 mt-1.5 max-w-2xl leading-relaxed">
-                NXBC is a next-generation utility coin designed for secure, high-yield P2P trading. By participating in this exclusive presale, early adopters secure their allocation at the lowest entry prices. This provides massive growth potential, automated instant payouts via our 80/20 FIFO smart contract, and guaranteed liquidity before the official Decentralized Exchange (DEX) launch.
+                NXBC is a next-generation utility coin designed for secure, high-yield P2P trading. By participating in this exclusive presale, early adopters secure their allocation at the lowest entry prices. This provides massive growth potential, automated instant payouts via our FIFO smart contract, and guaranteed liquidity before the official Decentralized Exchange (DEX) launch.
               </p>
-            </div>
-          </div>
-
-          {/* Top Controls & Connect Wallet Button */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {/* Direct Connect Wallet Action Button */}
-            {walletConnected && walletAddress ? (
-              <button
-                id="header-wallet-connected-btn"
-                onClick={() => setWalletModalOpen(true)}
-                className="px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600/30 to-teal-600/30 hover:from-emerald-600/40 hover:to-teal-600/40 border border-emerald-400 text-emerald-300 text-xs font-mono-crypto font-bold flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)]"
-              >
-                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>
-                  {walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}
-                </span>
-                <span className="text-[10px] text-emerald-200/70 border-l border-emerald-400/40 pl-1.5 hidden sm:inline">
-                  Change
-                </span>
-              </button>
-            ) : (
-              <button
-                id="header-connect-wallet-btn"
-                onClick={() => setWalletModalOpen(true)}
-                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider font-rajdhani flex items-center gap-2 transition-all shadow-[0_0_20px_rgba(245,158,11,0.4)] active:scale-95 cursor-pointer"
-              >
-                <Wallet className="w-4 h-4 fill-black text-black" />
-                <span>Connect Wallet</span>
-              </button>
-            )}
-
-            {/* Quick Demo Simulator Buttons */}
-            <div className="flex items-center gap-1.5">
-              <button
-                id="quick-buy-demo-btn"
-                onClick={() =>
-                  handleConfirmPurchase(100000, 1000, {
-                    p2Percent: allocation.p2Percent,
-                    p3Percent: allocation.p3Percent,
-                    p4Percent: allocation.p4Percent,
-                    p5Percent: allocation.p5Percent,
-                    dexPercent: allocation.dexPercent,
-                    unallocatedPercent: allocation.unallocatedPercent,
-                  })
-                }
-                className="px-2.5 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 text-[11px] font-mono-crypto font-semibold text-amber-300 flex items-center gap-1 transition-all"
-                title="Quickly add 100k Coins to test the 6-Box allocation schedule"
-              >
-                <Zap className="w-3 h-3 text-amber-400" />
-                <span>+100k Coins</span>
-              </button>
-
-              <button
-                id="quick-bonus-demo-btn"
-                onClick={handleAddDemoBonus}
-                className="px-2.5 py-1.5 rounded-xl bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-400/40 text-[11px] font-mono-crypto font-semibold text-fuchsia-300 flex items-center gap-1 transition-all"
-                title="Inject referral bonus to test Instant Withdrawal"
-              >
-                <TrendingUp className="w-3 h-3 text-fuchsia-400" />
-                <span>+$300 Yield</span>
-              </button>
             </div>
           </div>
         </header>
@@ -880,6 +842,9 @@ export default function App() {
                   onOpenTeamModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
                   levelIncomeUsd={levelIncomeUsd}
+                  totalInvestedUsd={totalInvestedUsd}
+                  minMlmQualifyUsd={systemConfig.minMlmQualifyUsd || 100}
+                  onOpenBuyModal={() => setBuyModalOpen(true)}
                 />
               )}
 
@@ -900,6 +865,8 @@ export default function App() {
                   walletAddress={walletAddress}
                   walletConnected={walletConnected}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
+                  totalInvestedUsd={totalInvestedUsd}
+                  minMlmQualifyUsd={systemConfig.minMlmQualifyUsd || 100}
                   onOpenAdmin={
                     walletConnected && walletAddress === '0xAdminSecretWalletAddress123'
                       ? () => setShowSecretAdminPage(true)

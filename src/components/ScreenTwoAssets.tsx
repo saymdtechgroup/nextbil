@@ -57,7 +57,6 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
 
   const totalAllocatedUsd = p2Val + p3Val + p4Val + p5Val + dexVal;
   const initialCostUsd = totalTokens * 0.01;
-  const totalProjectedRoi = initialCostUsd > 0 ? ((totalAllocatedUsd - initialCostUsd) / initialCostUsd) * 100 : 0;
 
   return (
     <div className="flex-1 p-3.5 space-y-3.5 relative">
@@ -264,8 +263,8 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
             </span>
             <div className="text-xl font-extrabold font-mono-crypto text-slate-100 flex items-center gap-1.5">
               <span>{showValues ? `$${totalAllocatedUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '••••••'}</span>
-              <span className="text-[10px] text-emerald-400 font-bold">
-                (+{totalProjectedRoi.toFixed(0)}% ROI)
+              <span className="text-[10px] text-emerald-400 font-bold font-mono-crypto">
+                USD Est.
               </span>
             </div>
             <p className="text-[9px] text-purple-300/70">
