@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, ShieldCheck, Key, FileText, Globe, Bell, HelpCircle, ExternalLink, ArrowRightLeft } from 'lucide-react';
+import { User, ShieldCheck, Key, FileText, Globe, Bell, HelpCircle, ExternalLink, ArrowRightLeft, RefreshCw, Trash2 } from 'lucide-react';
 import { GoldCoinGraphic } from './GoldCoinGraphic';
 
 interface ScreenMineProps {
@@ -7,6 +7,7 @@ interface ScreenMineProps {
   walletConnected: boolean;
   onToggleWallet: () => void;
   onOpenAdmin?: () => void;
+  onResetAllData?: () => void;
   totalInvestedUsd?: number;
   minMlmQualifyUsd?: number;
 }
@@ -16,7 +17,8 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
   walletConnected,
   onToggleWallet,
   onOpenAdmin,
-  totalInvestedUsd = 5000,
+  onResetAllData,
+  totalInvestedUsd = 0,
   minMlmQualifyUsd = 100,
 }) => {
   const isMlmQualified = totalInvestedUsd >= minMlmQualifyUsd;
@@ -52,7 +54,7 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
         <div className="flex-1">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-black text-slate-100 font-cinzel">
-              NXBC MEMBER #8891
+              NXBC MEMBER #{walletAddress ? walletAddress.substring(2, 6).toUpperCase() : '8891'}
             </h2>
             <span className={`text-[8px] font-mono-crypto px-1.5 py-0.5 rounded border font-bold ${
               isMlmQualified
@@ -63,7 +65,7 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
             </span>
           </div>
           <p className="text-[9px] font-mono-crypto text-purple-300/80">
-            {walletAddress || '0x71C...a89F'}
+            {walletAddress ? `${walletAddress.substring(0, 8)}...${walletAddress.substring(walletAddress.length - 6)}` : 'Connect Wallet'}
           </p>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-[8px] font-mono-crypto text-amber-300 bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-500/30">
@@ -75,30 +77,6 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
 
       {/* Menu Options */}
       <div className="space-y-1.5">
-        {onOpenAdmin && (
-          <button
-            onClick={onOpenAdmin}
-            className="w-full p-3 rounded-2xl bg-gradient-to-r from-amber-950/40 via-purple-950/60 to-[#120626] border-2 border-amber-500/40 hover:border-amber-400/80 transition-all flex items-center justify-between text-xs text-left group shadow-md cursor-pointer active:scale-[0.99]"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-black flex items-center justify-center font-black shadow-md group-hover:scale-105 transition-transform">
-                <Key className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="font-black text-amber-300 block font-rajdhani uppercase text-sm">
-                  🔐 Secret Manager Control Page
-                </span>
-                <span className="text-[9px] font-mono-crypto text-purple-300">
-                  Full Presale, Levels, Matrix & Security Master Settings
-                </span>
-              </div>
-            </div>
-            <span className="px-2 py-0.5 rounded-lg bg-amber-500 text-black font-black text-[9px] font-mono-crypto">
-              OPEN
-            </span>
-          </button>
-        )}
-
         <div className="p-2.5 rounded-xl bg-[#110722] border border-purple-500/20 flex items-center justify-between text-xs">
           <div className="flex items-center gap-2.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
@@ -108,17 +86,6 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
             </div>
           </div>
           <span className="text-[10px] text-emerald-400 font-mono-crypto font-bold">100% Passed</span>
-        </div>
-
-        <div className="p-2.5 rounded-xl bg-[#110722] border border-purple-500/20 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2.5">
-            <FileText className="w-4 h-4 text-amber-400" />
-            <div>
-              <span className="font-semibold text-slate-100 block">Coin Whitepaper v2.4</span>
-              <span className="text-[9px] font-mono-crypto text-purple-400">Tokenomics & 5-Phase Roadmap</span>
-            </div>
-          </div>
-          <ExternalLink className="w-3.5 h-3.5 text-purple-400" />
         </div>
 
         <div className="p-2.5 rounded-xl bg-[#110722] border border-purple-500/20 flex items-center justify-between text-xs">

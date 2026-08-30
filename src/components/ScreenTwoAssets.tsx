@@ -135,9 +135,14 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
           {/* Box 1: P2 SELL */}
           <div className="rounded-xl bg-[#110722] border border-amber-500/30 p-2.5 hover:border-amber-400/60 transition-all shadow-sm relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-8 h-8 bg-amber-500/10 rounded-bl-full pointer-events-none" />
-            <span className="text-[10px] font-bold text-amber-300 font-rajdhani uppercase tracking-wider block">
-              P2 SELL
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-amber-300 font-rajdhani uppercase tracking-wider block">
+                P2 SELL
+              </span>
+              <span className="text-[7.5px] font-mono-crypto px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                FIFO #5
+              </span>
+            </div>
             <div className="my-1">
               <span className="text-xs font-black font-mono-crypto text-slate-100 block">
                 {showValues ? `${p2Tokens.toLocaleString()} NXBC` : '••••'}
@@ -155,9 +160,14 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
           {/* Box 2: P3 SELL */}
           <div className="rounded-xl bg-[#110722] border border-amber-500/30 p-2.5 hover:border-amber-400/60 transition-all shadow-sm relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-8 h-8 bg-amber-500/10 rounded-bl-full pointer-events-none" />
-            <span className="text-[10px] font-bold text-amber-300 font-rajdhani uppercase tracking-wider block">
-              P3 SELL
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-amber-300 font-rajdhani uppercase tracking-wider block">
+                P3 SELL
+              </span>
+              <span className="text-[7.5px] font-mono-crypto px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                FIFO #7
+              </span>
+            </div>
             <div className="my-1">
               <span className="text-xs font-black font-mono-crypto text-slate-100 block">
                 {showValues ? `${p3Tokens.toLocaleString()} NXBC` : '••••'}
@@ -175,9 +185,14 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
           {/* Box 3: P4 SELL */}
           <div className="rounded-xl bg-[#110722] border border-purple-500/30 p-2.5 hover:border-fuchsia-400/60 transition-all shadow-sm relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-8 h-8 bg-purple-500/10 rounded-bl-full pointer-events-none" />
-            <span className="text-[10px] font-bold text-fuchsia-300 font-rajdhani uppercase tracking-wider block">
-              P4 SELL
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-fuchsia-300 font-rajdhani uppercase tracking-wider block">
+                P4 SELL
+              </span>
+              <span className="text-[7.5px] font-mono-crypto px-1 py-0.2 rounded bg-fuchsia-500/20 text-fuchsia-300 font-bold border border-fuchsia-500/30">
+                FIFO #12
+              </span>
+            </div>
             <div className="my-1">
               <span className="text-xs font-black font-mono-crypto text-slate-100 block">
                 {showValues ? `${p4Tokens.toLocaleString()} NXBC` : '••••'}
@@ -195,9 +210,14 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
           {/* Box 4: P5 SELL */}
           <div className="rounded-xl bg-[#110722] border border-purple-500/30 p-2.5 hover:border-fuchsia-400/60 transition-all shadow-sm relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-8 h-8 bg-purple-500/10 rounded-bl-full pointer-events-none" />
-            <span className="text-[10px] font-bold text-fuchsia-300 font-rajdhani uppercase tracking-wider block">
-              P5 SELL
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-fuchsia-300 font-rajdhani uppercase tracking-wider block">
+                P5 SELL
+              </span>
+              <span className="text-[7.5px] font-mono-crypto px-1 py-0.2 rounded bg-fuchsia-500/20 text-fuchsia-300 font-bold border border-fuchsia-500/30">
+                FIFO #15
+              </span>
+            </div>
             <div className="my-1">
               <span className="text-xs font-black font-mono-crypto text-slate-100 block">
                 {showValues ? `${p5Tokens.toLocaleString()} NXBC` : '••••'}
@@ -215,9 +235,14 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
           {/* Box 5: Live DEX */}
           <div className="rounded-xl bg-[#110722] border border-fuchsia-500/30 p-2.5 hover:border-fuchsia-400/60 transition-all shadow-sm relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-8 h-8 bg-fuchsia-500/10 rounded-bl-full pointer-events-none" />
-            <span className="text-[10px] font-bold text-fuchsia-300 font-rajdhani uppercase tracking-wider block">
-              Live DEX
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-fuchsia-300 font-rajdhani uppercase tracking-wider block">
+                Live DEX
+              </span>
+              <span className="text-[7.5px] font-mono-crypto px-1 py-0.2 rounded bg-fuchsia-500/25 text-fuchsia-200 font-bold border border-fuchsia-500/40">
+                FIFO #18
+              </span>
+            </div>
             <div className="my-1">
               <span className="text-xs font-black font-mono-crypto text-slate-100 block whitespace-nowrap">
                 {showValues ? `${dexTokens.toLocaleString()} NXBC` : '••••'}

@@ -416,7 +416,7 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
                 type="text"
                 value={manualAddress}
                 onChange={(e) => setManualAddress(e.target.value)}
-                placeholder="0x71C8a94F16d823E489e2730..."
+                placeholder="0xF1F82363Dfb5a5B52BE94c6C..."
                 className="w-full bg-[#0a0414] border border-purple-500/40 rounded-xl px-3 py-2.5 text-xs text-amber-300 font-mono-crypto focus:outline-none focus:border-amber-400"
               />
             </div>

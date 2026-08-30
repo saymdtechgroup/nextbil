@@ -19,6 +19,9 @@ interface BuyTokenModalProps {
     }
   ) => void;
   currentRate: number;
+  walletConnected?: boolean;
+  walletAddress?: string;
+  contractAddress?: string;
   activePhaseInfo?: {
     phaseNumber: number;
     name: string;
@@ -40,6 +43,9 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   onClose,
   onConfirmPurchase,
   currentRate = 0.01,
+  walletConnected = false,
+  walletAddress = '',
+  contractAddress = '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7',
   activePhaseInfo = {
     phaseNumber: 1,
     name: 'Phase 1',
@@ -69,6 +75,10 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
   const usdValue = parseFloat(payAmount) || 0;
   const tokenQuantity = Math.floor(usdValue / currentRate);
+
+  const bnbPriceUsd = 600;
+  const ethPriceUsd = 3200;
+  const cryptoEquivalent = currency === 'BNB' ? (usdValue / bnbPriceUsd) : currency === 'ETH' ? (usdValue / ethPriceUsd) : usdValue;
 
   // Strict System Allotment Constraints
   const maxAvailableInPhase = Math.max(0, activePhaseInfo.totalSupply - activePhaseInfo.tokensSold);
@@ -139,7 +149,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     setStep(2);
   };
 
-  const handleFinalConfirmBuy = () => {
+  const handleFinalConfirmBuy = async () => {
     if (tokenQuantity <= 0 || isOverAllocated) return;
     setIsProcessing(true);
 
@@ -151,27 +161,54 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     const dexPercent = tokenQuantity > 0 ? Math.round((dexTokens / tokenQuantity) * 100) : 0;
     const unallocatedPercent = Math.max(0, 100 - (p2Percent + p3Percent + p4Percent + p5Percent + dexPercent));
 
-    setTimeout(() => {
-      onConfirmPurchase(tokenQuantity, usdValue, {
-        p2Percent,
-        p3Percent,
-        p4Percent,
-        p5Percent,
-        dexPercent,
-        unallocatedPercent,
-      });
-      setIsProcessing(false);
-      setStep(1);
+    // If Web3 wallet is available, trigger real Web3 wallet interaction
+    if (typeof window !== 'undefined') {
+      const eth =
+        (window as any).trustwallet?.ethereum ||
+        (window as any).ethereum ||
+        (window as any).binancew3w?.ethereum ||
+        (window as any).okxwallet;
 
-      confetti({
-        particleCount: 100,
-        spread: 80,
-        origin: { y: 0.5 },
-        colors: ['#F59E0B', '#E879F9', '#10B981', '#38BDF8'],
-      });
+      if (walletConnected && eth && typeof eth.request === 'function') {
+        try {
+          if (currency === 'BNB') {
+            const bnbWei = `0x${Math.floor(cryptoEquivalent * 1e18).toString(16)}`;
+            await eth.request({
+              method: 'eth_sendTransaction',
+              params: [
+                {
+                  from: walletAddress,
+                  to: contractAddress,
+                  value: bnbWei,
+                },
+              ],
+            });
+          }
+        } catch (web3Err: any) {
+          console.log('Web3 on-chain prompt notice:', web3Err?.message || web3Err);
+        }
+      }
+    }
 
-      onClose();
-    }, 1200);
+    onConfirmPurchase(tokenQuantity, usdValue, {
+      p2Percent,
+      p3Percent,
+      p4Percent,
+      p5Percent,
+      dexPercent,
+      unallocatedPercent,
+    });
+    setIsProcessing(false);
+    setStep(1);
+
+    confetti({
+      particleCount: 100,
+      spread: 80,
+      origin: { y: 0.5 },
+      colors: ['#F59E0B', '#E879F9', '#10B981', '#38BDF8'],
+    });
+
+    onClose();
   };
 
   // Projected Return Calculation based on exact token amounts

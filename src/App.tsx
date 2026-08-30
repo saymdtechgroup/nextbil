@@ -135,17 +135,27 @@ export default function App() {
 
   const activePhase = phases.find((p) => p.status === 'active') || phases[0];
 
-  // Core State: Sell-Through Allocation
-  const [allocation, setAllocation] = useState<AllocationState>({
-    p2Percent: 20,
-    p3Percent: 30,
-    p4Percent: 20,
-    p5Percent: 15,
-    dexPercent: 15,
-    unallocatedPercent: 0,
-    totalTokensPurchased: 500000, // 500,000 NXBC purchased @ $0.01 = $5,000 USD
-    isLocked: true,
-    lockedTimestamp: '10:45 AM (Verified)',
+  // Core State: Sell-Through Allocation (Clean Real State persisted in localStorage)
+  const [allocation, setAllocation] = useState<AllocationState>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_user_allocation');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+    }
+    return {
+      p2Percent: 20,
+      p3Percent: 30,
+      p4Percent: 20,
+      p5Percent: 15,
+      dexPercent: 15,
+      unallocatedPercent: 0,
+      totalTokensPurchased: 0,
+      isLocked: false,
+      lockedTimestamp: '',
+    };
   });
 
   // Wallet & Income State (Loads persisted wallet if present, or checks injected web3)
@@ -161,15 +171,33 @@ export default function App() {
     }
     return '';
   });
-  const [claimableBalanceUsd, setClaimableBalanceUsd] = useState<number>(1248.50);
-  const [levelIncomeUsd, setLevelIncomeUsd] = useState<number>(860.00);
-  const [matrixIncomeUsd, setMatrixIncomeUsd] = useState<number>(388.50);
+  const [claimableBalanceUsd, setClaimableBalanceUsd] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('nxbc_claimable_usd');
+      if (stored) return parseFloat(stored) || 0;
+    }
+    return 0;
+  });
+  const [levelIncomeUsd, setLevelIncomeUsd] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('nxbc_level_income');
+      if (stored) return parseFloat(stored) || 0;
+    }
+    return 0;
+  });
+  const [matrixIncomeUsd, setMatrixIncomeUsd] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('nxbc_matrix_income');
+      if (stored) return parseFloat(stored) || 0;
+    }
+    return 0;
+  });
   const [totalInvestedUsd, setTotalInvestedUsd] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('nxbc_total_invested');
-      if (stored) return parseFloat(stored) || 5000;
+      if (stored) return parseFloat(stored) || 0;
     }
-    return 5000;
+    return 0;
   });
 
   // Auto-detect injected Web3 (MetaMask / Trust Wallet / Binance Web3 / OKX)
@@ -233,60 +261,31 @@ export default function App() {
     }
   }, [walletConnected, walletAddress]);
 
-  // Transactions History
-  const [transactions, setTransactions] = useState<Transaction[]>([
-    {
-      id: 'tx-1',
-      type: 'buy',
-      title: 'Phase 1 Coin Purchase (500,000 NXBC)',
-      amountTokens: 500000,
-      amountUsd: 5000.00,
-      timestamp: '2026-08-25 14:32',
-      status: 'completed',
-      txHash: '0x8f2a...39d1',
-      phase: 'Phase 1 ($0.01)',
-    },
-    {
-      id: 'tx-2',
-      type: 'referral_bonus',
-      title: 'Level 1 Commission (Direct Referral #884)',
-      amountUsd: 250.00,
-      timestamp: '2026-08-25 18:10',
-      status: 'completed',
-      txHash: '0x3c11...91ee',
-    },
-    {
-      id: 'tx-3',
-      type: 'matrix_spillover',
-      title: '2x2 Matrix Cycle Spillover Bonus',
-      amountUsd: 350.00,
-      timestamp: '2026-08-26 04:22',
-      status: 'completed',
-      txHash: '0x7a89...442b',
-    },
-    {
-      id: 'tx-4',
-      type: 'withdrawal',
-      title: 'Instant Smart Contract Withdrawal',
-      amountUsd: 500.00,
-      timestamp: '2026-08-26 06:15',
-      status: 'completed',
-      txHash: '0x10ae...ff90',
-    },
-  ]);
+  // Transactions History (Persisted in localStorage)
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('nxbc_transactions');
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch (e) {}
+      }
+    }
+    return [];
+  });
 
-  // 10-Level Referral Plan Data (Dynamic via Admin)
+  // 10-Level Referral Plan Data (Calculated dynamically)
   const [referralLevels, setReferralLevels] = useState<ReferralLevel[]>([
-    { level: 1, commissionPercent: 10, directRequirement: 1, directMembers: 8, totalVolumeUsd: 4500, earnedUsd: 450.00 },
-    { level: 2, commissionPercent: 5, directRequirement: 2, directMembers: 14, totalVolumeUsd: 3800, earnedUsd: 190.00 },
-    { level: 3, commissionPercent: 3, directRequirement: 3, directMembers: 22, totalVolumeUsd: 2900, earnedUsd: 87.00 },
-    { level: 4, commissionPercent: 2, directRequirement: 4, directMembers: 31, totalVolumeUsd: 2200, earnedUsd: 44.00 },
-    { level: 5, commissionPercent: 1, directRequirement: 5, directMembers: 18, totalVolumeUsd: 1800, earnedUsd: 18.00 },
-    { level: 6, commissionPercent: 1, directRequirement: 6, directMembers: 15, totalVolumeUsd: 1500, earnedUsd: 15.00 },
-    { level: 7, commissionPercent: 1, directRequirement: 7, directMembers: 12, totalVolumeUsd: 1200, earnedUsd: 12.00 },
-    { level: 8, commissionPercent: 1, directRequirement: 8, directMembers: 10, totalVolumeUsd: 1400, earnedUsd: 14.00 },
-    { level: 9, commissionPercent: 1, directRequirement: 9, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 15.00 },
-    { level: 10, commissionPercent: 1, directRequirement: 10, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 15.00 },
+    { level: 1, commissionPercent: 10, directRequirement: 1, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 2, commissionPercent: 5, directRequirement: 2, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 3, commissionPercent: 3, directRequirement: 3, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 4, commissionPercent: 2, directRequirement: 4, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 5, commissionPercent: 1, directRequirement: 5, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 6, commissionPercent: 1, directRequirement: 6, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 7, commissionPercent: 1, directRequirement: 7, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 8, commissionPercent: 1, directRequirement: 8, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 9, commissionPercent: 1, directRequirement: 9, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 10, commissionPercent: 1, directRequirement: 10, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
   ]);
 
   // 2x2 Matrix System Config (Dynamic via Admin)
@@ -374,9 +373,9 @@ export default function App() {
 
   // General System & Global Parameters (Dynamic via Admin)
   const [systemConfig, setSystemConfig] = useState<AdminSystemConfig>({
-    tokenName: 'NXBC Network Coin',
+    tokenName: 'NXBC',
     tokenSymbol: 'NXBC',
-    contractAddress: '0x71C8a94F16d823E489e273039d54B3F118a89F',
+    contractAddress: '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7',
     minPurchaseUsd: 10,
     maxPurchaseUsd: 50000,
     minMlmQualifyUsd: 100,
@@ -445,18 +444,21 @@ export default function App() {
       return;
     }
 
-    setAllocation((prev) => ({
-      ...prev,
+    const updatedAlloc: AllocationState = {
       p2Percent: sellAlloc.p2Percent,
       p3Percent: sellAlloc.p3Percent,
       p4Percent: sellAlloc.p4Percent,
       p5Percent: sellAlloc.p5Percent,
       dexPercent: sellAlloc.dexPercent,
       unallocatedPercent: sellAlloc.unallocatedPercent,
-      totalTokensPurchased: prev.totalTokensPurchased + tokenAmount,
+      totalTokensPurchased: allocation.totalTokensPurchased + tokenAmount,
       isLocked: true,
       lockedTimestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    }));
+    };
+    setAllocation(updatedAlloc);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_user_allocation', JSON.stringify(updatedAlloc));
+    }
 
     // Sequential Phase Progress & 100% Transition Logic
     setPhases((prevPhases) => {
@@ -507,8 +509,14 @@ export default function App() {
       const l1Bonus = (usdAmount * (referralLevels[0]?.commissionPercent || 10)) / 100;
       const totalBonus = directBonus + l1Bonus;
 
-      setClaimableBalanceUsd((prev) => prev + totalBonus);
-      setLevelIncomeUsd((prev) => prev + totalBonus);
+      const newClaimable = claimableBalanceUsd + totalBonus;
+      const newLevel = levelIncomeUsd + totalBonus;
+      setClaimableBalanceUsd(newClaimable);
+      setLevelIncomeUsd(newLevel);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nxbc_claimable_usd', newClaimable.toString());
+        localStorage.setItem('nxbc_level_income', newLevel.toString());
+      }
     }
 
     // Record Transaction in PostgreSQL Backend
@@ -516,7 +524,7 @@ export default function App() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        walletAddress,
+        walletAddress: walletAddress || '0x71C...a89F',
         amountUsdt: usdAmount,
         tokenAmount,
         tokenPrice: activePhase.rate,
@@ -534,12 +542,44 @@ export default function App() {
       title: `${activePhase.name} Purchase (${tokenAmount.toLocaleString()} ${systemConfig.tokenSymbol})`,
       amountTokens: tokenAmount,
       amountUsd: usdAmount,
-      timestamp: 'Just now',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: 'completed',
-      txHash: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
+      txHash: `0x${Array.from({length: 8}, () => Math.floor(Math.random()*16).toString(16)).join('')}...${Array.from({length: 4}, () => Math.floor(Math.random()*16).toString(16)).join('')}`,
       phase: `${activePhase.name} ($${activePhase.rate.toFixed(2)})`,
     };
-    setTransactions((prev) => [newTx, ...prev]);
+    const updatedTxs = [newTx, ...transactions];
+    setTransactions(updatedTxs);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_transactions', JSON.stringify(updatedTxs));
+    }
+  };
+
+  // Helper to reset all data back to clean state
+  const handleResetAllData = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('nxbc_user_allocation');
+      localStorage.removeItem('nxbc_total_invested');
+      localStorage.removeItem('nxbc_claimable_usd');
+      localStorage.removeItem('nxbc_level_income');
+      localStorage.removeItem('nxbc_matrix_income');
+      localStorage.removeItem('nxbc_transactions');
+    }
+    setAllocation({
+      p2Percent: 20,
+      p3Percent: 30,
+      p4Percent: 20,
+      p5Percent: 15,
+      dexPercent: 15,
+      unallocatedPercent: 0,
+      totalTokensPurchased: 0,
+      isLocked: false,
+      lockedTimestamp: '',
+    });
+    setTotalInvestedUsd(0);
+    setClaimableBalanceUsd(0);
+    setLevelIncomeUsd(0);
+    setMatrixIncomeUsd(0);
+    setTransactions([]);
   };
 
   // Helper to easily simulate 100% phase completion for sequential demo
@@ -669,9 +709,9 @@ export default function App() {
       enabled: true,
     });
     setSystemConfig({
-      tokenName: 'NXBC Network Coin',
+      tokenName: 'NXBC',
       tokenSymbol: 'NXBC',
-      contractAddress: '0x71C8a94F16d823E489e273039d54B3F118a89F',
+      contractAddress: '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7',
       minPurchaseUsd: 10,
       maxPurchaseUsd: 50000,
       presalePaused: false,
@@ -867,11 +907,8 @@ export default function App() {
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
                   totalInvestedUsd={totalInvestedUsd}
                   minMlmQualifyUsd={systemConfig.minMlmQualifyUsd || 100}
-                  onOpenAdmin={
-                    walletConnected && walletAddress === '0xAdminSecretWalletAddress123'
-                      ? () => setShowSecretAdminPage(true)
-                      : undefined
-                  }
+                  onResetAllData={handleResetAllData}
+                  onOpenAdmin={() => setShowSecretAdminPage(true)}
                 />
               )}
             </div>
@@ -1000,6 +1037,9 @@ export default function App() {
         onClose={() => setBuyModalOpen(false)}
         onConfirmPurchase={handleConfirmPurchase}
         currentRate={activePhase.rate}
+        walletConnected={walletConnected}
+        walletAddress={walletAddress}
+        contractAddress={systemConfig.contractAddress}
         activePhaseInfo={{
           phaseNumber: activePhase.phaseNumber,
           name: activePhase.name,

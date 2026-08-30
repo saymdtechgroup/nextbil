@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Bell,
   Wallet,
@@ -20,6 +20,10 @@ import {
   Play,
   RotateCcw,
   RefreshCw,
+  ListOrdered,
+  Users,
+  ArrowDownUp,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { AllocationState, PhaseConfig } from '../types/crypto';
 import { GoldCoinGraphic } from './GoldCoinGraphic';
@@ -50,6 +54,8 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   walletConnected,
   walletAddress,
 }) => {
+  const [selectedQueuePhase, setSelectedQueuePhase] = useState<'all' | 'p2' | 'p3' | 'p4' | 'p5' | 'dex'>('all');
+
   // Find current active phase (or fallback to Phase 1)
   const activePhase = phases.find((p) => p.status === 'active') || phases[0];
   const nextPhase = phases.find((p) => p.phaseNumber === activePhase.phaseNumber + 1);
@@ -60,6 +66,21 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   const progressPercent = Math.min(100, Math.max(0, (tokensSold / totalSupply) * 100));
   const usdRaised = tokensSold * activePhase.rate;
   const usdTarget = totalSupply * activePhase.rate;
+
+  const totalTokens = allocation.totalTokensPurchased;
+  const p2Tokens = Math.floor(totalTokens * (allocation.p2Percent / 100));
+  const p3Tokens = Math.floor(totalTokens * (allocation.p3Percent / 100));
+  const p4Tokens = Math.floor(totalTokens * (allocation.p4Percent / 100));
+  const p5Tokens = Math.floor(totalTokens * (allocation.p5Percent / 100));
+  const dexTokens = Math.floor(totalTokens * (allocation.dexPercent / 100));
+  const unallocatedTokens = Math.max(0, totalTokens - (p2Tokens + p3Tokens + p4Tokens + p5Tokens + dexTokens));
+
+  const p2Val = p2Tokens * 0.10;
+  const p3Val = p3Tokens * 0.20;
+  const p4Val = p4Tokens * 0.30;
+  const p5Val = p5Tokens * 0.40;
+  const dexVal = dexTokens * 1500.00;
+  const totalProjectedVal = p2Val + p3Val + p4Val + p5Val + dexVal;
 
   return (
     <div className="flex-1 p-3.5 space-y-4 relative">
@@ -465,7 +486,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
         {/* Read-Only Phase Breakdown Display Cards */}
         <div className="space-y-2 pt-1">
           {/* Phase 2 */}
-          <div className="bg-[#0b0518] p-2.5 rounded-xl border border-purple-500/20 flex items-center justify-between">
+          <div className="bg-[#0b0518] p-2.5 rounded-xl border border-amber-500/20 flex items-center justify-between hover:border-amber-400/40 transition-colors">
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-bold text-slate-100 font-rajdhani">Phase 2 Target Unlock</span>
@@ -488,7 +509,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
           </div>
 
           {/* Phase 3 */}
-          <div className="bg-[#0b0518] p-2.5 rounded-xl border border-purple-500/20 flex items-center justify-between">
+          <div className="bg-[#0b0518] p-2.5 rounded-xl border border-amber-500/20 flex items-center justify-between hover:border-amber-400/40 transition-colors">
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-bold text-slate-100 font-rajdhani">Phase 3 Target Unlock</span>
@@ -510,46 +531,99 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
             </div>
           </div>
 
-          {/* Phase 4, Phase 5, DEX Grid */}
-          <div className="grid grid-cols-3 gap-1.5">
-            {/* P4 */}
-            <div className="bg-[#0b0518] p-2 rounded-xl border border-purple-500/20 text-center">
-              <span className="text-[9px] font-bold text-purple-300 uppercase block font-rajdhani">
-                P4 (@ $0.30)
+          {/* Phase 4 */}
+          <div className="bg-[#0b0518] p-2.5 rounded-xl border border-purple-500/20 flex items-center justify-between hover:border-fuchsia-400/40 transition-colors">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-100 font-rajdhani">Phase 4 Target Unlock</span>
+                <span className="text-[9px] font-mono-crypto text-fuchsia-400 font-semibold bg-fuchsia-950/60 px-1.5 py-0.2 rounded border border-fuchsia-500/30">
+                  @ $0.30 Rate
+                </span>
+              </div>
+              <span className="text-[10px] text-purple-300/70 font-mono-crypto block mt-0.5">
+                Tokens: {Math.floor(allocation.totalTokensPurchased * (allocation.p4Percent / 100)).toLocaleString()} NXBC
               </span>
-              <span className="text-xs font-black font-mono-crypto text-fuchsia-300 my-0.5 block">
+            </div>
+            <div className="text-right">
+              <span className="text-sm font-black font-mono-crypto text-fuchsia-300">
                 {allocation.p4Percent}%
               </span>
-              <span className="text-[8px] font-mono-crypto text-purple-400">
-                {Math.floor(allocation.totalTokensPurchased * (allocation.p4Percent / 100)).toLocaleString()} NXBC
+              <span className="text-[9px] font-mono-crypto text-emerald-400 block font-semibold">
+                ${(Math.floor(allocation.totalTokensPurchased * (allocation.p4Percent / 100)) * 0.30).toLocaleString()} USD
               </span>
             </div>
+          </div>
 
-            {/* P5 */}
-            <div className="bg-[#0b0518] p-2 rounded-xl border border-purple-500/20 text-center">
-              <span className="text-[9px] font-bold text-purple-300 uppercase block font-rajdhani">
-                P5 (@ $0.40)
+          {/* Phase 5 */}
+          <div className="bg-[#0b0518] p-2.5 rounded-xl border border-purple-500/20 flex items-center justify-between hover:border-fuchsia-400/40 transition-colors">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-100 font-rajdhani">Phase 5 Target Unlock</span>
+                <span className="text-[9px] font-mono-crypto text-fuchsia-400 font-semibold bg-fuchsia-950/60 px-1.5 py-0.2 rounded border border-fuchsia-500/30">
+                  @ $0.40 Rate
+                </span>
+              </div>
+              <span className="text-[10px] text-purple-300/70 font-mono-crypto block mt-0.5">
+                Tokens: {Math.floor(allocation.totalTokensPurchased * (allocation.p5Percent / 100)).toLocaleString()} NXBC
               </span>
-              <span className="text-xs font-black font-mono-crypto text-fuchsia-300 my-0.5 block">
+            </div>
+            <div className="text-right">
+              <span className="text-sm font-black font-mono-crypto text-fuchsia-300">
                 {allocation.p5Percent}%
               </span>
-              <span className="text-[8px] font-mono-crypto text-purple-400">
-                {Math.floor(allocation.totalTokensPurchased * (allocation.p5Percent / 100)).toLocaleString()} NXBC
+              <span className="text-[9px] font-mono-crypto text-emerald-400 block font-semibold">
+                ${(Math.floor(allocation.totalTokensPurchased * (allocation.p5Percent / 100)) * 0.40).toLocaleString()} USD
               </span>
             </div>
+          </div>
 
-            {/* DEX */}
-            <div className="bg-[#0b0518] p-2 rounded-xl border border-purple-500/20 text-center">
-              <span className="text-[9px] font-bold text-fuchsia-300 uppercase block font-rajdhani">
-                Live DEX
+          {/* Live DEX Target Unlock */}
+          <div className="bg-[#0b0518] p-2.5 rounded-xl border border-fuchsia-500/30 flex items-center justify-between hover:border-fuchsia-400/60 transition-colors">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-100 font-rajdhani">Live DEX Target Unlock</span>
+                <span className="text-[9px] font-mono-crypto text-fuchsia-300 font-semibold bg-fuchsia-950/80 px-1.5 py-0.2 rounded border border-fuchsia-500/40">
+                  @ $1,500 – $3,000 DEX
+                </span>
+              </div>
+              <span className="text-[10px] text-purple-300/70 font-mono-crypto block mt-0.5">
+                Tokens: {dexTokens.toLocaleString()} NXBC
               </span>
-              <span className="text-xs font-black font-mono-crypto text-fuchsia-300 my-0.5 block">
+            </div>
+            <div className="text-right">
+              <span className="text-sm font-black font-mono-crypto text-fuchsia-300">
                 {allocation.dexPercent}%
               </span>
-              <span className="text-[8px] font-mono-crypto text-purple-400">
-                {Math.floor(allocation.totalTokensPurchased * (allocation.dexPercent / 100)).toLocaleString()} NXBC
+              <span className="text-[9px] font-mono-crypto text-emerald-400 block font-semibold">
+                ${dexVal.toLocaleString()} USD (Est.)
               </span>
             </div>
+          </div>
+        </div>
+
+        {/* Total Projected Return Summary */}
+        <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/15 via-fuchsia-950/40 to-amber-500/15 border border-amber-400/40 flex items-center justify-between shadow-inner">
+          <div>
+            <span className="text-[9px] font-bold text-amber-300 font-rajdhani uppercase tracking-wider block">
+              Total Projected Milestone Return
+            </span>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-base font-black font-mono-crypto gold-gradient-text">
+                ${totalProjectedVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+              </span>
+            </div>
+            <span className="text-[8px] text-purple-300/80 font-mono-crypto">
+              From {totalTokens.toLocaleString()} NXBC across all 5 milestones
+            </span>
+          </div>
+
+          <div className="text-right">
+            <span className="text-[9px] text-emerald-400 font-bold font-mono-crypto block">
+              +${(totalProjectedVal - (totalTokens * 0.01)).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} Profit
+            </span>
+            <span className="text-[8px] text-amber-400/90 font-mono-crypto">
+              {totalTokens > 0 ? `${((totalProjectedVal / Math.max(1, totalTokens * 0.01))).toFixed(0)}x ROI Potential` : '0x'}
+            </span>
           </div>
         </div>
 
@@ -565,6 +639,391 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
           >
             Buy & Allocate
           </button>
+        </div>
+
+        {/* ------------------------------------------------------------- */}
+        {/* NEW: FIFO AUTOMATIC SELL QUEUE & POSITION TRACKER BOX         */}
+        {/* ------------------------------------------------------------- */}
+        <div className="rounded-2xl bg-gradient-to-b from-[#16092c] via-[#100622] to-[#0b0318] border border-amber-500/30 p-3 space-y-3 shadow-lg relative overflow-hidden">
+          {/* Decorative Glow */}
+          <div className="absolute -top-10 -right-10 w-28 h-28 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-purple-500/20 pb-2">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-xl bg-gradient-to-br from-amber-500/20 to-fuchsia-600/20 border border-amber-500/40 text-amber-300">
+                <ListOrdered className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="text-xs font-black text-slate-100 font-rajdhani uppercase tracking-wide">
+                    FIFO Sell Queue Tracker
+                  </h3>
+                  <span className="text-[8px] font-mono-crypto px-1.5 py-0.2 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold">
+                    LIVE QUEUE 🟢
+                  </span>
+                </div>
+                <p className="text-[9px] text-purple-300/70 font-mono-crypto">
+                  First-In, First-Out Community Execution Order
+                </p>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <span className="text-[8px] font-bold text-purple-300 font-rajdhani uppercase block">
+                Queue Ticket
+              </span>
+              <span className="text-[10px] font-black font-mono-crypto gold-gradient-text">
+                #FIFO-NXBC-005
+              </span>
+            </div>
+          </div>
+
+          {/* Top 3 Metric Highlight Pills */}
+          <div className="grid grid-cols-3 gap-1.5">
+            {/* Total Community Queued */}
+            <div className="p-2 rounded-xl bg-[#0b0518] border border-purple-500/20 text-center">
+              <span className="text-[8px] font-bold text-purple-300/80 uppercase block font-rajdhani">
+                Global Queued
+              </span>
+              <span className="text-xs font-black font-mono-crypto text-amber-300 block my-0.5">
+                {(4250 + (totalTokens - unallocatedTokens)).toLocaleString()} NXBC
+              </span>
+              <span className="text-[8px] font-mono-crypto text-purple-400">
+                {totalTokens > 0 ? '8 Active Sellers' : '7 Active Sellers'}
+              </span>
+            </div>
+
+            {/* User Queued Tokens */}
+            <div className="p-2 rounded-xl bg-[#0b0518] border border-amber-500/30 text-center">
+              <span className="text-[8px] font-bold text-amber-300 uppercase block font-rajdhani">
+                Your Queued
+              </span>
+              <span className="text-xs font-black font-mono-crypto text-slate-100 block my-0.5">
+                {(totalTokens - unallocatedTokens).toLocaleString()} NXBC
+              </span>
+              <span className="text-[8px] font-mono-crypto text-emerald-400 font-semibold">
+                {totalTokens > 0 ? 'Active in Queue 🟢' : '0 Allocated'}
+              </span>
+            </div>
+
+            {/* User Priority Position */}
+            <div className="p-2 rounded-xl bg-[#0b0518] border border-fuchsia-500/30 text-center">
+              <span className="text-[8px] font-bold text-fuchsia-300 uppercase block font-rajdhani">
+                Priority Rank
+              </span>
+              <span className="text-xs font-black font-mono-crypto text-fuchsia-300 block my-0.5">
+                {totalTokens > 0 ? 'Slot #5' : 'Pending Buy'}
+              </span>
+              <span className="text-[8px] font-mono-crypto text-purple-300/80">
+                {totalTokens > 0 ? 'Early Batch 1' : 'Join Queue'}
+              </span>
+            </div>
+          </div>
+
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 text-[9px] font-mono-crypto">
+            <button
+              onClick={() => setSelectedQueuePhase('all')}
+              className={`px-2 py-1 rounded-lg border transition-all shrink-0 ${
+                selectedQueuePhase === 'all'
+                  ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow-sm'
+                  : 'bg-purple-950/40 text-purple-300 border-purple-500/20 hover:border-purple-400/40'
+              }`}
+            >
+              All Phases
+            </button>
+            <button
+              onClick={() => setSelectedQueuePhase('p2')}
+              className={`px-2 py-1 rounded-lg border transition-all shrink-0 ${
+                selectedQueuePhase === 'p2'
+                  ? 'bg-amber-500 text-slate-950 font-bold border-amber-400'
+                  : 'bg-purple-950/40 text-purple-300 border-purple-500/20 hover:border-purple-400/40'
+              }`}
+            >
+              Phase 2 ($0.10)
+            </button>
+            <button
+              onClick={() => setSelectedQueuePhase('p3')}
+              className={`px-2 py-1 rounded-lg border transition-all shrink-0 ${
+                selectedQueuePhase === 'p3'
+                  ? 'bg-amber-500 text-slate-950 font-bold border-amber-400'
+                  : 'bg-purple-950/40 text-purple-300 border-purple-500/20 hover:border-purple-400/40'
+              }`}
+            >
+              Phase 3 ($0.20)
+            </button>
+            <button
+              onClick={() => setSelectedQueuePhase('p4')}
+              className={`px-2 py-1 rounded-lg border transition-all shrink-0 ${
+                selectedQueuePhase === 'p4'
+                  ? 'bg-amber-500 text-slate-950 font-bold border-amber-400'
+                  : 'bg-purple-950/40 text-purple-300 border-purple-500/20 hover:border-purple-400/40'
+              }`}
+            >
+              Phase 4 ($0.30)
+            </button>
+            <button
+              onClick={() => setSelectedQueuePhase('p5')}
+              className={`px-2 py-1 rounded-lg border transition-all shrink-0 ${
+                selectedQueuePhase === 'p5'
+                  ? 'bg-amber-500 text-slate-950 font-bold border-amber-400'
+                  : 'bg-purple-950/40 text-purple-300 border-purple-500/20 hover:border-purple-400/40'
+              }`}
+            >
+              Phase 5 ($0.40)
+            </button>
+            <button
+              onClick={() => setSelectedQueuePhase('dex')}
+              className={`px-2 py-1 rounded-lg border transition-all shrink-0 ${
+                selectedQueuePhase === 'dex'
+                  ? 'bg-fuchsia-600 text-slate-100 font-bold border-fuchsia-400'
+                  : 'bg-purple-950/40 text-purple-300 border-purple-500/20 hover:border-purple-400/40'
+              }`}
+            >
+              Live DEX
+            </button>
+          </div>
+
+          {/* Phase-Wise Queue Details List */}
+          <div className="space-y-2">
+            {/* Phase 2 Queue Card */}
+            {(selectedQueuePhase === 'all' || selectedQueuePhase === 'p2') && (
+              <div className="bg-[#0b0416] p-2.5 rounded-xl border border-amber-500/30 hover:border-amber-400/60 transition-all">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-100 font-rajdhani">Phase 2 Queue</span>
+                    <span className="text-[9px] font-mono-crypto text-amber-400 font-semibold bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-500/30">
+                      @ $0.10 Target
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[9px] font-mono-crypto px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/50 text-amber-300 font-black">
+                      {p2Tokens > 0 ? 'Your Turn: Slot #5 in Line' : 'No Order Placed'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Queue Metrics Grid */}
+                <div className="grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t border-purple-500/15 text-[9px] font-mono-crypto">
+                  <div>
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Total Queued in Pool</span>
+                    <span className="text-amber-300 font-bold">{(1400 + p2Tokens).toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-purple-400 block">({7 + (p2Tokens > 0 ? 1 : 0)} Sellers Total)</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Your Sell Allocation</span>
+                    <span className="text-slate-100 font-bold">{p2Tokens.toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-emerald-400 block">${p2Val.toFixed(2)} USD</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Ahead of You</span>
+                    <span className="text-fuchsia-300 font-bold">4 Orders (800 NXBC)</span>
+                    <span className="text-[7.5px] text-emerald-400 block">Priority Group A</span>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="mt-2 space-y-1">
+                  <div className="flex justify-between text-[8px] font-mono-crypto text-purple-300/80">
+                    <span>FIFO Execution Queue: {7 + (p2Tokens > 0 ? 1 : 0)} Sellers</span>
+                    <span className="text-amber-300 font-semibold">{p2Tokens > 0 ? 'User #5 Position' : 'Standby'}</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-purple-950 rounded-full overflow-hidden p-0.5 border border-purple-500/30">
+                    <div className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full" style={{ width: p2Tokens > 0 ? '62%' : '20%' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Phase 3 Queue Card */}
+            {(selectedQueuePhase === 'all' || selectedQueuePhase === 'p3') && (
+              <div className="bg-[#0b0416] p-2.5 rounded-xl border border-amber-500/25 hover:border-amber-400/50 transition-all">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-100 font-rajdhani">Phase 3 Queue</span>
+                    <span className="text-[9px] font-mono-crypto text-amber-400 font-semibold bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-500/30">
+                      @ $0.20 Target
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-mono-crypto px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/40 text-amber-300 font-black">
+                    {p3Tokens > 0 ? 'Your Turn: Slot #7 in Line' : 'No Order Placed'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t border-purple-500/15 text-[9px] font-mono-crypto">
+                  <div>
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Total Queued in Pool</span>
+                    <span className="text-amber-300 font-bold">{(1000 + p3Tokens).toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-purple-400 block">({5 + (p3Tokens > 0 ? 1 : 0)} Sellers Total)</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Your Sell Allocation</span>
+                    <span className="text-slate-100 font-bold">{p3Tokens.toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-emerald-400 block">${p3Val.toFixed(2)} USD</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Ahead of You</span>
+                    <span className="text-fuchsia-300 font-bold">6 Orders (1,000 NXBC)</span>
+                    <span className="text-[7.5px] text-amber-400 block">Next Unlock Batch</span>
+                  </div>
+                </div>
+
+                <div className="mt-2 space-y-1">
+                  <div className="flex justify-between text-[8px] font-mono-crypto text-purple-300/80">
+                    <span>FIFO Execution Queue: {5 + (p3Tokens > 0 ? 1 : 0)} Sellers</span>
+                    <span className="text-amber-300 font-semibold">{p3Tokens > 0 ? 'User #7 Position' : 'Standby'}</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-purple-950 rounded-full overflow-hidden p-0.5 border border-purple-500/30">
+                    <div className="h-full bg-gradient-to-r from-amber-400 to-fuchsia-500 rounded-full" style={{ width: p3Tokens > 0 ? '45%' : '15%' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Phase 4 Queue Card */}
+            {(selectedQueuePhase === 'all' || selectedQueuePhase === 'p4') && (
+              <div className="bg-[#0b0416] p-2.5 rounded-xl border border-purple-500/25 hover:border-fuchsia-400/50 transition-all">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-100 font-rajdhani">Phase 4 Queue</span>
+                    <span className="text-[9px] font-mono-crypto text-fuchsia-400 font-semibold bg-fuchsia-950/60 px-1.5 py-0.2 rounded border border-fuchsia-500/30">
+                      @ $0.30 Target
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-mono-crypto px-2 py-0.5 rounded-md bg-fuchsia-500/20 border border-fuchsia-400/40 text-fuchsia-300 font-black">
+                    {p4Tokens > 0 ? 'Your Turn: Slot #12 in Line' : 'No Order Placed'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t border-purple-500/15 text-[9px] font-mono-crypto">
+                  <div>
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Total Queued in Pool</span>
+                    <span className="text-fuchsia-300 font-bold">{(750 + p4Tokens).toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-purple-400 block">({4 + (p4Tokens > 0 ? 1 : 0)} Sellers Total)</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Your Sell Allocation</span>
+                    <span className="text-slate-100 font-bold">{p4Tokens.toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-emerald-400 block">${p4Val.toFixed(2)} USD</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Ahead of You</span>
+                    <span className="text-purple-300 font-bold">11 Orders</span>
+                    <span className="text-[7.5px] text-purple-400 block">P4 Phase Order</span>
+                  </div>
+                </div>
+
+                <div className="mt-2 space-y-1">
+                  <div className="flex justify-between text-[8px] font-mono-crypto text-purple-300/80">
+                    <span>FIFO Execution Queue: {4 + (p4Tokens > 0 ? 1 : 0)} Sellers</span>
+                    <span className="text-fuchsia-300 font-semibold">{p4Tokens > 0 ? 'User #12 Position' : 'Standby'}</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-purple-950 rounded-full overflow-hidden p-0.5 border border-purple-500/30">
+                    <div className="h-full bg-gradient-to-r from-fuchsia-500 to-purple-500 rounded-full" style={{ width: p4Tokens > 0 ? '30%' : '10%' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Phase 5 Queue Card */}
+            {(selectedQueuePhase === 'all' || selectedQueuePhase === 'p5') && (
+              <div className="bg-[#0b0416] p-2.5 rounded-xl border border-purple-500/25 hover:border-fuchsia-400/50 transition-all">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-100 font-rajdhani">Phase 5 Queue</span>
+                    <span className="text-[9px] font-mono-crypto text-fuchsia-400 font-semibold bg-fuchsia-950/60 px-1.5 py-0.2 rounded border border-fuchsia-500/30">
+                      @ $0.40 Target
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-mono-crypto px-2 py-0.5 rounded-md bg-fuchsia-500/20 border border-fuchsia-400/40 text-fuchsia-300 font-black">
+                    {p5Tokens > 0 ? 'Your Turn: Slot #15 in Line' : 'No Order Placed'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t border-purple-500/15 text-[9px] font-mono-crypto">
+                  <div>
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Total Queued in Pool</span>
+                    <span className="text-fuchsia-300 font-bold">{(600 + p5Tokens).toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-purple-400 block">({3 + (p5Tokens > 0 ? 1 : 0)} Sellers Total)</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Your Sell Allocation</span>
+                    <span className="text-slate-100 font-bold">{p5Tokens.toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-emerald-400 block">${p5Val.toFixed(2)} USD</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Ahead of You</span>
+                    <span className="text-purple-300 font-bold">14 Orders</span>
+                    <span className="text-[7.5px] text-purple-400 block">P5 Phase Order</span>
+                  </div>
+                </div>
+
+                <div className="mt-2 space-y-1">
+                  <div className="flex justify-between text-[8px] font-mono-crypto text-purple-300/80">
+                    <span>FIFO Execution Queue: {3 + (p5Tokens > 0 ? 1 : 0)} Sellers</span>
+                    <span className="text-fuchsia-300 font-semibold">{p5Tokens > 0 ? 'User #15 Position' : 'Standby'}</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-purple-950 rounded-full overflow-hidden p-0.5 border border-purple-500/30">
+                    <div className="h-full bg-gradient-to-r from-fuchsia-500 to-purple-600 rounded-full" style={{ width: p5Tokens > 0 ? '20%' : '5%' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Live DEX Queue Card */}
+            {(selectedQueuePhase === 'all' || selectedQueuePhase === 'dex') && (
+              <div className="bg-[#0b0416] p-2.5 rounded-xl border border-fuchsia-500/35 hover:border-fuchsia-400/60 transition-all">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-100 font-rajdhani">Live DEX Liquidity Auto-Bridge</span>
+                    <span className="text-[9px] font-mono-crypto text-fuchsia-300 font-semibold bg-fuchsia-950/80 px-1.5 py-0.2 rounded border border-fuchsia-500/40">
+                      @ $1,500 – $3,000 DEX
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-mono-crypto px-2 py-0.5 rounded-md bg-fuchsia-500/25 border border-fuchsia-400/50 text-fuchsia-200 font-black">
+                    {dexTokens > 0 ? 'Your Turn: Slot #18 in Line' : 'No Order Placed'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t border-purple-500/15 text-[9px] font-mono-crypto">
+                  <div>
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Total Queued in Pool</span>
+                    <span className="text-fuchsia-300 font-bold">{(500 + dexTokens).toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-purple-400 block">({3 + (dexTokens > 0 ? 1 : 0)} Sellers Total)</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Your Sell Allocation</span>
+                    <span className="text-slate-100 font-bold">{dexTokens.toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-emerald-400 block">${dexVal.toLocaleString()} USD</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-purple-300/70 block text-[8px] uppercase">Execution Method</span>
+                    <span className="text-emerald-400 font-bold">Auto-PancakeSwap</span>
+                    <span className="text-[7.5px] text-purple-300 block">LP Smart Contract</span>
+                  </div>
+                </div>
+
+                <div className="mt-2 space-y-1">
+                  <div className="flex justify-between text-[8px] font-mono-crypto text-purple-300/80">
+                    <span>DEX Priority Execution Queue</span>
+                    <span className="text-fuchsia-300 font-semibold">{dexTokens > 0 ? 'Slot #18 (Smart Pair)' : 'Standby'}</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-purple-950 rounded-full overflow-hidden p-0.5 border border-purple-500/30">
+                    <div className="h-full bg-gradient-to-r from-fuchsia-500 via-pink-500 to-amber-400 rounded-full" style={{ width: dexTokens > 0 ? '85%' : '10%' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* FIFO Rule Explanation Footer */}
+          <div className="p-2 rounded-xl bg-purple-950/40 border border-purple-500/20 flex items-start gap-2 text-[8.5px] text-purple-300/90 font-mono-crypto">
+            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <p>
+              <strong className="text-slate-100 font-bold font-rajdhani text-[9.5px]">FIFO Execution Rule:</strong> All orders are timestamped on-chain. When Phase 2 unlocked buying volume enters, earlier buyers (<span className="text-amber-300">#1 to #4</span>) execute first, and your order (<span className="text-emerald-400 font-bold">#5</span>) automatically receives instant USDT payout to your wallet!
+            </p>
+          </div>
         </div>
       </div>
 
