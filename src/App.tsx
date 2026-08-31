@@ -288,6 +288,68 @@ export default function App() {
     };
   }, []);
 
+  // Real-time synchronization with Server Admin Configs & Cross-tab updates
+  useEffect(() => {
+    const fetchLatestServerConfigs = async () => {
+      try {
+        const res = await fetch('/api/admin/configs');
+        const data = await res.json();
+        if (data?.success) {
+          if (data.phases && Array.isArray(data.phases) && data.phases.length > 0) {
+            setPhases(data.phases);
+            localStorage.setItem('nxbc_admin_phases', JSON.stringify(data.phases));
+          }
+          if (data.referralLevels && Array.isArray(data.referralLevels) && data.referralLevels.length > 0) {
+            setReferralLevels(data.referralLevels);
+            localStorage.setItem('nxbc_admin_levels', JSON.stringify(data.referralLevels));
+          }
+          if (data.rankRewards && Array.isArray(data.rankRewards) && data.rankRewards.length > 0) {
+            setRankRewards(data.rankRewards);
+            localStorage.setItem('nxbc_admin_ranks', JSON.stringify(data.rankRewards));
+          }
+          if (data.systemConfig && typeof data.systemConfig === 'object') {
+            setSystemConfig(data.systemConfig);
+            localStorage.setItem('nxbc_admin_system', JSON.stringify(data.systemConfig));
+          }
+          if (data.matrixConfig && typeof data.matrixConfig === 'object') {
+            setMatrixConfig(data.matrixConfig);
+            localStorage.setItem('nxbc_admin_matrix', JSON.stringify(data.matrixConfig));
+          }
+        }
+      } catch (err) {}
+    };
+
+    fetchLatestServerConfigs();
+    // Poll server every 3.5 seconds to keep user dashboard 100% updated in real-time
+    const syncInterval = setInterval(fetchLatestServerConfigs, 3500);
+
+    // Cross-tab storage listener for immediate instant sync across browser tabs
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'nxbc_admin_phases' && e.newValue) {
+        try { setPhases(JSON.parse(e.newValue)); } catch (err) {}
+      }
+      if (e.key === 'nxbc_admin_levels' && e.newValue) {
+        try { setReferralLevels(JSON.parse(e.newValue)); } catch (err) {}
+      }
+      if (e.key === 'nxbc_admin_ranks' && e.newValue) {
+        try { setRankRewards(JSON.parse(e.newValue)); } catch (err) {}
+      }
+      if (e.key === 'nxbc_admin_system' && e.newValue) {
+        try { setSystemConfig(JSON.parse(e.newValue)); } catch (err) {}
+      }
+      if (e.key === 'nxbc_admin_matrix' && e.newValue) {
+        try { setMatrixConfig(JSON.parse(e.newValue)); } catch (err) {}
+      }
+    };
+
+    window.addEventListener('storage', handleStorageEvent);
+
+    return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener('storage', handleStorageEvent);
+    };
+  }, []);
+
   // Sync user with PostgreSQL backend when wallet connects
   useEffect(() => {
     if (walletConnected && walletAddress) {
@@ -670,12 +732,27 @@ export default function App() {
     setTransactions([]);
   };
 
-  // Synchronized Update Handlers (Updates React state AND persists to localStorage)
+  // Synchronized Update Handlers (Updates React state, persists to localStorage, and saves to Server API)
+  const syncConfigsToServer = (partial: {
+    phases?: PhaseConfig[];
+    referralLevels?: ReferralLevel[];
+    rankRewards?: RankReward[];
+    systemConfig?: AdminSystemConfig;
+    matrixConfig?: MatrixConfig;
+  }) => {
+    fetch('/api/admin/configs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(partial),
+    }).catch((err) => console.log('Admin API sync notice:', err));
+  };
+
   const handleUpdatePhases = (newPhases: PhaseConfig[]) => {
     setPhases(newPhases);
     if (typeof window !== 'undefined') {
       localStorage.setItem('nxbc_admin_phases', JSON.stringify(newPhases));
     }
+    syncConfigsToServer({ phases: newPhases });
   };
 
   const handleUpdateReferralLevels = (newLevels: ReferralLevel[]) => {
@@ -683,6 +760,7 @@ export default function App() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('nxbc_admin_levels', JSON.stringify(newLevels));
     }
+    syncConfigsToServer({ referralLevels: newLevels });
   };
 
   const handleUpdateRankRewards = (newRanks: RankReward[]) => {
@@ -690,6 +768,7 @@ export default function App() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('nxbc_admin_ranks', JSON.stringify(newRanks));
     }
+    syncConfigsToServer({ rankRewards: newRanks });
   };
 
   const handleUpdateSystemConfig = (newConfig: AdminSystemConfig) => {
@@ -697,6 +776,7 @@ export default function App() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('nxbc_admin_system', JSON.stringify(newConfig));
     }
+    syncConfigsToServer({ systemConfig: newConfig });
   };
 
   const handleUpdateMatrixConfig = (newMatrix: MatrixConfig) => {
@@ -704,6 +784,7 @@ export default function App() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('nxbc_admin_matrix', JSON.stringify(newMatrix));
     }
+    syncConfigsToServer({ matrixConfig: newMatrix });
   };
 
   // Helper to easily simulate 100% phase completion for sequential demo

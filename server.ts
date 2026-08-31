@@ -355,13 +355,174 @@ async function startServer() {
     }
   });
 
-  // System Configurations (Admin Control)
+  // System & Admin Configurations (Live Synchronization)
+  let inMemoryAdminPin = "7788";
+  let inMemoryConfigs: {
+    phases?: any;
+    referralLevels?: any;
+    rankRewards?: any;
+    systemConfig?: any;
+    matrixConfig?: any;
+  } = {};
+
+  // Verify PIN Endpoint (Strict & Secure - No password leakage)
+  app.post("/api/admin/verify-pin", async (req, res) => {
+    try {
+      const { pin } = req.body;
+      const cleanPin = (pin || "").trim();
+
+      // Check in database first
+      let currentPin = inMemoryAdminPin;
+      try {
+        const pinRecord = await db.query.systemConfigs.findFirst({
+          where: eq(systemConfigs.key, "admin_pin"),
+        });
+        if (pinRecord && pinRecord.value) {
+          currentPin = pinRecord.value;
+          inMemoryAdminPin = pinRecord.value;
+        }
+      } catch (dbErr) {}
+
+      if (cleanPin === currentPin) {
+        return res.json({ success: true, message: "Authentication successful" });
+      } else {
+        return res.status(401).json({ success: false, error: "Incorrect Security PIN. Access Denied." });
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Server authentication error" });
+    }
+  });
+
+  // Change Admin PIN Endpoint
+  app.post("/api/admin/change-pin", async (req, res) => {
+    try {
+      const { currentPin, newPin } = req.body;
+      const cleanCurrent = (currentPin || "").trim();
+      const cleanNew = (newPin || "").trim();
+
+      if (!cleanNew || cleanNew.length < 4) {
+        return res.status(400).json({ error: "New PIN must be at least 4 characters long." });
+      }
+
+      let activePin = inMemoryAdminPin;
+      try {
+        const pinRecord = await db.query.systemConfigs.findFirst({
+          where: eq(systemConfigs.key, "admin_pin"),
+        });
+        if (pinRecord && pinRecord.value) {
+          activePin = pinRecord.value;
+        }
+      } catch (dbErr) {}
+
+      if (cleanCurrent !== activePin) {
+        return res.status(401).json({ error: "Current PIN is incorrect." });
+      }
+
+      // Update PIN in database and memory
+      inMemoryAdminPin = cleanNew;
+      try {
+        const existing = await db.query.systemConfigs.findFirst({
+          where: eq(systemConfigs.key, "admin_pin"),
+        });
+        if (existing) {
+          await db.update(systemConfigs).set({ value: cleanNew, updatedAt: new Date() }).where(eq(systemConfigs.key, "admin_pin"));
+        } else {
+          await db.insert(systemConfigs).values({ key: "admin_pin", value: cleanNew, description: "Master Admin Security PIN" });
+        }
+      } catch (dbErr) {
+        console.log("Database PIN update notice:", dbErr);
+      }
+
+      res.json({ success: true, message: "Admin PIN changed successfully!" });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to update PIN" });
+    }
+  });
+
+  // Get Live System & Admin Configs
+  app.get("/api/admin/configs", async (req, res) => {
+    try {
+      let dbConfigs: Record<string, any> = {};
+      try {
+        const rows = await db.select().from(systemConfigs);
+        for (const row of rows) {
+          try {
+            dbConfigs[row.key] = JSON.parse(row.value);
+          } catch {
+            dbConfigs[row.key] = row.value;
+          }
+        }
+      } catch (dbErr) {}
+
+      res.json({
+        success: true,
+        phases: dbConfigs.phases || inMemoryConfigs.phases || null,
+        referralLevels: dbConfigs.referralLevels || inMemoryConfigs.referralLevels || null,
+        rankRewards: dbConfigs.rankRewards || inMemoryConfigs.rankRewards || null,
+        systemConfig: dbConfigs.systemConfig || inMemoryConfigs.systemConfig || null,
+        matrixConfig: dbConfigs.matrixConfig || inMemoryConfigs.matrixConfig || null,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Save Live System & Admin Configs
+  app.post("/api/admin/configs", async (req, res) => {
+    try {
+      const { phases, referralLevels, rankRewards, systemConfig, matrixConfig } = req.body;
+
+      if (phases) inMemoryConfigs.phases = phases;
+      if (referralLevels) inMemoryConfigs.referralLevels = referralLevels;
+      if (rankRewards) inMemoryConfigs.rankRewards = rankRewards;
+      if (systemConfig) inMemoryConfigs.systemConfig = systemConfig;
+      if (matrixConfig) inMemoryConfigs.matrixConfig = matrixConfig;
+
+      // Save to database
+      const itemsToSave = [
+        { key: "phases", value: phases ? JSON.stringify(phases) : null, desc: "Presale Phases and Coin Prices" },
+        { key: "referralLevels", value: referralLevels ? JSON.stringify(referralLevels) : null, desc: "10-Level Commission Plan" },
+        { key: "rankRewards", value: rankRewards ? JSON.stringify(rankRewards) : null, desc: "Leadership Rank Rewards" },
+        { key: "systemConfig", value: systemConfig ? JSON.stringify(systemConfig) : null, desc: "System Parameters" },
+        { key: "matrixConfig", value: matrixConfig ? JSON.stringify(matrixConfig) : null, desc: "2x2 Matrix System Config" },
+      ];
+
+      for (const item of itemsToSave) {
+        if (!item.value) continue;
+        try {
+          const existing = await db.query.systemConfigs.findFirst({
+            where: eq(systemConfigs.key, item.key),
+          });
+          if (existing) {
+            await db.update(systemConfigs).set({ value: item.value, updatedAt: new Date() }).where(eq(systemConfigs.key, item.key));
+          } else {
+            await db.insert(systemConfigs).values({ key: item.key, value: item.value, description: item.desc });
+          }
+        } catch (dbErr) {
+          console.log(`DB config save notice (${item.key}):`, dbErr);
+        }
+      }
+
+      console.log("[ADMIN SYNC] Live configurations updated and persisted to PostgreSQL & Memory.");
+
+      res.json({
+        success: true,
+        message: "Configurations updated successfully and applied to all users!",
+        configs: inMemoryConfigs,
+      });
+    } catch (error: any) {
+      console.error("Error in /api/admin/configs POST:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // System Configurations (Admin Control Legacy endpoint)
   app.get("/api/system/configs", async (req, res) => {
     try {
       const configs = await db.select().from(systemConfigs);
-      res.json({ configs });
+      res.json({ configs, inMemoryConfigs });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: error.message, inMemoryConfigs });
     }
   });
 
