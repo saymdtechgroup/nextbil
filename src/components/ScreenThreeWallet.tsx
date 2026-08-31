@@ -25,6 +25,9 @@ interface ScreenThreeWalletProps {
   onWithdraw: (amountUsd: number) => void;
   onToggleWallet: () => void;
   onOpenWalletModal: () => void;
+  onOpenSwapModal?: () => void;
+  nxbusdBalance?: number;
+  usdtBalance?: number;
 }
 
 export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
@@ -35,6 +38,9 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
   onWithdraw,
   onToggleWallet,
   onOpenWalletModal,
+  onOpenSwapModal,
+  nxbusdBalance = 0,
+  usdtBalance = 0,
 }) => {
   const [withdrawAmount, setWithdrawAmount] = useState<string>(
     claimableBalanceUsd > 0 ? claimableBalanceUsd.toFixed(2) : '0.00'
@@ -137,7 +143,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
             Available Wallet Reward Value
           </span>
           <span className="text-[10px] font-mono-crypto px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/40">
-            USDT / JDT Yield
+            NXBUSD & USDT Payouts
           </span>
         </div>
 
@@ -151,8 +157,25 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
         </div>
 
         <p className="text-[9px] text-purple-200/70">
-          Earned via Level Income, Matrix Cycle Spillover & Phase Lock Yields
+          Earned via Level Income, Matrix Cycle Spillover & Phase Lock Yields (Paid in NXBUSD / USDT)
         </p>
+
+        {/* 1:1 Swap Quick Action */}
+        <div className="mt-3 pt-2.5 border-t border-purple-500/20 flex items-center justify-between">
+          <div className="text-[9px] font-mono-crypto text-purple-300">
+            <span>NXBUSD: <strong className="text-amber-300">${nxbusdBalance.toFixed(2)}</strong></span>
+            <span className="mx-2">•</span>
+            <span>USDT: <strong className="text-emerald-400">${usdtBalance.toFixed(2)}</strong></span>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenSwapModal}
+            className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-300 font-mono-crypto font-bold text-[9px] flex items-center gap-1 cursor-pointer transition-all"
+          >
+            <ArrowRightLeft className="w-3 h-3 text-amber-400" />
+            <span>1:1 Instant Swap</span>
+          </button>
+        </div>
       </div>
 
       {/* Wallet Type Card: Hot Wallet with Connect / Disconnect Arrow */}

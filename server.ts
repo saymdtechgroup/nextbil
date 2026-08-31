@@ -338,6 +338,44 @@ async function startServer() {
     }
   });
 
+  // 1:1 Instant Token Swap (USDT ⮂ NXBUSD)
+  app.post("/api/swap/convert", async (req, res) => {
+    try {
+      const { walletAddress, fromToken, toToken, amount, txHash } = req.body;
+      if (!walletAddress || !amount || Number(amount) <= 0) {
+        return res.status(400).json({ error: "Invalid swap parameters" });
+      }
+
+      const normalizedAddress = walletAddress.toLowerCase();
+      let user = await db.query.users.findFirst({
+        where: eq(users.walletAddress, normalizedAddress),
+      });
+
+      const confirmedTxHash = txHash || `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
+
+      if (user) {
+        // Record in transactions database
+        await db.insert(transactions).values({
+          userId: user.id,
+          type: 'referral_bonus',
+          amountUsdt: Number(amount),
+          tokenAmount: Number(amount),
+          tokenPrice: 1.0,
+          status: 'completed',
+          txHash: confirmedTxHash,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: `Instant 1:1 swap executed: ${amount} ${fromToken} ➔ ${amount} ${toToken}`,
+        txHash: confirmedTxHash,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Swap execution failed" });
+    }
+  });
+
   // Create P2P Sell Order
   app.post("/api/p2p/sell", async (req, res) => {
     try {

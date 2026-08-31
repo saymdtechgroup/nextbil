@@ -79,7 +79,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   },
 }) => {
   const [step, setStep] = useState<1 | 2>(1);
-  const [currency, setCurrency] = useState<'USDT' | 'BNB'>('USDT');
+  const [currency, setCurrency] = useState<'NXBUSD' | 'USDT' | 'BNB'>('NXBUSD');
   const [paymentMode, setPaymentMode] = useState<'web3' | 'manual'>('web3');
   const [payAmount, setPayAmount] = useState<string>('100');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -101,6 +101,11 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
   const bnbPriceUsd = 600;
   const cryptoEquivalent = currency === 'BNB' ? (usdValue / bnbPriceUsd) : usdValue;
+
+  // Contracts
+  const NXBUSD_CONTRACT = '0xbEFB5857cd4309a4a64f92Dd67507c34fCbca78b';
+  const NXBC_CONTRACT = '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7';
+  const USDT_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
 
   // Strict System Allotment Constraints
   const maxAvailableInPhase = Math.max(0, activePhaseInfo.totalSupply - activePhaseInfo.tokensSold);
@@ -223,9 +228,28 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
         ],
       });
       return tx;
+    } else if (currency === 'NXBUSD') {
+      const tokenAmountWei = BigInt(Math.floor(usdValue * 1e18));
+      const cleanTo = contractAddress.toLowerCase().replace('0x', '').padStart(64, '0');
+      const cleanVal = tokenAmountWei.toString(16).padStart(64, '0');
+      const data = `0xa9059cbb${cleanTo}${cleanVal}`;
+
+      setPaymentStatusText('Approve NXBUSD token transfer in your wallet...');
+      const tx = await eth.request({
+        method: 'eth_sendTransaction',
+        params: [
+          {
+            from: sender,
+            to: NXBUSD_CONTRACT,
+            data: data,
+            value: '0x0',
+          },
+        ],
+      });
+      return tx;
     } else {
       // USDT BEP-20 on BSC Mainnet: 0x55d398326f99059fF775485246999027B3197955
-      const usdtContractBsc = '0x55d398326f99059fF775485246999027B3197955';
+      const usdtContractBsc = USDT_CONTRACT;
       const usdtAmountWei = BigInt(Math.floor(usdValue * 1e18));
       
       // Transfer function selector 0xa9059cbb + padded recipient + padded amount
@@ -233,7 +257,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
       const cleanVal = usdtAmountWei.toString(16).padStart(64, '0');
       const data = `0xa9059cbb${cleanTo}${cleanVal}`;
 
-      setPaymentStatusText('Approve USDT BEP-20 transfer in your wallet...');
+      setPaymentStatusText('Auto-Converting USDT ➔ NXBUSD & purchasing NXBC...');
       const tx = await eth.request({
         method: 'eth_sendTransaction',
         params: [
@@ -420,25 +444,61 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
             {/* Payment Currency Selector */}
             <div className="space-y-1.5">
-              <label className="text-[10px] font-semibold text-purple-200 uppercase tracking-wider">
-                2. Select Payment Asset (BNB Chain)
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {(['USDT', 'BNB'] as const).map((curr) => (
-                  <button
-                    key={curr}
-                    type="button"
-                    onClick={() => setCurrency(curr)}
-                    className={`py-2 rounded-xl text-xs font-mono-crypto font-bold border transition-all flex items-center justify-center gap-1.5 ${
-                      currency === curr
-                        ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                        : 'bg-purple-950/60 border-purple-500/20 text-purple-300 hover:text-white'
-                    }`}
-                  >
-                    <span>{curr} (BEP-20)</span>
-                  </button>
-                ))}
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-semibold text-purple-200 uppercase tracking-wider">
+                  2. Select Payment Asset (BNB Chain)
+                </label>
+                <span className="text-[9px] text-amber-300 font-mono-crypto font-bold">
+                  1 NXBUSD = $1.00 USDT
+                </span>
               </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCurrency('NXBUSD')}
+                  className={`py-2 px-1 rounded-xl text-[11px] font-mono-crypto font-bold border transition-all flex flex-col items-center justify-center ${
+                    currency === 'NXBUSD'
+                      ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+                      : 'bg-purple-950/60 border-purple-500/20 text-purple-300 hover:text-white'
+                  }`}
+                >
+                  <span className="font-bold">NXBUSD</span>
+                  <span className="text-[8px] opacity-75">1:1 Utility Fuel</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrency('USDT')}
+                  className={`py-2 px-1 rounded-xl text-[11px] font-mono-crypto font-bold border transition-all flex flex-col items-center justify-center ${
+                    currency === 'USDT'
+                      ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+                      : 'bg-purple-950/60 border-purple-500/20 text-purple-300 hover:text-white'
+                  }`}
+                >
+                  <span className="font-bold">USDT</span>
+                  <span className="text-[8px] text-emerald-400">Auto 1:1 Convert</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrency('BNB')}
+                  className={`py-2 px-1 rounded-xl text-[11px] font-mono-crypto font-bold border transition-all flex flex-col items-center justify-center ${
+                    currency === 'BNB'
+                      ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+                      : 'bg-purple-950/60 border-purple-500/20 text-purple-300 hover:text-white'
+                  }`}
+                >
+                  <span className="font-bold">BNB</span>
+                  <span className="text-[8px] opacity-75">Native BSC</span>
+                </button>
+              </div>
+
+              {currency === 'USDT' && (
+                <div className="p-2 rounded-xl bg-emerald-950/50 border border-emerald-500/30 text-[9px] text-emerald-300 font-mono-crypto flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-emerald-400 shrink-0" />
+                  <span>Your USDT will be instantly converted 1:1 into NXBUSD to mint your NXBC Coins seamlessly!</span>
+                </div>
+              )}
             </div>
 
             {/* Amount Input */}

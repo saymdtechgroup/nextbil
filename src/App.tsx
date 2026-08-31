@@ -37,6 +37,7 @@ import { ScreenThreeWallet } from './components/ScreenThreeWallet';
 import { ScreenTeam } from './components/ScreenTeam';
 import { ScreenMine } from './components/ScreenMine';
 import { BuyTokenModal } from './components/BuyTokenModal';
+import { SwapModal } from './components/SwapModal';
 import { WalletConnectModal } from './components/WalletConnectModal';
 import { TeamPlanModal } from './components/TeamPlanModal';
 import { MatrixPlanModal } from './components/MatrixPlanModal';
@@ -613,10 +614,65 @@ export default function App() {
 
   // Modals state
   const [buyModalOpen, setBuyModalOpen] = useState<boolean>(false);
+  const [swapModalOpen, setSwapModalOpen] = useState<boolean>(false);
   const [walletModalOpen, setWalletModalOpen] = useState<boolean>(false);
   const [teamModalOpen, setTeamModalOpen] = useState<boolean>(false);
   const [matrixModalOpen, setMatrixModalOpen] = useState<boolean>(false);
   const [adminModalOpen, setAdminModalOpen] = useState<boolean>(false);
+
+  // 2-Token Balances: NXBUSD ($1.00 Utility Token) & USDT (BEP-20)
+  const [nxbusdBalance, setNxbusdBalance] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const s = localStorage.getItem('nxbc_nxbusd_balance');
+      if (s) return parseFloat(s) || 0;
+    }
+    return 0;
+  });
+
+  const [usdtBalance, setUsdtBalance] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const s = localStorage.getItem('nxbc_usdt_balance');
+      if (s) return parseFloat(s) || 0;
+    }
+    return 250;
+  });
+
+  const handleSwapSuccess = (fromToken: 'USDT' | 'NXBUSD', toToken: 'USDT' | 'NXBUSD', amount: number) => {
+    if (fromToken === 'USDT') {
+      setUsdtBalance((prev) => {
+        const next = Math.max(0, prev - amount);
+        localStorage.setItem('nxbc_usdt_balance', next.toString());
+        return next;
+      });
+      setNxbusdBalance((prev) => {
+        const next = prev + amount;
+        localStorage.setItem('nxbc_nxbusd_balance', next.toString());
+        return next;
+      });
+    } else {
+      setNxbusdBalance((prev) => {
+        const next = Math.max(0, prev - amount);
+        localStorage.setItem('nxbc_nxbusd_balance', next.toString());
+        return next;
+      });
+      setUsdtBalance((prev) => {
+        const next = prev + amount;
+        localStorage.setItem('nxbc_usdt_balance', next.toString());
+        return next;
+      });
+    }
+
+    const newTx: Transaction = {
+      id: `tx-swap-${Date.now()}`,
+      type: 'referral_bonus',
+      title: `1:1 Swap: ${amount} ${fromToken} ➔ ${amount} ${toToken}`,
+      amountUsd: amount,
+      timestamp: 'Just now',
+      status: 'completed',
+      txHash: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
+    };
+    setTransactions((prev) => [newTx, ...prev]);
+  };
 
   // Purchase handler with sequential phase progression & immutable allocation lock
   const handleConfirmPurchase = (
@@ -1207,6 +1263,7 @@ export default function App() {
                   phases={phases}
                   onUpdateAllocation={setAllocation}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
+                  onOpenSwapModal={() => setSwapModalOpen(true)}
                   onOpenWalletModal={() => setWalletModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
@@ -1214,6 +1271,8 @@ export default function App() {
                   onResetPhases={handleResetPhases}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
+                  nxbusdBalance={nxbusdBalance}
+                  usdtBalance={usdtBalance}
                 />
               )}
 
@@ -1250,6 +1309,9 @@ export default function App() {
                   onWithdraw={handleWithdraw}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
                   onOpenWalletModal={() => setWalletModalOpen(true)}
+                  onOpenSwapModal={() => setSwapModalOpen(true)}
+                  nxbusdBalance={nxbusdBalance}
+                  usdtBalance={usdtBalance}
                 />
               )}
 
@@ -1307,6 +1369,7 @@ export default function App() {
                   phases={phases}
                   onUpdateAllocation={setAllocation}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
+                  onOpenSwapModal={() => setSwapModalOpen(true)}
                   onOpenWalletModal={() => setWalletModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
@@ -1314,6 +1377,8 @@ export default function App() {
                   onResetPhases={handleResetPhases}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
+                  nxbusdBalance={nxbusdBalance}
+                  usdtBalance={usdtBalance}
                 />
                 <BottomNavBar
                   idPrefix="s1-nav"
@@ -1368,6 +1433,9 @@ export default function App() {
                   onWithdraw={handleWithdraw}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
                   onOpenWalletModal={() => setWalletModalOpen(true)}
+                  onOpenSwapModal={() => setSwapModalOpen(true)}
+                  nxbusdBalance={nxbusdBalance}
+                  usdtBalance={usdtBalance}
                 />
                 <BottomNavBar
                   idPrefix="s3-nav"
@@ -1407,6 +1475,18 @@ export default function App() {
           p5Percent: allocation.p5Percent,
           dexPercent: allocation.dexPercent,
         }}
+      />
+
+      {/* 1:1 USDT ⮂ NXBUSD Swap Modal */}
+      <SwapModal
+        isOpen={swapModalOpen}
+        onClose={() => setSwapModalOpen(false)}
+        walletConnected={walletConnected}
+        walletAddress={walletAddress}
+        onOpenWalletModal={() => setWalletModalOpen(true)}
+        onSwapSuccess={handleSwapSuccess}
+        nxbusdBalance={nxbusdBalance}
+        usdtBalance={usdtBalance}
       />
 
       <WalletConnectModal
