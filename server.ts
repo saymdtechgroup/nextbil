@@ -212,21 +212,34 @@ async function startServer() {
     }
   });
 
-  // Buy Presale Tokens API
+  // Buy Presale Tokens API (Supports Real Web3 & Direct Payment TxHash)
   app.post("/api/presale/buy", async (req, res) => {
     try {
-      const { walletAddress, amountUsdt, tokenAmount, tokenPrice, phaseIndex } = req.body;
+      const { walletAddress, amountUsdt, tokenAmount, tokenPrice, phaseIndex, txHash } = req.body;
       if (!walletAddress || !amountUsdt || !tokenAmount) {
         return res.status(400).json({ error: "Missing required purchase fields" });
       }
 
-      const user = await db.query.users.findFirst({
-        where: eq(users.walletAddress, walletAddress.toLowerCase()),
+      const normalizedAddress = walletAddress.toLowerCase();
+      let user = await db.query.users.findFirst({
+        where: eq(users.walletAddress, normalizedAddress),
       });
 
       if (!user) {
-        return res.status(404).json({ error: "User not registered. Please sync wallet first." });
+        // Auto-register user if first purchase
+        const generatedRefCode = `REF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        const [newUser] = await db.insert(users).values({
+          walletAddress: normalizedAddress,
+          referralCode: generatedRefCode,
+          referredBy: null,
+          availableUsdt: 0,
+        }).returning();
+        user = newUser;
       }
+
+      const confirmedTxHash = txHash && txHash.startsWith('0x') && txHash.length >= 20
+        ? txHash
+        : `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
 
       // Record transaction
       const [tx] = await db.insert(transactions).values({
@@ -237,7 +250,7 @@ async function startServer() {
         tokenPrice: Number(tokenPrice || 0.10),
         phaseIndex: Number(phaseIndex || 1),
         status: 'completed',
-        txHash: `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`,
+        txHash: confirmedTxHash,
       }).returning();
 
       // Update user investment & qualification

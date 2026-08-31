@@ -56,7 +56,13 @@ export default function App() {
       const saved = localStorage.getItem('nxbc_admin_phases');
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          // If stored data contains the old demo 7,650,000 sold, reset to clean real state
+          if (parsed?.[0]?.tokensSold === 7650000) {
+            localStorage.removeItem('nxbc_admin_phases');
+          } else {
+            return parsed;
+          }
         } catch (e) {}
       }
     }
@@ -69,11 +75,11 @@ export default function App() {
         rate: 0.01,
         rateLabel: '$0.01',
         totalSupply: 10000000, // 10,000,000 NXBC
-        tokensSold: 7650000, // 7,650,000 NXBC (76.5%)
+        tokensSold: 0, // Clean real state for live payments
         status: 'active',
         multiplier: 'Base Seed Rate',
         unlockRequirement: 'Live Now (Stage 1)',
-        targetDate: 'Ends in 03d 14h 22m',
+        targetDate: 'Active Now',
       },
       {
         id: 'p2',
@@ -291,40 +297,84 @@ export default function App() {
   // Real-time synchronization with Server Admin Configs & Cross-tab updates
   useEffect(() => {
     const fetchLatestServerConfigs = async () => {
+      // If currently on admin page, do not overwrite what the admin is viewing/editing
+      if (
+        typeof window !== 'undefined' &&
+        (window.location.hash.toLowerCase().includes('admin') ||
+          window.location.pathname.toLowerCase().includes('admin') ||
+          window.location.search.toLowerCase().includes('admin'))
+      ) {
+        return;
+      }
+
       try {
         const res = await fetch('/api/admin/configs');
         const data = await res.json();
         if (data?.success) {
           if (data.phases && Array.isArray(data.phases) && data.phases.length > 0) {
-            setPhases(data.phases);
-            localStorage.setItem('nxbc_admin_phases', JSON.stringify(data.phases));
+            setPhases((prev) => {
+              if (JSON.stringify(prev) !== JSON.stringify(data.phases)) {
+                localStorage.setItem('nxbc_admin_phases', JSON.stringify(data.phases));
+                return data.phases;
+              }
+              return prev;
+            });
           }
           if (data.referralLevels && Array.isArray(data.referralLevels) && data.referralLevels.length > 0) {
-            setReferralLevels(data.referralLevels);
-            localStorage.setItem('nxbc_admin_levels', JSON.stringify(data.referralLevels));
+            setReferralLevels((prev) => {
+              if (JSON.stringify(prev) !== JSON.stringify(data.referralLevels)) {
+                localStorage.setItem('nxbc_admin_levels', JSON.stringify(data.referralLevels));
+                return data.referralLevels;
+              }
+              return prev;
+            });
           }
           if (data.rankRewards && Array.isArray(data.rankRewards) && data.rankRewards.length > 0) {
-            setRankRewards(data.rankRewards);
-            localStorage.setItem('nxbc_admin_ranks', JSON.stringify(data.rankRewards));
+            setRankRewards((prev) => {
+              if (JSON.stringify(prev) !== JSON.stringify(data.rankRewards)) {
+                localStorage.setItem('nxbc_admin_ranks', JSON.stringify(data.rankRewards));
+                return data.rankRewards;
+              }
+              return prev;
+            });
           }
           if (data.systemConfig && typeof data.systemConfig === 'object') {
-            setSystemConfig(data.systemConfig);
-            localStorage.setItem('nxbc_admin_system', JSON.stringify(data.systemConfig));
+            setSystemConfig((prev) => {
+              if (JSON.stringify(prev) !== JSON.stringify(data.systemConfig)) {
+                localStorage.setItem('nxbc_admin_system', JSON.stringify(data.systemConfig));
+                return data.systemConfig;
+              }
+              return prev;
+            });
           }
           if (data.matrixConfig && typeof data.matrixConfig === 'object') {
-            setMatrixConfig(data.matrixConfig);
-            localStorage.setItem('nxbc_admin_matrix', JSON.stringify(data.matrixConfig));
+            setMatrixConfig((prev) => {
+              if (JSON.stringify(prev) !== JSON.stringify(data.matrixConfig)) {
+                localStorage.setItem('nxbc_admin_matrix', JSON.stringify(data.matrixConfig));
+                return data.matrixConfig;
+              }
+              return prev;
+            });
           }
         }
       } catch (err) {}
     };
 
     fetchLatestServerConfigs();
-    // Poll server every 3.5 seconds to keep user dashboard 100% updated in real-time
-    const syncInterval = setInterval(fetchLatestServerConfigs, 3500);
+    // Poll server every 5 seconds for live user dashboards
+    const syncInterval = setInterval(fetchLatestServerConfigs, 5000);
 
     // Cross-tab storage listener for immediate instant sync across browser tabs
     const handleStorageEvent = (e: StorageEvent) => {
+      // Ignore storage sync events if currently on admin page
+      if (
+        typeof window !== 'undefined' &&
+        (window.location.hash.toLowerCase().includes('admin') ||
+          window.location.pathname.toLowerCase().includes('admin'))
+      ) {
+        return;
+      }
+
       if (e.key === 'nxbc_admin_phases' && e.newValue) {
         try { setPhases(JSON.parse(e.newValue)); } catch (err) {}
       }
@@ -390,21 +440,26 @@ export default function App() {
       const saved = localStorage.getItem('nxbc_admin_levels');
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          if (parsed?.[0]?.directMembers === 8 || parsed?.[0]?.totalVolumeUsd === 4500) {
+            localStorage.removeItem('nxbc_admin_levels');
+          } else {
+            return parsed;
+          }
         } catch (e) {}
       }
     }
     return [
-      { level: 1, commissionPercent: 10, directRequirement: 1, directMembers: 8, totalVolumeUsd: 4500, earnedUsd: 450.00 },
-      { level: 2, commissionPercent: 5, directRequirement: 2, directMembers: 14, totalVolumeUsd: 3800, earnedUsd: 190.00 },
-      { level: 3, commissionPercent: 3, directRequirement: 3, directMembers: 22, totalVolumeUsd: 2900, earnedUsd: 87.00 },
-      { level: 4, commissionPercent: 2, directRequirement: 4, directMembers: 31, totalVolumeUsd: 2200, earnedUsd: 44.00 },
-      { level: 5, commissionPercent: 1, directRequirement: 5, directMembers: 18, totalVolumeUsd: 1800, earnedUsd: 18.00 },
-      { level: 6, commissionPercent: 1, directRequirement: 6, directMembers: 15, totalVolumeUsd: 1500, earnedUsd: 15.00 },
-      { level: 7, commissionPercent: 1, directRequirement: 7, directMembers: 12, totalVolumeUsd: 1200, earnedUsd: 12.00 },
-      { level: 8, commissionPercent: 1, directRequirement: 8, directMembers: 10, totalVolumeUsd: 1400, earnedUsd: 14.00 },
-      { level: 9, commissionPercent: 1, directRequirement: 9, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 15.00 },
-      { level: 10, commissionPercent: 1, directRequirement: 10, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 15.00 },
+      { level: 1, commissionPercent: 10, directRequirement: 1, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 2, commissionPercent: 5, directRequirement: 2, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 3, commissionPercent: 3, directRequirement: 3, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 4, commissionPercent: 2, directRequirement: 4, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 5, commissionPercent: 1, directRequirement: 5, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 6, commissionPercent: 1, directRequirement: 6, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 7, commissionPercent: 1, directRequirement: 7, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 8, commissionPercent: 1, directRequirement: 8, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 9, commissionPercent: 1, directRequirement: 9, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 10, commissionPercent: 1, directRequirement: 10, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
     ];
   });
 
@@ -431,7 +486,12 @@ export default function App() {
       const saved = localStorage.getItem('nxbc_admin_ranks');
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          if (parsed?.[0]?.currentQualifiedCount === 42) {
+            localStorage.removeItem('nxbc_admin_ranks');
+          } else {
+            return parsed;
+          }
         } catch (e) {}
       }
     }
@@ -445,8 +505,8 @@ export default function App() {
         oneTimeBonusUsd: 150,
         rewardTokens: 10000,
         monthlyRoyaltyPercent: 1,
-        currentQualifiedCount: 42,
-        status: 'unlocked',
+        currentQualifiedCount: 0,
+        status: 'locked',
       },
       {
         id: 'rank-2',
@@ -457,8 +517,8 @@ export default function App() {
         oneTimeBonusUsd: 500,
         rewardTokens: 35000,
         monthlyRoyaltyPercent: 2,
-        currentQualifiedCount: 18,
-        status: 'claimable',
+        currentQualifiedCount: 0,
+        status: 'locked',
       },
       {
         id: 'rank-3',
@@ -469,7 +529,7 @@ export default function App() {
         oneTimeBonusUsd: 1500,
         rewardTokens: 100000,
         monthlyRoyaltyPercent: 3,
-        currentQualifiedCount: 7,
+        currentQualifiedCount: 0,
         status: 'locked',
       },
       {
@@ -481,7 +541,7 @@ export default function App() {
         oneTimeBonusUsd: 5000,
         rewardTokens: 300000,
         monthlyRoyaltyPercent: 4,
-        currentQualifiedCount: 3,
+        currentQualifiedCount: 0,
         status: 'locked',
       },
       {
@@ -493,7 +553,7 @@ export default function App() {
         oneTimeBonusUsd: 15000,
         rewardTokens: 1000000,
         monthlyRoyaltyPercent: 5,
-        currentQualifiedCount: 1,
+        currentQualifiedCount: 0,
         status: 'locked',
       },
       {
@@ -536,19 +596,19 @@ export default function App() {
         uplineSharePercent: 10,
         enabled: true,
       },
-      royaltyPoolUsd: 25000,
+      royaltyPoolUsd: 0,
     };
   });
 
-  // 2x2 Matrix Structure Nodes Data (Reflecting User A, B, C, D, E, F, G tree with $1 base placement)
+  // 2x2 Matrix Structure Nodes Data (Clean Real Tree)
   const matrixNodes: MatrixNode[] = [
-    { id: 'm-0', name: 'User A (You)', wallet: '0x71C...a89F', position: 'root', status: 'filled', avatarSeed: 'root', earningsUsd: 2.40 },
-    { id: 'm-1', name: 'User B', wallet: '0x84A...12F4', position: 'L1_left', status: 'filled', avatarSeed: 'alex', earningsUsd: 2.00 },
-    { id: 'm-2', name: 'User C', wallet: '0x99B...77C1', position: 'L1_right', status: 'filled', avatarSeed: 'elena', earningsUsd: 2.00 },
-    { id: 'm-3', name: 'User D', wallet: '0x12C...98D0', position: 'L2_LL', status: 'filled', avatarSeed: 'spill1', earningsUsd: 0 },
-    { id: 'm-4', name: 'User E', wallet: '0x44D...55A2', position: 'L2_LR', status: 'filled', avatarSeed: 'dao', earningsUsd: 0 },
-    { id: 'm-5', name: 'User F', wallet: '0x88E...33B9', position: 'L2_RL', status: 'filled', avatarSeed: 'spill2', earningsUsd: 0 },
-    { id: 'm-6', name: 'User G', wallet: '0x55F...00E3', position: 'L2_RR', status: 'filled', avatarSeed: 'sat', earningsUsd: 0 },
+    { id: 'm-0', name: walletConnected ? 'You (Active)' : 'You (Root)', wallet: walletAddress ? `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}` : 'Connect Wallet', position: 'root', status: walletConnected ? 'filled' : 'empty', avatarSeed: 'root', earningsUsd: 0 },
+    { id: 'm-1', name: 'Open Slot', wallet: 'Empty', position: 'L1_left', status: 'empty', avatarSeed: 'l1', earningsUsd: 0 },
+    { id: 'm-2', name: 'Open Slot', wallet: 'Empty', position: 'L1_right', status: 'empty', avatarSeed: 'l2', earningsUsd: 0 },
+    { id: 'm-3', name: 'Open Slot', wallet: 'Empty', position: 'L2_LL', status: 'empty', avatarSeed: 'l3', earningsUsd: 0 },
+    { id: 'm-4', name: 'Open Slot', wallet: 'Empty', position: 'L2_LR', status: 'empty', avatarSeed: 'l4', earningsUsd: 0 },
+    { id: 'm-5', name: 'Open Slot', wallet: 'Empty', position: 'L2_RL', status: 'empty', avatarSeed: 'l5', earningsUsd: 0 },
+    { id: 'm-6', name: 'Open Slot', wallet: 'Empty', position: 'L2_RR', status: 'empty', avatarSeed: 'l6', earningsUsd: 0 },
   ];
 
   // Modals state

@@ -32,7 +32,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
   onOpenTeamModal,
   onOpenMatrixModal,
   levelIncomeUsd,
-  totalInvestedUsd = 5000,
+  totalInvestedUsd = 0,
   minMlmQualifyUsd = 100,
   onOpenBuyModal,
 }) => {

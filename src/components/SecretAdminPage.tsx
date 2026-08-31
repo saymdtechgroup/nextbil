@@ -98,32 +98,45 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
   const [activeSection, setActiveSection] = useState<AdminSection>('overview');
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string>('');
 
-  // Editable local state copies
-  const [localPhases, setLocalPhases] = useState<PhaseConfig[]>(phases);
-  const [localLevels, setLocalLevels] = useState<ReferralLevel[]>(referralLevels);
-  const [localRanks, setLocalRanks] = useState<RankReward[]>(rankRewards);
-  const [localSystem, setLocalSystem] = useState<AdminSystemConfig>(systemConfig);
-  const [localMatrix, setLocalMatrix] = useState<MatrixConfig>(matrixConfig);
+  // Editable local state copies initialized from persistent storage
+  const [localPhases, setLocalPhases] = useState<PhaseConfig[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_admin_phases');
+      if (saved) try { return JSON.parse(saved); } catch (e) {}
+    }
+    return phases;
+  });
+  const [localLevels, setLocalLevels] = useState<ReferralLevel[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_admin_levels');
+      if (saved) try { return JSON.parse(saved); } catch (e) {}
+    }
+    return referralLevels;
+  });
+  const [localRanks, setLocalRanks] = useState<RankReward[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_admin_ranks');
+      if (saved) try { return JSON.parse(saved); } catch (e) {}
+    }
+    return rankRewards;
+  });
+  const [localSystem, setLocalSystem] = useState<AdminSystemConfig>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_admin_system');
+      if (saved) try { return JSON.parse(saved); } catch (e) {}
+    }
+    return systemConfig;
+  });
+  const [localMatrix, setLocalMatrix] = useState<MatrixConfig>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_admin_matrix');
+      if (saved) try { return JSON.parse(saved); } catch (e) {}
+    }
+    return matrixConfig;
+  });
 
   // Simulation test amount
   const [simBuyAmount, setSimBuyAmount] = useState<number>(500);
-
-  // Synchronize with incoming props if changed outside
-  React.useEffect(() => {
-    setLocalPhases(phases);
-  }, [phases]);
-  React.useEffect(() => {
-    setLocalLevels(referralLevels);
-  }, [referralLevels]);
-  React.useEffect(() => {
-    setLocalRanks(rankRewards);
-  }, [rankRewards]);
-  React.useEffect(() => {
-    setLocalSystem(systemConfig);
-  }, [systemConfig]);
-  React.useEffect(() => {
-    setLocalMatrix(matrixConfig);
-  }, [matrixConfig]);
 
   // Auth Handler - Strictly validates PIN without exposing password
   const handlePinSubmit = async (e: React.FormEvent) => {
@@ -225,10 +238,13 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
       [field]: value,
     };
     if (field === 'rate') {
-      const numRate = typeof value === 'number' ? value : parseFloat(value) || 0;
+      const numRate = typeof value === 'number' ? value : parseFloat(value as string) || 0;
       updated[index].rateLabel = `$${numRate.toFixed(2)}`;
     }
     setLocalPhases(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_phases', JSON.stringify(updated));
+    }
   };
 
   const handleSetActivePhase = (targetId: string) => {
@@ -237,6 +253,9 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
       status: (p.id === targetId ? 'active' : p.phaseNumber < (localPhases.find((x) => x.id === targetId)?.phaseNumber || 0) ? 'completed' : 'locked') as 'active' | 'completed' | 'locked',
     }));
     setLocalPhases(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_phases', JSON.stringify(updated));
+    }
   };
 
   // Level Handlers
@@ -244,12 +263,18 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
     const updated = [...localLevels];
     updated[index] = { ...updated[index], commissionPercent: percent };
     setLocalLevels(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_levels', JSON.stringify(updated));
+    }
   };
 
   const handleLevelDirectsChange = (index: number, directs: number) => {
     const updated = [...localLevels];
     updated[index] = { ...updated[index], directRequirement: directs };
     setLocalLevels(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_levels', JSON.stringify(updated));
+    }
   };
 
   // Rank Handlers
@@ -261,6 +286,27 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
     const updated = [...localRanks];
     updated[index] = { ...updated[index], [field]: value };
     setLocalRanks(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_ranks', JSON.stringify(updated));
+    }
+  };
+
+  // System Config Helper
+  const handleUpdateSystem = (partial: Partial<AdminSystemConfig>) => {
+    const updated = { ...localSystem, ...partial };
+    setLocalSystem(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_system', JSON.stringify(updated));
+    }
+  };
+
+  // Matrix Config Helper
+  const handleUpdateMatrix = (partial: Partial<MatrixConfig>) => {
+    const updated = { ...localMatrix, ...partial };
+    setLocalMatrix(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_matrix', JSON.stringify(updated));
+    }
   };
 
   // Save All Changes - Persists locally AND to server for all users & dashboards
@@ -318,7 +364,19 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
         'Are you sure you want to reset all settings to factory default parameters?'
       )
     ) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('nxbc_admin_phases');
+        localStorage.removeItem('nxbc_admin_levels');
+        localStorage.removeItem('nxbc_admin_ranks');
+        localStorage.removeItem('nxbc_admin_system');
+        localStorage.removeItem('nxbc_admin_matrix');
+      }
       onResetToDefaults();
+      setLocalPhases(phases);
+      setLocalLevels(referralLevels);
+      setLocalRanks(rankRewards);
+      setLocalSystem(systemConfig);
+      setLocalMatrix(matrixConfig);
       setSaveSuccessMsg('Reset to default values successfully.');
       setTimeout(() => setSaveSuccessMsg(''), 3000);
     }
@@ -921,8 +979,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                       max="50"
                       value={localSystem.directSponsorPercent}
                       onChange={(e) =>
-                        setLocalSystem({
-                          ...localSystem,
+                        handleUpdateSystem({
                           directSponsorPercent: parseFloat(e.target.value) || 0,
                         })
                       }
@@ -947,8 +1004,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                       max="1000"
                       value={localSystem.minMlmQualifyUsd || 100}
                       onChange={(e) =>
-                        setLocalSystem({
-                          ...localSystem,
+                        handleUpdateSystem({
                           minMlmQualifyUsd: parseFloat(e.target.value) || 100,
                         })
                       }
@@ -1388,7 +1444,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                     <input
                       type="text"
                       value={localSystem.tokenName}
-                      onChange={(e) => setLocalSystem({ ...localSystem, tokenName: e.target.value })}
+                      onChange={(e) => handleUpdateSystem({ tokenName: e.target.value })}
                       className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-slate-100 focus:border-amber-400 focus:outline-none"
                     />
                   </div>
@@ -1400,7 +1456,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                     <input
                       type="text"
                       value={localSystem.tokenSymbol}
-                      onChange={(e) => setLocalSystem({ ...localSystem, tokenSymbol: e.target.value })}
+                      onChange={(e) => handleUpdateSystem({ tokenSymbol: e.target.value })}
                       className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 font-bold focus:border-amber-400 focus:outline-none"
                     />
                   </div>
@@ -1412,7 +1468,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                     <input
                       type="text"
                       value={localSystem.contractAddress}
-                      onChange={(e) => setLocalSystem({ ...localSystem, contractAddress: e.target.value })}
+                      onChange={(e) => handleUpdateSystem({ contractAddress: e.target.value })}
                       className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-purple-200 focus:border-amber-400 focus:outline-none"
                     />
                   </div>
@@ -1429,7 +1485,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                     type="number"
                     min="1"
                     value={localSystem.minPurchaseUsd}
-                    onChange={(e) => setLocalSystem({ ...localSystem, minPurchaseUsd: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => handleUpdateSystem({ minPurchaseUsd: parseFloat(e.target.value) || 0 })}
                     className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-slate-100 focus:border-amber-400 focus:outline-none"
                   />
                 </div>
@@ -1442,7 +1498,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                     type="number"
                     min="100"
                     value={localSystem.maxPurchaseUsd}
-                    onChange={(e) => setLocalSystem({ ...localSystem, maxPurchaseUsd: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => handleUpdateSystem({ maxPurchaseUsd: parseFloat(e.target.value) || 0 })}
                     className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-slate-100 focus:border-amber-400 focus:outline-none"
                   />
                 </div>
@@ -1457,7 +1513,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                     max="20"
                     step="0.5"
                     value={localSystem.withdrawalFeePercent}
-                    onChange={(e) => setLocalSystem({ ...localSystem, withdrawalFeePercent: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => handleUpdateSystem({ withdrawalFeePercent: parseFloat(e.target.value) || 0 })}
                     className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 font-bold focus:border-amber-400 focus:outline-none"
                   />
                 </div>

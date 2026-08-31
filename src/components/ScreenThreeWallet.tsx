@@ -37,7 +37,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
   onOpenWalletModal,
 }) => {
   const [withdrawAmount, setWithdrawAmount] = useState<string>(
-    claimableBalanceUsd > 0 ? claimableBalanceUsd.toFixed(2) : '100.00'
+    claimableBalanceUsd > 0 ? claimableBalanceUsd.toFixed(2) : '0.00'
   );
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState<boolean>(false);
