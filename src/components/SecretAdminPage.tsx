@@ -75,8 +75,8 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
   onResetToDefaults,
   onExitAdmin,
 }) => {
-  // Secret Authentication Gate
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true); // default true for immediate easy access, with lock button
+  // Secret Authentication Gate - Strictly Locked by default
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [enteredPin, setEnteredPin] = useState<string>('');
   const [pinError, setPinError] = useState<string>('');
 
@@ -269,25 +269,18 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
               type="submit"
               className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 text-black font-black text-sm font-rajdhani uppercase tracking-wider shadow-lg hover:opacity-95 active:scale-95 transition-all cursor-pointer"
             >
-              Unlock Master Panel
+              Verify Security Key & Unlock
             </button>
 
             <div className="pt-2 border-t border-purple-500/20 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => {
-                  setEnteredPin('7788');
-                  setIsAuthenticated(true);
-                }}
-                className="text-xs text-amber-400/90 hover:text-amber-300 font-mono-crypto underline cursor-pointer"
-              >
-                ⚡ Quick Master Unlock (PIN: 7788)
-              </button>
+              <span className="text-[10px] text-purple-400/80 font-mono-crypto">
+                🔒 Protected Master Console
+              </span>
 
               <button
                 type="button"
                 onClick={onExitAdmin}
-                className="text-xs text-purple-400 hover:text-purple-200 font-mono-crypto"
+                className="text-xs text-amber-400 hover:text-amber-300 font-mono-crypto"
               >
                 Exit to App &rarr;
               </button>

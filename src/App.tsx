@@ -50,88 +50,98 @@ export default function App() {
   const [activeSingleScreen, setActiveSingleScreen] = useState<ActiveScreen>('home');
   const [showSecretAdminPage, setShowSecretAdminPage] = useState<boolean>(false);
 
-  // Core State: 6-Phase Sequential Roadmap & Live Status (Admin Managed)
-  const [phases, setPhases] = useState<PhaseConfig[]>([
-    {
-      id: 'p1',
-      phaseNumber: 1,
-      name: 'Phase 1',
-      shortName: 'P1',
-      rate: 0.01,
-      rateLabel: '$0.01',
-      totalSupply: 10000000, // 10,000,000 NXBC
-      tokensSold: 7650000, // 7,650,000 NXBC (76.5%)
-      status: 'active',
-      multiplier: 'Base Seed Rate',
-      unlockRequirement: 'Live Now (Stage 1)',
-      targetDate: 'Ends in 03d 14h 22m',
-    },
-    {
-      id: 'p2',
-      phaseNumber: 2,
-      name: 'Phase 2',
-      shortName: 'P2',
-      rate: 0.10,
-      rateLabel: '$0.10',
-      totalSupply: 15000000, // 15,000,000 NXBC
-      tokensSold: 0,
-      status: 'locked',
-      multiplier: '10x Growth',
-      unlockRequirement: 'Phase 1 must be 100% sold to unlock',
-    },
-    {
-      id: 'p3',
-      phaseNumber: 3,
-      name: 'Phase 3',
-      shortName: 'P3',
-      rate: 0.20,
-      rateLabel: '$0.20',
-      totalSupply: 20000000, // 20,000,000 NXBC
-      tokensSold: 0,
-      status: 'locked',
-      multiplier: '20x Growth',
-      unlockRequirement: 'Phase 2 must be 100% sold to unlock',
-    },
-    {
-      id: 'p4',
-      phaseNumber: 4,
-      name: 'Phase 4',
-      shortName: 'P4',
-      rate: 0.30,
-      rateLabel: '$0.30',
-      totalSupply: 25000000, // 25,000,000 NXBC
-      tokensSold: 0,
-      status: 'locked',
-      multiplier: '30x Growth',
-      unlockRequirement: 'Phase 3 must be 100% sold to unlock',
-    },
-    {
-      id: 'p5',
-      phaseNumber: 5,
-      name: 'Phase 5',
-      shortName: 'P5',
-      rate: 0.40,
-      rateLabel: '$0.40',
-      totalSupply: 30000000, // 30,000,000 NXBC
-      tokensSold: 0,
-      status: 'locked',
-      multiplier: '40x Growth',
-      unlockRequirement: 'Phase 4 must be 100% sold to unlock',
-    },
-    {
-      id: 'dex',
-      phaseNumber: 6,
-      name: 'Live DEX Launch',
-      shortName: 'DEX',
-      rate: 1500.00,
-      rateLabel: '$1,500 – $3,000',
-      totalSupply: 50000000, // 50,000,000 NXBC
-      tokensSold: 0,
-      status: 'locked',
-      multiplier: '50x+ Open Market Trading',
-      unlockRequirement: 'Phase 5 must be 100% sold to unlock',
-    },
-  ]);
+  // Core State: 6-Phase Sequential Roadmap & Live Status (Admin Managed & Persisted)
+  const [phases, setPhases] = useState<PhaseConfig[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_admin_phases');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+    }
+    return [
+      {
+        id: 'p1',
+        phaseNumber: 1,
+        name: 'Phase 1',
+        shortName: 'P1',
+        rate: 0.01,
+        rateLabel: '$0.01',
+        totalSupply: 10000000, // 10,000,000 NXBC
+        tokensSold: 7650000, // 7,650,000 NXBC (76.5%)
+        status: 'active',
+        multiplier: 'Base Seed Rate',
+        unlockRequirement: 'Live Now (Stage 1)',
+        targetDate: 'Ends in 03d 14h 22m',
+      },
+      {
+        id: 'p2',
+        phaseNumber: 2,
+        name: 'Phase 2',
+        shortName: 'P2',
+        rate: 0.10,
+        rateLabel: '$0.10',
+        totalSupply: 15000000, // 15,000,000 NXBC
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '10x Growth',
+        unlockRequirement: 'Phase 1 must be 100% sold to unlock',
+      },
+      {
+        id: 'p3',
+        phaseNumber: 3,
+        name: 'Phase 3',
+        shortName: 'P3',
+        rate: 0.20,
+        rateLabel: '$0.20',
+        totalSupply: 20000000, // 20,000,000 NXBC
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '20x Growth',
+        unlockRequirement: 'Phase 2 must be 100% sold to unlock',
+      },
+      {
+        id: 'p4',
+        phaseNumber: 4,
+        name: 'Phase 4',
+        shortName: 'P4',
+        rate: 0.30,
+        rateLabel: '$0.30',
+        totalSupply: 25000000, // 25,000,000 NXBC
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '30x Growth',
+        unlockRequirement: 'Phase 3 must be 100% sold to unlock',
+      },
+      {
+        id: 'p5',
+        phaseNumber: 5,
+        name: 'Phase 5',
+        shortName: 'P5',
+        rate: 0.40,
+        rateLabel: '$0.40',
+        totalSupply: 30000000, // 30,000,000 NXBC
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '40x Growth',
+        unlockRequirement: 'Phase 4 must be 100% sold to unlock',
+      },
+      {
+        id: 'dex',
+        phaseNumber: 6,
+        name: 'Live DEX Launch',
+        shortName: 'DEX',
+        rate: 1500.00,
+        rateLabel: '$1,500 – $3,000',
+        totalSupply: 50000000, // 50,000,000 NXBC
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '50x+ Open Market Trading',
+        unlockRequirement: 'Phase 5 must be 100% sold to unlock',
+      },
+    ];
+  });
 
   const activePhase = phases.find((p) => p.status === 'active') || phases[0];
 
@@ -312,120 +322,160 @@ export default function App() {
     return [];
   });
 
-  // 10-Level Referral Plan Data (Calculated dynamically)
-  const [referralLevels, setReferralLevels] = useState<ReferralLevel[]>([
-    { level: 1, commissionPercent: 10, directRequirement: 1, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-    { level: 2, commissionPercent: 5, directRequirement: 2, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-    { level: 3, commissionPercent: 3, directRequirement: 3, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-    { level: 4, commissionPercent: 2, directRequirement: 4, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-    { level: 5, commissionPercent: 1, directRequirement: 5, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-    { level: 6, commissionPercent: 1, directRequirement: 6, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-    { level: 7, commissionPercent: 1, directRequirement: 7, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-    { level: 8, commissionPercent: 1, directRequirement: 8, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-    { level: 9, commissionPercent: 1, directRequirement: 9, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-    { level: 10, commissionPercent: 1, directRequirement: 10, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-  ]);
-
-  // 2x2 Matrix System Config (Dynamic via Admin)
-  const [matrixConfig, setMatrixConfig] = useState<MatrixConfig>({
-    placementIncomeUsd: 1.00,
-    uplineSharePercent: 10,
-    enabled: true,
+  // 10-Level Referral Plan Data (Admin Managed & Persisted)
+  const [referralLevels, setReferralLevels] = useState<ReferralLevel[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_admin_levels');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+    }
+    return [
+      { level: 1, commissionPercent: 10, directRequirement: 1, directMembers: 8, totalVolumeUsd: 4500, earnedUsd: 450.00 },
+      { level: 2, commissionPercent: 5, directRequirement: 2, directMembers: 14, totalVolumeUsd: 3800, earnedUsd: 190.00 },
+      { level: 3, commissionPercent: 3, directRequirement: 3, directMembers: 22, totalVolumeUsd: 2900, earnedUsd: 87.00 },
+      { level: 4, commissionPercent: 2, directRequirement: 4, directMembers: 31, totalVolumeUsd: 2200, earnedUsd: 44.00 },
+      { level: 5, commissionPercent: 1, directRequirement: 5, directMembers: 18, totalVolumeUsd: 1800, earnedUsd: 18.00 },
+      { level: 6, commissionPercent: 1, directRequirement: 6, directMembers: 15, totalVolumeUsd: 1500, earnedUsd: 15.00 },
+      { level: 7, commissionPercent: 1, directRequirement: 7, directMembers: 12, totalVolumeUsd: 1200, earnedUsd: 12.00 },
+      { level: 8, commissionPercent: 1, directRequirement: 8, directMembers: 10, totalVolumeUsd: 1400, earnedUsd: 14.00 },
+      { level: 9, commissionPercent: 1, directRequirement: 9, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 15.00 },
+      { level: 10, commissionPercent: 1, directRequirement: 10, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 15.00 },
+    ];
   });
 
-  // Rank Rewards & Leadership Pool (Dynamic via Admin)
-  const [rankRewards, setRankRewards] = useState<RankReward[]>([
-    {
-      id: 'rank-1',
-      rankNumber: 1,
-      name: 'Bronze Leader',
-      requiredDirects: 5,
-      requiredTeamVolume: 5000,
-      oneTimeBonusUsd: 150,
-      rewardTokens: 10000,
-      monthlyRoyaltyPercent: 1,
-      currentQualifiedCount: 42,
-      status: 'unlocked',
-    },
-    {
-      id: 'rank-2',
-      rankNumber: 2,
-      name: 'Silver Director',
-      requiredDirects: 10,
-      requiredTeamVolume: 15000,
-      oneTimeBonusUsd: 500,
-      rewardTokens: 35000,
-      monthlyRoyaltyPercent: 2,
-      currentQualifiedCount: 18,
-      status: 'claimable',
-    },
-    {
-      id: 'rank-3',
-      rankNumber: 3,
-      name: 'Gold Executive',
-      requiredDirects: 20,
-      requiredTeamVolume: 50000,
-      oneTimeBonusUsd: 1500,
-      rewardTokens: 100000,
-      monthlyRoyaltyPercent: 3,
-      currentQualifiedCount: 7,
-      status: 'locked',
-    },
-    {
-      id: 'rank-4',
-      rankNumber: 4,
-      name: 'Platinum Vice President',
-      requiredDirects: 35,
-      requiredTeamVolume: 150000,
-      oneTimeBonusUsd: 5000,
-      rewardTokens: 300000,
-      monthlyRoyaltyPercent: 4,
-      currentQualifiedCount: 3,
-      status: 'locked',
-    },
-    {
-      id: 'rank-5',
-      rankNumber: 5,
-      name: 'Diamond President',
-      requiredDirects: 50,
-      requiredTeamVolume: 500000,
-      oneTimeBonusUsd: 15000,
-      rewardTokens: 1000000,
-      monthlyRoyaltyPercent: 5,
-      currentQualifiedCount: 1,
-      status: 'locked',
-    },
-    {
-      id: 'rank-6',
-      rankNumber: 6,
-      name: 'Crown Global Ambassador',
-      requiredDirects: 100,
-      requiredTeamVolume: 2000000,
-      oneTimeBonusUsd: 50000,
-      rewardTokens: 5000000,
-      monthlyRoyaltyPercent: 5,
-      currentQualifiedCount: 0,
-      status: 'locked',
-    },
-  ]);
-
-  // General System & Global Parameters (Dynamic via Admin)
-  const [systemConfig, setSystemConfig] = useState<AdminSystemConfig>({
-    tokenName: 'NXBC',
-    tokenSymbol: 'NXBC',
-    contractAddress: '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7',
-    minPurchaseUsd: 10,
-    maxPurchaseUsd: 50000,
-    minMlmQualifyUsd: 100,
-    presalePaused: false,
-    directSponsorPercent: 5,
-    withdrawalFeePercent: 2,
-    matrixConfig: {
+  // 2x2 Matrix System Config (Dynamic via Admin & Persisted)
+  const [matrixConfig, setMatrixConfig] = useState<MatrixConfig>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_admin_matrix');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+    }
+    return {
       placementIncomeUsd: 1.00,
       uplineSharePercent: 10,
       enabled: true,
-    },
-    royaltyPoolUsd: 25000,
+    };
+  });
+
+  // Rank Rewards & Leadership Pool (Dynamic via Admin & Persisted)
+  const [rankRewards, setRankRewards] = useState<RankReward[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_admin_ranks');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+    }
+    return [
+      {
+        id: 'rank-1',
+        rankNumber: 1,
+        name: 'Bronze Leader',
+        requiredDirects: 5,
+        requiredTeamVolume: 5000,
+        oneTimeBonusUsd: 150,
+        rewardTokens: 10000,
+        monthlyRoyaltyPercent: 1,
+        currentQualifiedCount: 42,
+        status: 'unlocked',
+      },
+      {
+        id: 'rank-2',
+        rankNumber: 2,
+        name: 'Silver Director',
+        requiredDirects: 10,
+        requiredTeamVolume: 15000,
+        oneTimeBonusUsd: 500,
+        rewardTokens: 35000,
+        monthlyRoyaltyPercent: 2,
+        currentQualifiedCount: 18,
+        status: 'claimable',
+      },
+      {
+        id: 'rank-3',
+        rankNumber: 3,
+        name: 'Gold Executive',
+        requiredDirects: 20,
+        requiredTeamVolume: 50000,
+        oneTimeBonusUsd: 1500,
+        rewardTokens: 100000,
+        monthlyRoyaltyPercent: 3,
+        currentQualifiedCount: 7,
+        status: 'locked',
+      },
+      {
+        id: 'rank-4',
+        rankNumber: 4,
+        name: 'Platinum Vice President',
+        requiredDirects: 35,
+        requiredTeamVolume: 150000,
+        oneTimeBonusUsd: 5000,
+        rewardTokens: 300000,
+        monthlyRoyaltyPercent: 4,
+        currentQualifiedCount: 3,
+        status: 'locked',
+      },
+      {
+        id: 'rank-5',
+        rankNumber: 5,
+        name: 'Diamond President',
+        requiredDirects: 50,
+        requiredTeamVolume: 500000,
+        oneTimeBonusUsd: 15000,
+        rewardTokens: 1000000,
+        monthlyRoyaltyPercent: 5,
+        currentQualifiedCount: 1,
+        status: 'locked',
+      },
+      {
+        id: 'rank-6',
+        rankNumber: 6,
+        name: 'Crown Global Ambassador',
+        requiredDirects: 100,
+        requiredTeamVolume: 2000000,
+        oneTimeBonusUsd: 50000,
+        rewardTokens: 5000000,
+        monthlyRoyaltyPercent: 5,
+        currentQualifiedCount: 0,
+        status: 'locked',
+      },
+    ];
+  });
+
+  // General System & Global Parameters (Dynamic via Admin & Persisted)
+  const [systemConfig, setSystemConfig] = useState<AdminSystemConfig>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_admin_system');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+    }
+    return {
+      tokenName: 'NXBC',
+      tokenSymbol: 'NXBC',
+      contractAddress: '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7',
+      minPurchaseUsd: 10,
+      maxPurchaseUsd: 50000,
+      minMlmQualifyUsd: 100,
+      presalePaused: false,
+      directSponsorPercent: 5,
+      withdrawalFeePercent: 2,
+      matrixConfig: {
+        placementIncomeUsd: 1.00,
+        uplineSharePercent: 10,
+        enabled: true,
+      },
+      royaltyPoolUsd: 25000,
+    };
   });
 
   // 2x2 Matrix Structure Nodes Data (Reflecting User A, B, C, D, E, F, G tree with $1 base placement)
@@ -620,6 +670,42 @@ export default function App() {
     setTransactions([]);
   };
 
+  // Synchronized Update Handlers (Updates React state AND persists to localStorage)
+  const handleUpdatePhases = (newPhases: PhaseConfig[]) => {
+    setPhases(newPhases);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_phases', JSON.stringify(newPhases));
+    }
+  };
+
+  const handleUpdateReferralLevels = (newLevels: ReferralLevel[]) => {
+    setReferralLevels(newLevels);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_levels', JSON.stringify(newLevels));
+    }
+  };
+
+  const handleUpdateRankRewards = (newRanks: RankReward[]) => {
+    setRankRewards(newRanks);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_ranks', JSON.stringify(newRanks));
+    }
+  };
+
+  const handleUpdateSystemConfig = (newConfig: AdminSystemConfig) => {
+    setSystemConfig(newConfig);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_system', JSON.stringify(newConfig));
+    }
+  };
+
+  const handleUpdateMatrixConfig = (newMatrix: MatrixConfig) => {
+    setMatrixConfig(newMatrix);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_matrix', JSON.stringify(newMatrix));
+    }
+  };
+
   // Helper to easily simulate 100% phase completion for sequential demo
   const handleSimulateFillPhase = () => {
     setPhases((prevPhases) => {
@@ -728,8 +814,89 @@ export default function App() {
 
   // Reset all to system defaults
   const handleResetToDefaults = () => {
-    handleResetPhases();
-    setReferralLevels([
+    const defaultPhases: PhaseConfig[] = [
+      {
+        id: 'p1',
+        phaseNumber: 1,
+        name: 'Phase 1',
+        shortName: 'P1',
+        rate: 0.01,
+        rateLabel: '$0.01',
+        totalSupply: 10000000,
+        tokensSold: 7650000,
+        status: 'active',
+        multiplier: 'Base Seed Rate',
+        unlockRequirement: 'Live Now (Stage 1)',
+        targetDate: 'Ends in 03d 14h 22m',
+      },
+      {
+        id: 'p2',
+        phaseNumber: 2,
+        name: 'Phase 2',
+        shortName: 'P2',
+        rate: 0.10,
+        rateLabel: '$0.10',
+        totalSupply: 15000000,
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '10x Growth',
+        unlockRequirement: 'Phase 1 must be 100% sold to unlock',
+      },
+      {
+        id: 'p3',
+        phaseNumber: 3,
+        name: 'Phase 3',
+        shortName: 'P3',
+        rate: 0.20,
+        rateLabel: '$0.20',
+        totalSupply: 20000000,
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '20x Growth',
+        unlockRequirement: 'Phase 2 must be 100% sold to unlock',
+      },
+      {
+        id: 'p4',
+        phaseNumber: 4,
+        name: 'Phase 4',
+        shortName: 'P4',
+        rate: 0.30,
+        rateLabel: '$0.30',
+        totalSupply: 25000000,
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '30x Growth',
+        unlockRequirement: 'Phase 3 must be 100% sold to unlock',
+      },
+      {
+        id: 'p5',
+        phaseNumber: 5,
+        name: 'Phase 5',
+        shortName: 'P5',
+        rate: 0.40,
+        rateLabel: '$0.40',
+        totalSupply: 30000000,
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '40x Growth',
+        unlockRequirement: 'Phase 4 must be 100% sold to unlock',
+      },
+      {
+        id: 'dex',
+        phaseNumber: 6,
+        name: 'Live DEX Launch',
+        shortName: 'DEX',
+        rate: 1500.00,
+        rateLabel: '$1500 - $3000',
+        totalSupply: 50000000,
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '50x+ Open Market Trading',
+        unlockRequirement: 'Phase 5 must be 100% sold to unlock',
+      },
+    ];
+
+    const defaultLevels: ReferralLevel[] = [
       { level: 1, commissionPercent: 10, directRequirement: 1, directMembers: 8, totalVolumeUsd: 4500, earnedUsd: 450.00 },
       { level: 2, commissionPercent: 5, directRequirement: 2, directMembers: 14, totalVolumeUsd: 3800, earnedUsd: 190.00 },
       { level: 3, commissionPercent: 3, directRequirement: 3, directMembers: 22, totalVolumeUsd: 2900, earnedUsd: 87.00 },
@@ -740,28 +907,32 @@ export default function App() {
       { level: 8, commissionPercent: 1, directRequirement: 8, directMembers: 10, totalVolumeUsd: 1400, earnedUsd: 14.00 },
       { level: 9, commissionPercent: 1, directRequirement: 9, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 15.00 },
       { level: 10, commissionPercent: 1, directRequirement: 10, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 15.00 },
-    ]);
-    setMatrixConfig({
+    ];
+
+    const defaultMatrix: MatrixConfig = {
       placementIncomeUsd: 1.00,
       uplineSharePercent: 10,
       enabled: true,
-    });
-    setSystemConfig({
+    };
+
+    const defaultSystem: AdminSystemConfig = {
       tokenName: 'NXBC',
       tokenSymbol: 'NXBC',
       contractAddress: '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7',
       minPurchaseUsd: 10,
       maxPurchaseUsd: 50000,
+      minMlmQualifyUsd: 100,
       presalePaused: false,
       directSponsorPercent: 5,
       withdrawalFeePercent: 2,
-      matrixConfig: {
-        placementIncomeUsd: 1.00,
-        uplineSharePercent: 10,
-        enabled: true,
-      },
+      matrixConfig: defaultMatrix,
       royaltyPoolUsd: 25000,
-    });
+    };
+
+    handleUpdatePhases(defaultPhases);
+    handleUpdateReferralLevels(defaultLevels);
+    handleUpdateMatrixConfig(defaultMatrix);
+    handleUpdateSystemConfig(defaultSystem);
   };
 
   // Withdrawal handler
@@ -805,11 +976,11 @@ export default function App() {
         rankRewards={rankRewards}
         systemConfig={systemConfig}
         matrixConfig={matrixConfig}
-        onUpdatePhases={setPhases}
-        onUpdateReferralLevels={setReferralLevels}
-        onUpdateRankRewards={setRankRewards}
-        onUpdateSystemConfig={setSystemConfig}
-        onUpdateMatrixConfig={setMatrixConfig}
+        onUpdatePhases={handleUpdatePhases}
+        onUpdateReferralLevels={handleUpdateReferralLevels}
+        onUpdateRankRewards={handleUpdateRankRewards}
+        onUpdateSystemConfig={handleUpdateSystemConfig}
+        onUpdateMatrixConfig={handleUpdateMatrixConfig}
         onResetToDefaults={handleResetToDefaults}
         onExitAdmin={() => {
           setShowSecretAdminPage(false);
@@ -1127,15 +1298,15 @@ export default function App() {
         isOpen={adminModalOpen}
         onClose={() => setAdminModalOpen(false)}
         phases={phases}
-        onUpdatePhases={setPhases}
+        onUpdatePhases={handleUpdatePhases}
         levels={referralLevels}
-        onUpdateLevels={setReferralLevels}
+        onUpdateLevels={handleUpdateReferralLevels}
         matrixConfig={matrixConfig}
-        onUpdateMatrixConfig={setMatrixConfig}
+        onUpdateMatrixConfig={handleUpdateMatrixConfig}
         rankRewards={rankRewards}
-        onUpdateRankRewards={setRankRewards}
+        onUpdateRankRewards={handleUpdateRankRewards}
         systemConfig={systemConfig}
-        onUpdateSystemConfig={setSystemConfig}
+        onUpdateSystemConfig={handleUpdateSystemConfig}
         onResetToDefaults={handleResetToDefaults}
         onOpenSecretPage={() => {
           setAdminModalOpen(false);
