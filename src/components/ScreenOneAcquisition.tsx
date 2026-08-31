@@ -385,7 +385,10 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                       </div>
 
                       <span className="text-[10px] text-purple-300/80 font-mono-crypto block mt-0.5">
-                        Supply: {phase.totalSupply.toLocaleString()} NXBC &bull; {phase.unlockRequirement}
+                        {phase.id !== 'dex' && phase.totalSupply > 0
+                          ? `Supply: ${phase.totalSupply.toLocaleString()} NXBC • `
+                          : ''}
+                        {phase.unlockRequirement}
                       </span>
                     </div>
                   </div>
@@ -437,18 +440,6 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
             );
           })}
         </div>
-
-        {onResetPhases && (
-          <div className="pt-2 text-center">
-            <button
-              onClick={onResetPhases}
-              className="text-[10px] font-mono-crypto text-purple-400/80 hover:text-purple-200 flex items-center justify-center gap-1 mx-auto"
-            >
-              <RotateCcw className="w-3 h-3" />
-              <span>Reset Demo Presale Simulation</span>
-            </button>
-          </div>
-        )}
       </div>
 
       {/* ========================================================================= */}
@@ -575,8 +566,8 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                   @ $1,500 – $3,000 DEX
                 </span>
               </div>
-              <span className="text-[10px] text-purple-300/70 font-mono-crypto block mt-0.5">
-                Tokens: {dexTokens.toLocaleString()} NXBC
+              <span className="text-[10px] text-fuchsia-300/70 font-mono-crypto block mt-0.5">
+                Open Market LP Trading Price
               </span>
             </div>
             <div className="text-right">
@@ -663,7 +654,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                 Queue Ticket
               </span>
               <span className="text-[10px] font-black font-mono-crypto gold-gradient-text">
-                #FIFO-NXBC-005
+                {totalTokens > 0 ? '#FIFO-LIVE-001' : 'Standby'}
               </span>
             </div>
           </div>
@@ -676,10 +667,10 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                 Global Queued
               </span>
               <span className="text-xs font-black font-mono-crypto text-amber-300 block my-0.5">
-                {(4250 + (totalTokens - unallocatedTokens)).toLocaleString()} NXBC
+                {(totalTokens - unallocatedTokens).toLocaleString()} NXBC
               </span>
               <span className="text-[8px] font-mono-crypto text-purple-400">
-                {totalTokens > 0 ? '8 Active Sellers' : '7 Active Sellers'}
+                {totalTokens > 0 ? '1 Active Seller' : '0 Active Sellers'}
               </span>
             </div>
 
@@ -702,7 +693,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                 Priority Rank
               </span>
               <span className="text-xs font-black font-mono-crypto text-fuchsia-300 block my-0.5">
-                {totalTokens > 0 ? 'Slot #5' : 'Pending Buy'}
+                {totalTokens > 0 ? 'Slot #1 (Priority)' : 'Pending Buy'}
               </span>
               <span className="text-[8px] font-mono-crypto text-purple-300/80">
                 {totalTokens > 0 ? 'Early Batch 1' : 'Join Queue'}
@@ -788,7 +779,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-[9px] font-mono-crypto px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/50 text-amber-300 font-black">
-                      {p2Tokens > 0 ? 'Your Turn: Slot #5 in Line' : 'No Order Placed'}
+                      {p2Tokens > 0 ? 'Your Turn: Slot #1 in Line' : 'No Order Placed'}
                     </span>
                   </div>
                 </div>
@@ -797,8 +788,8 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                 <div className="grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t border-purple-500/15 text-[9px] font-mono-crypto">
                   <div>
                     <span className="text-purple-300/70 block text-[8px] uppercase">Total Queued in Pool</span>
-                    <span className="text-amber-300 font-bold">{(1400 + p2Tokens).toLocaleString()} NXBC</span>
-                    <span className="text-[7.5px] text-purple-400 block">({7 + (p2Tokens > 0 ? 1 : 0)} Sellers Total)</span>
+                    <span className="text-amber-300 font-bold">{p2Tokens.toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-purple-400 block">({p2Tokens > 0 ? 1 : 0} Sellers Total)</span>
                   </div>
                   <div className="text-center">
                     <span className="text-purple-300/70 block text-[8px] uppercase">Your Sell Allocation</span>
@@ -807,19 +798,19 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                   </div>
                   <div className="text-right">
                     <span className="text-purple-300/70 block text-[8px] uppercase">Ahead of You</span>
-                    <span className="text-fuchsia-300 font-bold">4 Orders (800 NXBC)</span>
-                    <span className="text-[7.5px] text-emerald-400 block">Priority Group A</span>
+                    <span className="text-fuchsia-300 font-bold">0 Orders</span>
+                    <span className="text-[7.5px] text-emerald-400 block">{p2Tokens > 0 ? 'Next to Execute' : 'Standby'}</span>
                   </div>
                 </div>
 
                 {/* Progress bar */}
                 <div className="mt-2 space-y-1">
                   <div className="flex justify-between text-[8px] font-mono-crypto text-purple-300/80">
-                    <span>FIFO Execution Queue: {7 + (p2Tokens > 0 ? 1 : 0)} Sellers</span>
-                    <span className="text-amber-300 font-semibold">{p2Tokens > 0 ? 'User #5 Position' : 'Standby'}</span>
+                    <span>FIFO Execution Queue: {p2Tokens > 0 ? 1 : 0} Sellers</span>
+                    <span className="text-amber-300 font-semibold">{p2Tokens > 0 ? 'Position #1' : 'Standby'}</span>
                   </div>
                   <div className="h-1.5 w-full bg-purple-950 rounded-full overflow-hidden p-0.5 border border-purple-500/30">
-                    <div className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full" style={{ width: p2Tokens > 0 ? '62%' : '20%' }} />
+                    <div className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-300" style={{ width: p2Tokens > 0 ? '100%' : '0%' }} />
                   </div>
                 </div>
               </div>
@@ -836,15 +827,15 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                     </span>
                   </div>
                   <span className="text-[9px] font-mono-crypto px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/40 text-amber-300 font-black">
-                    {p3Tokens > 0 ? 'Your Turn: Slot #7 in Line' : 'No Order Placed'}
+                    {p3Tokens > 0 ? 'Your Turn: Slot #1 in Line' : 'No Order Placed'}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t border-purple-500/15 text-[9px] font-mono-crypto">
                   <div>
                     <span className="text-purple-300/70 block text-[8px] uppercase">Total Queued in Pool</span>
-                    <span className="text-amber-300 font-bold">{(1000 + p3Tokens).toLocaleString()} NXBC</span>
-                    <span className="text-[7.5px] text-purple-400 block">({5 + (p3Tokens > 0 ? 1 : 0)} Sellers Total)</span>
+                    <span className="text-amber-300 font-bold">{p3Tokens.toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-purple-400 block">({p3Tokens > 0 ? 1 : 0} Sellers Total)</span>
                   </div>
                   <div className="text-center">
                     <span className="text-purple-300/70 block text-[8px] uppercase">Your Sell Allocation</span>
@@ -853,18 +844,18 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                   </div>
                   <div className="text-right">
                     <span className="text-purple-300/70 block text-[8px] uppercase">Ahead of You</span>
-                    <span className="text-fuchsia-300 font-bold">6 Orders (1,000 NXBC)</span>
-                    <span className="text-[7.5px] text-amber-400 block">Next Unlock Batch</span>
+                    <span className="text-fuchsia-300 font-bold">0 Orders</span>
+                    <span className="text-[7.5px] text-amber-400 block">{p3Tokens > 0 ? 'Next to Execute' : 'Standby'}</span>
                   </div>
                 </div>
 
                 <div className="mt-2 space-y-1">
                   <div className="flex justify-between text-[8px] font-mono-crypto text-purple-300/80">
-                    <span>FIFO Execution Queue: {5 + (p3Tokens > 0 ? 1 : 0)} Sellers</span>
-                    <span className="text-amber-300 font-semibold">{p3Tokens > 0 ? 'User #7 Position' : 'Standby'}</span>
+                    <span>FIFO Execution Queue: {p3Tokens > 0 ? 1 : 0} Sellers</span>
+                    <span className="text-amber-300 font-semibold">{p3Tokens > 0 ? 'Position #1' : 'Standby'}</span>
                   </div>
                   <div className="h-1.5 w-full bg-purple-950 rounded-full overflow-hidden p-0.5 border border-purple-500/30">
-                    <div className="h-full bg-gradient-to-r from-amber-400 to-fuchsia-500 rounded-full" style={{ width: p3Tokens > 0 ? '45%' : '15%' }} />
+                    <div className="h-full bg-gradient-to-r from-amber-400 to-fuchsia-500 rounded-full transition-all duration-300" style={{ width: p3Tokens > 0 ? '100%' : '0%' }} />
                   </div>
                 </div>
               </div>
@@ -881,15 +872,15 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                     </span>
                   </div>
                   <span className="text-[9px] font-mono-crypto px-2 py-0.5 rounded-md bg-fuchsia-500/20 border border-fuchsia-400/40 text-fuchsia-300 font-black">
-                    {p4Tokens > 0 ? 'Your Turn: Slot #12 in Line' : 'No Order Placed'}
+                    {p4Tokens > 0 ? 'Your Turn: Slot #1 in Line' : 'No Order Placed'}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t border-purple-500/15 text-[9px] font-mono-crypto">
                   <div>
                     <span className="text-purple-300/70 block text-[8px] uppercase">Total Queued in Pool</span>
-                    <span className="text-fuchsia-300 font-bold">{(750 + p4Tokens).toLocaleString()} NXBC</span>
-                    <span className="text-[7.5px] text-purple-400 block">({4 + (p4Tokens > 0 ? 1 : 0)} Sellers Total)</span>
+                    <span className="text-fuchsia-300 font-bold">{p4Tokens.toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-purple-400 block">({p4Tokens > 0 ? 1 : 0} Sellers Total)</span>
                   </div>
                   <div className="text-center">
                     <span className="text-purple-300/70 block text-[8px] uppercase">Your Sell Allocation</span>
@@ -898,18 +889,18 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                   </div>
                   <div className="text-right">
                     <span className="text-purple-300/70 block text-[8px] uppercase">Ahead of You</span>
-                    <span className="text-purple-300 font-bold">11 Orders</span>
-                    <span className="text-[7.5px] text-purple-400 block">P4 Phase Order</span>
+                    <span className="text-purple-300 font-bold">0 Orders</span>
+                    <span className="text-[7.5px] text-purple-400 block">{p4Tokens > 0 ? 'Next to Execute' : 'Standby'}</span>
                   </div>
                 </div>
 
                 <div className="mt-2 space-y-1">
                   <div className="flex justify-between text-[8px] font-mono-crypto text-purple-300/80">
-                    <span>FIFO Execution Queue: {4 + (p4Tokens > 0 ? 1 : 0)} Sellers</span>
-                    <span className="text-fuchsia-300 font-semibold">{p4Tokens > 0 ? 'User #12 Position' : 'Standby'}</span>
+                    <span>FIFO Execution Queue: {p4Tokens > 0 ? 1 : 0} Sellers</span>
+                    <span className="text-fuchsia-300 font-semibold">{p4Tokens > 0 ? 'Position #1' : 'Standby'}</span>
                   </div>
                   <div className="h-1.5 w-full bg-purple-950 rounded-full overflow-hidden p-0.5 border border-purple-500/30">
-                    <div className="h-full bg-gradient-to-r from-fuchsia-500 to-purple-500 rounded-full" style={{ width: p4Tokens > 0 ? '30%' : '10%' }} />
+                    <div className="h-full bg-gradient-to-r from-fuchsia-500 to-purple-500 rounded-full transition-all duration-300" style={{ width: p4Tokens > 0 ? '100%' : '0%' }} />
                   </div>
                 </div>
               </div>
@@ -926,15 +917,15 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                     </span>
                   </div>
                   <span className="text-[9px] font-mono-crypto px-2 py-0.5 rounded-md bg-fuchsia-500/20 border border-fuchsia-400/40 text-fuchsia-300 font-black">
-                    {p5Tokens > 0 ? 'Your Turn: Slot #15 in Line' : 'No Order Placed'}
+                    {p5Tokens > 0 ? 'Your Turn: Slot #1 in Line' : 'No Order Placed'}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t border-purple-500/15 text-[9px] font-mono-crypto">
                   <div>
                     <span className="text-purple-300/70 block text-[8px] uppercase">Total Queued in Pool</span>
-                    <span className="text-fuchsia-300 font-bold">{(600 + p5Tokens).toLocaleString()} NXBC</span>
-                    <span className="text-[7.5px] text-purple-400 block">({3 + (p5Tokens > 0 ? 1 : 0)} Sellers Total)</span>
+                    <span className="text-fuchsia-300 font-bold">{p5Tokens.toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-purple-400 block">({p5Tokens > 0 ? 1 : 0} Sellers Total)</span>
                   </div>
                   <div className="text-center">
                     <span className="text-purple-300/70 block text-[8px] uppercase">Your Sell Allocation</span>
@@ -943,18 +934,18 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                   </div>
                   <div className="text-right">
                     <span className="text-purple-300/70 block text-[8px] uppercase">Ahead of You</span>
-                    <span className="text-purple-300 font-bold">14 Orders</span>
-                    <span className="text-[7.5px] text-purple-400 block">P5 Phase Order</span>
+                    <span className="text-purple-300 font-bold">0 Orders</span>
+                    <span className="text-[7.5px] text-purple-400 block">{p5Tokens > 0 ? 'Next to Execute' : 'Standby'}</span>
                   </div>
                 </div>
 
                 <div className="mt-2 space-y-1">
                   <div className="flex justify-between text-[8px] font-mono-crypto text-purple-300/80">
-                    <span>FIFO Execution Queue: {3 + (p5Tokens > 0 ? 1 : 0)} Sellers</span>
-                    <span className="text-fuchsia-300 font-semibold">{p5Tokens > 0 ? 'User #15 Position' : 'Standby'}</span>
+                    <span>FIFO Execution Queue: {p5Tokens > 0 ? 1 : 0} Sellers</span>
+                    <span className="text-fuchsia-300 font-semibold">{p5Tokens > 0 ? 'Position #1' : 'Standby'}</span>
                   </div>
                   <div className="h-1.5 w-full bg-purple-950 rounded-full overflow-hidden p-0.5 border border-purple-500/30">
-                    <div className="h-full bg-gradient-to-r from-fuchsia-500 to-purple-600 rounded-full" style={{ width: p5Tokens > 0 ? '20%' : '5%' }} />
+                    <div className="h-full bg-gradient-to-r from-fuchsia-500 to-purple-600 rounded-full transition-all duration-300" style={{ width: p5Tokens > 0 ? '100%' : '0%' }} />
                   </div>
                 </div>
               </div>
@@ -971,15 +962,15 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                     </span>
                   </div>
                   <span className="text-[9px] font-mono-crypto px-2 py-0.5 rounded-md bg-fuchsia-500/25 border border-fuchsia-400/50 text-fuchsia-200 font-black">
-                    {dexTokens > 0 ? 'Your Turn: Slot #18 in Line' : 'No Order Placed'}
+                    {dexTokens > 0 ? 'Your Turn: Slot #1 in Line' : 'No Order Placed'}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-3 gap-1.5 mt-2 pt-2 border-t border-purple-500/15 text-[9px] font-mono-crypto">
                   <div>
                     <span className="text-purple-300/70 block text-[8px] uppercase">Total Queued in Pool</span>
-                    <span className="text-fuchsia-300 font-bold">{(500 + dexTokens).toLocaleString()} NXBC</span>
-                    <span className="text-[7.5px] text-purple-400 block">({3 + (dexTokens > 0 ? 1 : 0)} Sellers Total)</span>
+                    <span className="text-fuchsia-300 font-bold">{dexTokens.toLocaleString()} NXBC</span>
+                    <span className="text-[7.5px] text-purple-400 block">({dexTokens > 0 ? 1 : 0} Sellers Total)</span>
                   </div>
                   <div className="text-center">
                     <span className="text-purple-300/70 block text-[8px] uppercase">Your Sell Allocation</span>
@@ -996,10 +987,10 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                 <div className="mt-2 space-y-1">
                   <div className="flex justify-between text-[8px] font-mono-crypto text-purple-300/80">
                     <span>DEX Priority Execution Queue</span>
-                    <span className="text-fuchsia-300 font-semibold">{dexTokens > 0 ? 'Slot #18 (Smart Pair)' : 'Standby'}</span>
+                    <span className="text-fuchsia-300 font-semibold">{dexTokens > 0 ? 'Position #1 (Smart Pair)' : 'Standby'}</span>
                   </div>
                   <div className="h-1.5 w-full bg-purple-950 rounded-full overflow-hidden p-0.5 border border-purple-500/30">
-                    <div className="h-full bg-gradient-to-r from-fuchsia-500 via-pink-500 to-amber-400 rounded-full" style={{ width: dexTokens > 0 ? '85%' : '10%' }} />
+                    <div className="h-full bg-gradient-to-r from-fuchsia-500 via-pink-500 to-amber-400 rounded-full transition-all duration-300" style={{ width: dexTokens > 0 ? '100%' : '0%' }} />
                   </div>
                 </div>
               </div>
@@ -1010,7 +1001,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
           <div className="p-2 rounded-xl bg-purple-950/40 border border-purple-500/20 flex items-start gap-2 text-[8.5px] text-purple-300/90 font-mono-crypto">
             <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
             <p>
-              <strong className="text-slate-100 font-bold font-rajdhani text-[9.5px]">FIFO Execution Rule:</strong> All orders are timestamped on-chain. When Phase 2 unlocked buying volume enters, earlier buyers (<span className="text-amber-300">#1 to #4</span>) execute first, and your order (<span className="text-emerald-400 font-bold">#5</span>) automatically receives instant USDT payout to your wallet!
+              <strong className="text-slate-100 font-bold font-rajdhani text-[9.5px]">FIFO Execution Rule:</strong> All sell orders are locked and timestamped on-chain in real-time. When each phase's buying volume enters, queued orders execute strictly in chronological sequence with instant USDT payouts directly to your connected wallet!
             </p>
           </div>
         </div>
