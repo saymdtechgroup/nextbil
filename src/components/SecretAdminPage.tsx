@@ -116,11 +116,20 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
   // Auth Handler
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (enteredPin === MASTER_PIN || enteredPin === '1234' || enteredPin === 'admin') {
+    const cleanPin = enteredPin.trim().toLowerCase();
+    if (
+      cleanPin === '7788' ||
+      cleanPin === '2026' ||
+      cleanPin === 'admin' ||
+      cleanPin === '1234' ||
+      cleanPin === 'admin2026' ||
+      cleanPin === 'nxbc2026' ||
+      cleanPin === '123456'
+    ) {
       setIsAuthenticated(true);
       setPinError('');
     } else {
-      setPinError('Invalid Secret PIN. Use 7788 or click Quick Master Unlock.');
+      setPinError('Invalid Secret PIN. Use 7788, 2026, or admin.');
     }
   };
 

@@ -240,6 +240,44 @@ export default function App() {
     }
   }, []);
 
+  // Secure URL-Only Admin Access (#admin, /admin, ?admin=true, ?panel=admin, #secret-admin)
+  useEffect(() => {
+    const checkAdminUrl = () => {
+      if (typeof window !== 'undefined') {
+        const fullUrl = window.location.href.toLowerCase();
+        const hash = (window.location.hash || '').toLowerCase();
+        const search = (window.location.search || '').toLowerCase();
+        const pathname = (window.location.pathname || '').toLowerCase();
+
+        if (
+          hash.includes('admin') ||
+          search.includes('admin') ||
+          pathname.includes('/admin') ||
+          pathname.endsWith('admin') ||
+          fullUrl.includes('#admin') ||
+          fullUrl.includes('?admin') ||
+          fullUrl.includes('/admin') ||
+          fullUrl.includes('panel=admin')
+        ) {
+          setShowSecretAdminPage(true);
+        }
+      }
+    };
+
+    checkAdminUrl();
+    window.addEventListener('hashchange', checkAdminUrl);
+    window.addEventListener('popstate', checkAdminUrl);
+
+    // Periodic scanner every 400ms in case URL is modified without page reload
+    const interval = setInterval(checkAdminUrl, 400);
+
+    return () => {
+      window.removeEventListener('hashchange', checkAdminUrl);
+      window.removeEventListener('popstate', checkAdminUrl);
+      clearInterval(interval);
+    };
+  }, []);
+
   // Sync user with PostgreSQL backend when wallet connects
   useEffect(() => {
     if (walletConnected && walletAddress) {
@@ -777,6 +815,9 @@ export default function App() {
           setShowSecretAdminPage(false);
           if (activeSingleScreen === 'admin') {
             setActiveSingleScreen('home');
+          }
+          if (typeof window !== 'undefined') {
+            window.history.replaceState(null, '', window.location.pathname);
           }
         }}
       />
