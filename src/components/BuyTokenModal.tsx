@@ -39,6 +39,7 @@ interface BuyTokenModalProps {
   walletConnected?: boolean;
   walletAddress?: string;
   contractAddress?: string;
+  receivingAddress?: string;
   activePhaseInfo?: {
     phaseNumber: number;
     name: string;
@@ -63,6 +64,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   walletConnected = false,
   walletAddress = '',
   contractAddress = '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7',
+  receivingAddress = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
   activePhaseInfo = {
     phaseNumber: 1,
     name: 'Phase 1',
@@ -79,7 +81,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   },
 }) => {
   const [step, setStep] = useState<1 | 2>(1);
-  const [currency, setCurrency] = useState<'NXBUSD' | 'USDT' | 'BNB'>('NXBUSD');
+  const [currency, setCurrency] = useState<'NXBUSD' | 'USDT'>('NXBUSD');
   const [paymentMode, setPaymentMode] = useState<'web3' | 'manual'>('web3');
   const [payAmount, setPayAmount] = useState<string>('100');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -99,8 +101,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   const usdValue = parseFloat(payAmount) || 0;
   const tokenQuantity = Math.floor(usdValue / (currentRate || 0.01));
 
-  const bnbPriceUsd = 600;
-  const cryptoEquivalent = currency === 'BNB' ? (usdValue / bnbPriceUsd) : usdValue;
+  const cryptoEquivalent = usdValue;
 
   // Contracts
   const NXBUSD_CONTRACT = '0xbEFB5857cd4309a4a64f92Dd67507c34fCbca78b';
@@ -214,23 +215,9 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     const accounts = await eth.request({ method: 'eth_requestAccounts' });
     const sender = accounts[0];
 
-    if (currency === 'BNB') {
-      const bnbWei = `0x${Math.floor(cryptoEquivalent * 1e18).toString(16)}`;
-      setPaymentStatusText('Approve BNB Transaction in your wallet...');
-      const tx = await eth.request({
-        method: 'eth_sendTransaction',
-        params: [
-          {
-            from: sender,
-            to: contractAddress,
-            value: bnbWei,
-          },
-        ],
-      });
-      return tx;
-    } else if (currency === 'NXBUSD') {
+    if (currency === 'NXBUSD') {
       const tokenAmountWei = BigInt(Math.floor(usdValue * 1e18));
-      const cleanTo = contractAddress.toLowerCase().replace('0x', '').padStart(64, '0');
+      const cleanTo = receivingAddress.toLowerCase().replace('0x', '').padStart(64, '0');
       const cleanVal = tokenAmountWei.toString(16).padStart(64, '0');
       const data = `0xa9059cbb${cleanTo}${cleanVal}`;
 
@@ -253,7 +240,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
       const usdtAmountWei = BigInt(Math.floor(usdValue * 1e18));
       
       // Transfer function selector 0xa9059cbb + padded recipient + padded amount
-      const cleanTo = contractAddress.toLowerCase().replace('0x', '').padStart(64, '0');
+      const cleanTo = receivingAddress.toLowerCase().replace('0x', '').padStart(64, '0');
       const cleanVal = usdtAmountWei.toString(16).padStart(64, '0');
       const data = `0xa9059cbb${cleanTo}${cleanVal}`;
 
@@ -338,7 +325,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   const totalPhaseUsdReturn = projectedReturnP2 + projectedReturnP3 + projectedReturnP4 + projectedReturnP5;
 
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-    contractAddress
+    receivingAddress
   )}&margin=4&bgcolor=110725&color=F59E0B`;
 
   return (
@@ -369,7 +356,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             </div>
             <p className="text-xs text-purple-300/80 font-mono-crypto">
               {step === 1
-                ? `${activePhaseInfo.name} Rate: $${currentRate.toFixed(2)} / NXBC • BNB Smart Chain (BEP-20)`
+                ? `${activePhaseInfo.name} Rate: $${currentRate.toFixed(2)} / NXBC • BEP-20 Network`
                 : `Set Coin Sell Schedule for ${tokenQuantity.toLocaleString()} NXBC`}
             </p>
           </div>
@@ -446,13 +433,13 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             <div className="space-y-1.5">
               <div className="flex justify-between items-center">
                 <label className="text-[10px] font-semibold text-purple-200 uppercase tracking-wider">
-                  2. Select Payment Asset (BNB Chain)
+                  2. Select Payment Asset (BEP-20)
                 </label>
                 <span className="text-[9px] text-amber-300 font-mono-crypto font-bold">
                   1 NXBUSD = $1.00 USDT
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setCurrency('NXBUSD')}
@@ -478,19 +465,6 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                   <span className="font-bold">USDT</span>
                   <span className="text-[8px] text-emerald-400">Auto 1:1 Convert</span>
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCurrency('BNB')}
-                  className={`py-2 px-1 rounded-xl text-[11px] font-mono-crypto font-bold border transition-all flex flex-col items-center justify-center ${
-                    currency === 'BNB'
-                      ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                      : 'bg-purple-950/60 border-purple-500/20 text-purple-300 hover:text-white'
-                  }`}
-                >
-                  <span className="font-bold">BNB</span>
-                  <span className="text-[8px] opacity-75">Native BSC</span>
-                </button>
               </div>
 
               {currency === 'USDT' && (
@@ -506,7 +480,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               <label className="text-[10px] font-semibold text-purple-200 uppercase tracking-wider flex justify-between">
                 <span>3. Enter USD Amount</span>
                 <span className="text-amber-400 font-mono-crypto font-bold">
-                  ≈ {cryptoEquivalent.toFixed(currency === 'BNB' ? 4 : 2)} {currency}
+                  ≈ {cryptoEquivalent.toFixed(2)} {currency}
                 </span>
               </label>
 
@@ -585,14 +559,14 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                   </div>
                   <div className="flex-1 space-y-1 overflow-hidden">
                     <span className="text-[9px] text-purple-300 block font-mono-crypto">
-                      Receiving Address (BNB Smart Chain):
+                      Receiving Address (BEP-20 Network):
                     </span>
                     <p className="text-[10px] font-mono-crypto text-amber-300 font-bold break-all leading-tight">
-                      {contractAddress}
+                      {receivingAddress}
                     </p>
                     <button
                       type="button"
-                      onClick={() => handleCopy(contractAddress, 'address')}
+                      onClick={() => handleCopy(receivingAddress, 'address')}
                       className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[9px] font-mono-crypto font-bold border border-amber-500/40"
                     >
                       {copiedAddress ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}

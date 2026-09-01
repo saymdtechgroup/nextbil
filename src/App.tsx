@@ -586,6 +586,7 @@ export default function App() {
       tokenName: 'NXBC',
       tokenSymbol: 'NXBC',
       contractAddress: '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7',
+      receivingAddress: '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
       minPurchaseUsd: 10,
       maxPurchaseUsd: 50000,
       minMlmQualifyUsd: 100,
@@ -1116,6 +1117,7 @@ export default function App() {
       tokenName: 'NXBC',
       tokenSymbol: 'NXBC',
       contractAddress: '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7',
+      receivingAddress: '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
       minPurchaseUsd: 10,
       maxPurchaseUsd: 50000,
       minMlmQualifyUsd: 100,
@@ -1461,6 +1463,7 @@ export default function App() {
         walletConnected={walletConnected}
         walletAddress={walletAddress}
         contractAddress={systemConfig.contractAddress}
+        receivingAddress={systemConfig.receivingAddress}
         activePhaseInfo={{
           phaseNumber: activePhase.phaseNumber,
           name: activePhase.name,

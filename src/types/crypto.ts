@@ -69,6 +69,7 @@ export interface AdminSystemConfig {
   tokenName: string;
   tokenSymbol: string;
   contractAddress: string;
+  receivingAddress?: string;
   minPurchaseUsd: number;
   maxPurchaseUsd: number;
   minMlmQualifyUsd: number; // Minimum cumulative investment to qualify for MLM commissions (default $100)

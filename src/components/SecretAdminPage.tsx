@@ -1472,6 +1472,17 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                       className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-purple-200 focus:border-amber-400 focus:outline-none"
                     />
                   </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">
+                      Receiving Wallet Address (For USDT Payments)
+                    </label>
+                    <input
+                      type="text"
+                      value={localSystem.receivingAddress || ''}
+                      onChange={(e) => handleUpdateSystem({ receivingAddress: e.target.value })}
+                      className="w-full bg-[#06020c] border border-amber-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 font-bold focus:border-amber-400 focus:outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 
