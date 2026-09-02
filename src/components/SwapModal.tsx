@@ -27,6 +27,7 @@ interface SwapModalProps {
   onSwapSuccess?: (fromToken: 'USDT' | 'NXBUSD', toToken: 'USDT' | 'NXBUSD', amount: number) => void;
   nxbusdBalance?: number;
   usdtBalance?: number;
+  receivingAddress?: string;
 }
 
 export const SwapModal: React.FC<SwapModalProps> = ({
@@ -38,6 +39,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({
   onSwapSuccess,
   nxbusdBalance = 0,
   usdtBalance = 0,
+  receivingAddress = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
 }) => {
   const [fromToken, setFromToken] = useState<'USDT' | 'NXBUSD'>('USDT');
   const [swapAmount, setSwapAmount] = useState<string>('100');
@@ -154,7 +156,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({
           setStatusMessage(`Please confirm transaction in your wallet for ${amountNumber} ${fromToken}...`);
 
           const tokenContract = fromToken === 'USDT' ? USDT_CONTRACT : NXBUSD_CONTRACT;
-          const targetAddress = NXBC_CONTRACT;
+          const targetAddress = receivingAddress;
           const amountWei = BigInt(Math.floor(amountNumber * 1e18));
           
           const cleanTo = targetAddress.toLowerCase().replace('0x', '').padStart(64, '0');

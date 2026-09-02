@@ -1687,6 +1687,7 @@ export default function App() {
         onSwapSuccess={handleSwapSuccess}
         nxbusdBalance={nxbusdBalance}
         usdtBalance={usdtBalance}
+        receivingAddress={systemConfig.receivingAddress}
       />
 
       <WalletConnectModal
