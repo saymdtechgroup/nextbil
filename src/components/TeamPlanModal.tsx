@@ -30,7 +30,7 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
   onClose,
   levels,
   rankRewards = [],
-  directSponsorPercent = 5,
+  directSponsorPercent = 10,
   referralCode = 'NXBC-COMMUNITY-8891',
 }) => {
   const [activeTab, setActiveTab] = useState<'levels' | 'ranks'>('levels');
@@ -203,10 +203,10 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-slate-200 uppercase font-rajdhani">
-                  Leadership Ranks & Global Royalty Pool
+                  Leadership Funds, Salary & Royalty Pool
                 </h3>
                 <span className="text-[9px] font-mono-crypto text-amber-300">
-                  Lifetime Passive Income
+                  Direct & Team Business Goals
                 </span>
               </div>
 
@@ -219,28 +219,44 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 font-rajdhani font-black text-xs border border-amber-400/40">
-                          Tier {rank.rankNumber}
+                          Fund #{rank.rankNumber}
                         </span>
                         <span className="text-xs font-bold text-slate-100 font-rajdhani">
                           {rank.name}
                         </span>
                       </div>
-                      <span className="text-[10px] font-mono-crypto font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/30">
-                        {rank.monthlyRoyaltyPercent}% Monthly Royalty
+                      <span className="text-[10px] font-mono-crypto font-bold text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/30">
+                        {rank.rewardTitle || `$${rank.oneTimeBonusUsd} USD`}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-[10px] bg-[#070310] p-2 rounded-xl border border-purple-500/10">
+                    <div className="grid grid-cols-2 gap-2 text-[10px] bg-[#070310] p-2.5 rounded-xl border border-purple-500/10">
                       <div>
-                        <span className="text-purple-400 block text-[8px] uppercase">Target Criteria</span>
-                        <span className="font-mono-crypto text-slate-200">
-                          {rank.requiredDirects} Directs &bull; ${rank.requiredTeamVolume.toLocaleString()} Vol
-                        </span>
+                        <span className="text-purple-400 block text-[8px] uppercase font-bold">Qualification Criteria</span>
+                        <div className="space-y-0.5 text-[9px] font-mono-crypto text-slate-200 mt-0.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-purple-300">Direct Business:</span>
+                            <strong className="text-amber-300 font-bold">${(rank.requiredDirectVolume || 0).toLocaleString()} USD</strong>
+                          </div>
+                          {rank.requiredTeamVolume > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-purple-300">Team Business:</span>
+                              <strong className="text-emerald-400 font-bold">${rank.requiredTeamVolume.toLocaleString()} USD</strong>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <span className="text-purple-400 block text-[8px] uppercase">Reward Payout</span>
-                        <span className="font-mono-crypto text-amber-300 font-bold">
-                          ${rank.oneTimeBonusUsd} + {rank.rewardTokens.toLocaleString()} NXBC
+                      <div className="text-right flex flex-col justify-between">
+                        <div>
+                          <span className="text-purple-400 block text-[8px] uppercase font-bold">Reward Payout</span>
+                          <span className="font-mono-crypto text-emerald-400 font-black text-xs block">
+                            {rank.monthlySalaryUsd 
+                              ? `$${rank.monthlySalaryUsd}/Month (${rank.salaryMonths} Mo)` 
+                              : `$${rank.oneTimeBonusUsd.toLocaleString()} USD`}
+                          </span>
+                        </div>
+                        <span className="text-[8px] font-mono-crypto text-amber-300 font-semibold">
+                          Pure USDT / NXBUSD Payout
                         </span>
                       </div>
                     </div>

@@ -309,7 +309,7 @@ export const MatrixPlanModal: React.FC<MatrixPlanModalProps> = ({
                 <span className="text-xs font-mono-crypto font-bold text-amber-300">Presale %</span>
               </div>
               <p className="text-[10px] text-purple-300 font-mono-crypto">
-                User A sponsored B, C, D, E, F, and G. Therefore, the <strong>Direct Sponsor % (e.g. 5%)</strong> of all 6 users' coin purchases is instantly credited to User A's wallet.
+                User A sponsored B, C, D, E, F, and G. Therefore, the <strong>Direct Sponsor % (10%)</strong> of all 6 users' coin purchases is instantly credited to User A's wallet.
               </p>
             </div>
 

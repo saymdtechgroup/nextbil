@@ -931,30 +931,31 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
-                      {/* Directs Required */}
+                      {/* Direct Business Required */}
                       <div>
-                        <label className="text-[8px] uppercase text-purple-300/80 font-rajdhani font-semibold block">
-                          Direct Referrals Required
+                        <label className="text-[8px] uppercase text-amber-300 font-rajdhani font-semibold block">
+                          Direct Business ($ USD)
                         </label>
                         <input
                           type="number"
+                          step="5000"
                           min="0"
-                          value={rank.requiredDirects}
-                          onChange={(e) => handleRankChange(idx, 'requiredDirects', parseInt(e.target.value) || 0)}
-                          className="w-full bg-[#06020c] border border-purple-600/40 rounded-lg py-1 px-2 text-xs font-mono-crypto text-slate-200 focus:border-amber-400 focus:outline-none"
+                          value={rank.requiredDirectVolume || 0}
+                          onChange={(e) => handleRankChange(idx, 'requiredDirectVolume', parseInt(e.target.value) || 0)}
+                          className="w-full bg-[#06020c] border border-amber-500/40 rounded-lg py-1 px-2 text-xs font-mono-crypto text-amber-300 font-bold focus:border-amber-400 focus:outline-none"
                         />
                       </div>
 
-                      {/* Team Volume Required */}
+                      {/* Team Business Required */}
                       <div>
                         <label className="text-[8px] uppercase text-purple-300/80 font-rajdhani font-semibold block">
-                          Team Volume ($ USD)
+                          Team Business ($ USD)
                         </label>
                         <input
                           type="number"
-                          step="1000"
+                          step="10000"
                           min="0"
-                          value={rank.requiredTeamVolume}
+                          value={rank.requiredTeamVolume || 0}
                           onChange={(e) => handleRankChange(idx, 'requiredTeamVolume', parseInt(e.target.value) || 0)}
                           className="w-full bg-[#06020c] border border-purple-600/40 rounded-lg py-1 px-2 text-xs font-mono-crypto text-slate-200 focus:border-amber-400 focus:outline-none"
                         />
@@ -963,7 +964,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       {/* Cash Bonus in USD */}
                       <div>
                         <label className="text-[8px] uppercase text-emerald-400 font-rajdhani font-semibold block">
-                          One-Time Bonus ($)
+                          Reward / Fund Value ($)
                         </label>
                         <input
                           type="number"

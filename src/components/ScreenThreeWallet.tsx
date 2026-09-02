@@ -236,6 +236,11 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
           </span>
         </div>
 
+        <div className="p-2 rounded-lg bg-indigo-950/40 border border-indigo-500/30 text-[9px] text-indigo-200">
+          <p className="font-semibold text-amber-300 mb-0.5">Atomic Web3 Swap</p>
+          <p>Withdrawing your earnings triggers a smart contract swap. It deducts the exact amount of sold NXBC from your connected wallet in exchange for this USDT payout.</p>
+        </div>
+
         {/* Amount Input */}
         <div className="space-y-1">
           <label className="text-[10px] font-semibold text-purple-200/80 uppercase tracking-wider flex justify-between">

@@ -270,13 +270,47 @@ async function startServer() {
         })
         .where(eq(users.id, user.id));
 
-      // 10-Level Commission Distribution Logic (ONLY when user reaches >= $100 Cumulative Investment Threshold)
+      // Direct Sponsor (10%) & 10-Level Commission Distribution Logic (ONLY when user reaches >= $100 Cumulative Investment Threshold)
       if (isNowMlmQualified) {
         // If user just crossed the $100 threshold (e.g., 50 + 50 = 100), commission is distributed on the eligible amount
         const commissionBaseAmount = wasMlmQualified ? purchaseUsdt : newInvested;
-        const levelPercentages = [0.10, 0.05, 0.03, 0.02, 0.01, 0.01, 0.005, 0.005, 0.005, 0.005]; // Level 1 to 10
+        const directSponsorRate = 0.10; // 10% Direct Sponsor Income
+        const levelPercentages = [0.03, 0.02, 0.01, 0.01, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005]; // L1: 3%, L2: 2%, L3: 1%, L4: 1%, L5-10: 0.5%
         let currentSponsorCode = user.referredBy;
+
+        // 1. Direct Sponsor Bonus (10%)
+        if (currentSponsorCode) {
+          const directSponsor = await db.query.users.findFirst({
+            where: eq(users.referralCode, currentSponsorCode),
+          });
+
+          if (directSponsor) {
+            const isDirectQualified = directSponsor.isMlmQualified || ((directSponsor.totalInvestedUsdt || 0) >= 100);
+            if (isDirectQualified) {
+              const sponsorBonusAmount = commissionBaseAmount * directSponsorRate;
+              if (sponsorBonusAmount > 0) {
+                await db.insert(levelEarnings).values({
+                  beneficiaryId: directSponsor.id,
+                  sourceUserId: user.id,
+                  levelNumber: 0, // 0 indicates Direct Sponsor
+                  percentage: directSponsorRate * 100,
+                  commissionUsdt: sponsorBonusAmount,
+                  txType: 'token_purchase',
+                });
+
+                await db.update(users)
+                  .set({
+                    totalEarnedUsdt: directSponsor.totalEarnedUsdt + sponsorBonusAmount,
+                    availableUsdt: directSponsor.availableUsdt + sponsorBonusAmount,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(users.id, directSponsor.id));
+              }
+            }
+          }
+        }
         
+        // 2. 10-Level Unilevel Commissions (L1: 3%, L2: 2%, L3: 1%, L4: 1%, L5-10: 0.5%)
         for (let lvl = 0; lvl < levelPercentages.length && currentSponsorCode; lvl++) {
           const uplineUser = await db.query.users.findFirst({
             where: eq(users.referralCode, currentSponsorCode),

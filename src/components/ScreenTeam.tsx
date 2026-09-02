@@ -12,6 +12,7 @@ import {
   Crown,
 } from 'lucide-react';
 import { ReferralLevel, RankReward } from '../types/crypto';
+import { NetworkTreeModal } from './NetworkTreeModal';
 
 interface ScreenTeamProps {
   levels: ReferralLevel[];
@@ -26,9 +27,10 @@ interface ScreenTeamProps {
 }
 
 export const ScreenTeam: React.FC<ScreenTeamProps> = ({
+
   levels,
   rankRewards = [],
-  directSponsorPercent = 5,
+  directSponsorPercent = 10,
   onOpenTeamModal,
   onOpenMatrixModal,
   levelIncomeUsd,
@@ -38,6 +40,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
 }) => {
   const [copied, setCopied] = useState<boolean>(false);
   const totalMembers = levels.reduce((acc, l) => acc + l.directMembers, 0);
+  const [isTreeModalOpen, setIsTreeModalOpen] = useState(false);
   const totalTierPercent = levels.reduce((acc, l) => acc + l.commissionPercent, 0);
 
   const isMlmQualified = totalInvestedUsd >= minMlmQualifyUsd;
@@ -215,22 +218,30 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
       {/* Leadership Rank & Global Royalty Banner */}
       <div
         onClick={onOpenTeamModal}
-        className="p-2.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-[#18092f] to-[#0d041c] border border-amber-400/30 hover:border-amber-400/60 transition-all cursor-pointer flex items-center justify-between"
+        className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-[#1d0b38] to-[#0d041c] border border-amber-400/40 hover:border-amber-400/80 transition-all cursor-pointer flex items-center justify-between shadow-md"
       >
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-xl bg-amber-500/20 text-amber-300">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-xl bg-amber-500/20 text-amber-300">
             <Crown className="w-4 h-4 text-amber-400" />
           </div>
           <div>
-            <h3 className="text-[11px] font-bold text-slate-100 font-rajdhani uppercase">
-              Leadership Ranks & Royalty
-            </h3>
-            <p className="text-[8px] text-purple-300/80 font-mono-crypto">
-              Earn from Global Royalty Pool & One-time Cash awards
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-xs font-bold text-slate-100 font-rajdhani uppercase tracking-wider">
+                Leadership Funds & Salary Rewards
+              </h3>
+              <span className="text-[8px] font-mono-crypto px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                5 Major Funds
+              </span>
+            </div>
+            <p className="text-[8.5px] text-purple-200/90 font-mono-crypto mt-0.5">
+              Dev Fund ($100) • Salary ($100/mo) • Travel ($500) • Car & House Funds
             </p>
           </div>
         </div>
-        <ChevronRight className="w-4 h-4 text-amber-400" />
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] font-mono-crypto text-amber-300 font-bold hidden sm:inline">View Plan</span>
+          <ChevronRight className="w-4 h-4 text-amber-400" />
+        </div>
       </div>
 
       {/* Quick Matrix Action Banner */}
@@ -253,6 +264,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
         </div>
         <ChevronRight className="w-4 h-4 text-fuchsia-300" />
       </div>
+      <NetworkTreeModal isOpen={isTreeModalOpen} onClose={() => setIsTreeModalOpen(false)} />
     </div>
   );
 };

@@ -63,8 +63,8 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   currentRate = 0.01,
   walletConnected = false,
   walletAddress = '',
-  contractAddress = '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7',
-  receivingAddress = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
+  contractAddress = '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
+  receivingAddress = '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
   activePhaseInfo = {
     phaseNumber: 1,
     name: 'Phase 1',
@@ -332,150 +332,37 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
       <div className="w-full max-w-md max-h-[94vh] overflow-y-auto rounded-3xl bg-[#110725] border border-amber-500/30 p-4 sm:p-5 shadow-[0_0_50px_rgba(245,158,11,0.25)] relative text-slate-100 scroll-smooth">
         
+        
         {/* Close Button */}
         <button
-          onClick={() => {
-            setStep(1);
-            onClose();
-          }}
-          className="absolute top-3.5 right-3.5 p-1.5 rounded-full bg-purple-950 text-purple-300 hover:text-white border border-purple-800/60 transition-colors"
+          onClick={onClose}
+          className="absolute top-4 right-4 text-purple-400 hover:text-amber-400 transition-colors p-1 bg-[#1a0f35] rounded-full z-10"
         >
-          <X className="w-4 h-4" />
+          <X className="w-5 h-5" />
         </button>
 
-        {/* Title & Step Indicator */}
-        <div className="flex items-center gap-2 mb-3.5">
-          <div className="flex-1 pr-6">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-black text-slate-100 font-cinzel">
-                BUY <span className="text-amber-400">NXBC</span> (REAL PAYMENT)
-              </h2>
-              <span className="text-[10px] font-mono-crypto px-2 py-0.5 rounded-full bg-purple-900/60 border border-purple-500/40 text-purple-200">
-                Step {step} of 2
-              </span>
-            </div>
-            <p className="text-xs text-purple-300/80 font-mono-crypto">
-              {step === 1
-                ? `${activePhaseInfo.name} Rate: $${currentRate.toFixed(2)} / NXBC • BEP-20 Network`
-                : `Set Coin Sell Schedule for ${tokenQuantity.toLocaleString()} NXBC`}
-            </p>
-          </div>
-        </div>
-
-        {/* STEP 1: PAYMENT AMOUNT, METHOD & CURRENCY */}
         {step === 1 && (
-          <div className="space-y-3.5 animate-fade-in">
-            {/* Phase Allotment Quota & Remaining Tokens Status Box */}
-            <div className="p-3 rounded-2xl bg-gradient-to-r from-[#17092e] to-[#0d041c] border border-amber-500/30 space-y-2 shadow-inner">
-              <div className="flex justify-between items-center text-[10px] font-mono-crypto">
-                <span className="text-purple-300/80 uppercase font-rajdhani font-bold flex items-center gap-1">
-                  <Lock className="w-3 h-3 text-amber-400" />
-                  {activePhaseInfo.name} Live Presale
-                </span>
-                <span className="text-amber-300 font-bold">
-                  {maxAvailableInPhase.toLocaleString()} Left / {activePhaseInfo.totalSupply.toLocaleString()} Total
-                </span>
-              </div>
-
-              {/* Progress bar */}
-              <div className="w-full h-2 rounded-full bg-purple-950/90 overflow-hidden border border-purple-700/40">
-                <div
-                  className="h-full bg-gradient-to-r from-amber-500 to-fuchsia-500 transition-all duration-300"
-                  style={{
-                    width: `${Math.min(100, (activePhaseInfo.tokensSold / (activePhaseInfo.totalSupply || 1)) * 100)}%`,
-                  }}
-                />
-              </div>
-
-              <div className="flex justify-between items-center text-[9px] text-purple-300/70 font-mono-crypto">
-                <span>Phase Sold: {((activePhaseInfo.tokensSold / (activePhaseInfo.totalSupply || 1)) * 100).toFixed(1)}%</span>
-                <span className="text-emerald-400 font-bold">
-                  Stage 1 Active Rate: ${currentRate.toFixed(2)}
-                </span>
-              </div>
+          <div className="space-y-3">
+            <div className="text-center space-y-1">
+              <h2 className="text-2xl font-black font-rajdhani tracking-wider text-amber-400 flex items-center justify-center gap-2">
+                <Coins className="w-6 h-6" />
+                ACQUIRE NXBC
+              </h2>
             </div>
 
-            {/* Payment Method Switcher (Web3 vs Manual QR Deposit) */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-semibold text-purple-200 uppercase tracking-wider">
-                1. Select Real Payment Method
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMode('web3')}
-                  className={`py-2 px-2.5 rounded-xl text-xs font-mono-crypto font-bold border transition-all flex items-center justify-center gap-1.5 ${
-                    paymentMode === 'web3'
-                      ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                      : 'bg-purple-950/60 border-purple-500/20 text-purple-300 hover:text-white'
-                  }`}
-                >
-                  <Zap className="w-3.5 h-3.5 text-amber-400" />
-                  <span>1-Click Web3 Pay</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPaymentMode('manual')}
-                  className={`py-2 px-2.5 rounded-xl text-xs font-mono-crypto font-bold border transition-all flex items-center justify-center gap-1.5 ${
-                    paymentMode === 'manual'
-                      ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                      : 'bg-purple-950/60 border-purple-500/20 text-purple-300 hover:text-white'
-                  }`}
-                >
-                  <QrCode className="w-3.5 h-3.5 text-fuchsia-400" />
-                  <span>Direct QR & Address</span>
-                </button>
+            {/* Decentralized Hold & Swap Warning Alert */}
+            <div className="p-2.5 rounded-xl bg-gradient-to-r from-emerald-950/60 to-indigo-950/60 border border-emerald-500/40 text-[10px] text-emerald-200 leading-snug shadow-sm">
+              <div className="flex items-center gap-1.5 font-bold text-emerald-300 mb-0.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>Decentralized Hold & Swap Notice</span>
               </div>
-            </div>
-
-            {/* Payment Currency Selector */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-center">
-                <label className="text-[10px] font-semibold text-purple-200 uppercase tracking-wider">
-                  2. Select Payment Asset (BEP-20)
-                </label>
-                <span className="text-[9px] text-amber-300 font-mono-crypto font-bold">
-                  1 NXBUSD = $1.00 USDT
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCurrency('NXBUSD')}
-                  className={`py-2 px-1 rounded-xl text-[11px] font-mono-crypto font-bold border transition-all flex flex-col items-center justify-center ${
-                    currency === 'NXBUSD'
-                      ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                      : 'bg-purple-950/60 border-purple-500/20 text-purple-300 hover:text-white'
-                  }`}
-                >
-                  <span className="font-bold">NXBUSD</span>
-                  <span className="text-[8px] opacity-75">1:1 Utility Fuel</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCurrency('USDT')}
-                  className={`py-2 px-1 rounded-xl text-[11px] font-mono-crypto font-bold border transition-all flex flex-col items-center justify-center ${
-                    currency === 'USDT'
-                      ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                      : 'bg-purple-950/60 border-purple-500/20 text-purple-300 hover:text-white'
-                  }`}
-                >
-                  <span className="font-bold">USDT</span>
-                  <span className="text-[8px] text-emerald-400">Auto 1:1 Convert</span>
-                </button>
-              </div>
-
-              {currency === 'USDT' && (
-                <div className="p-2 rounded-xl bg-emerald-950/50 border border-emerald-500/30 text-[9px] text-emerald-300 font-mono-crypto flex items-center gap-1.5">
-                  <Sparkles className="w-3 h-3 text-emerald-400 shrink-0" />
-                  <span>Your USDT will be instantly converted 1:1 into NXBUSD to mint your NXBC Coins seamlessly!</span>
-                </div>
-              )}
+              <p className="text-slate-200">
+                <strong className="text-emerald-300 font-semibold">100% tokens aapke Trust Wallet mein turant mint (transfer) ho jayenge.</strong> Allocations queue mein virtually register rahenge, jabki tokens aapke safe self-custody wallet mein rehte hain.
+              </p>
             </div>
 
             {/* Amount Input */}
+
             <div className="space-y-1">
               <label className="text-[10px] font-semibold text-purple-200 uppercase tracking-wider flex justify-between">
                 <span>3. Enter USD Amount</span>
@@ -514,8 +401,8 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             </div>
 
             {/* Quick Amount Buttons */}
-            <div className="flex gap-1.5">
-              {['50', '100', '250', '500', '1000'].map((preset) => {
+            <div className="flex gap-1.5 flex-wrap">
+              {['1', '10', '50', '100', '500', '1000'].map((preset) => {
                 const presetTokens = Math.floor(parseFloat(preset) / currentRate);
                 const isPresetTooHigh = presetTokens > maxAvailableInPhase;
                 return (
@@ -524,7 +411,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                     type="button"
                     disabled={isPresetTooHigh}
                     onClick={() => setPayAmount(preset)}
-                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-mono-crypto border font-semibold transition-all ${
+                    className={`flex-1 min-w-[45px] py-1.5 rounded-lg text-[10px] font-mono-crypto border font-semibold transition-all ${
                       isPresetTooHigh
                         ? 'bg-purple-950/20 text-purple-600 border-purple-900/30 cursor-not-allowed opacity-40'
                         : 'bg-purple-900/40 hover:bg-purple-800 text-purple-200 border-purple-600/30'
@@ -663,7 +550,14 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
             {/* Quick 1-Click Strategy Presets */}
             <div className="space-y-1">
-              <div className="flex justify-between items-center text-[10px]">
+              <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-[10px] text-indigo-200 leading-snug">
+                <p className="font-semibold text-amber-300 mb-1 flex items-center gap-1"><Zap className="w-3 h-3"/> Decentralized Hold & Swap</p>
+                <p>1. <strong className="text-emerald-400">100% of tokens</strong> will be minted directly to your Trust Wallet immediately.</p>
+                <p>2. Allocations below are <strong className="text-amber-200">virtually registered</strong> in our Smart Contract FIFO line.</p>
+                <p>3. When your phase hits, we credit your USDT earnings. At withdrawal, you approve a 1-click swap (Tokens from your wallet for USDT).</p>
+              </div>
+
+              <div className="flex justify-between items-center text-[10px] pt-1">
                 <span className="text-purple-300 font-semibold flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-400" />
                   Quick 1-Click Split:
@@ -984,14 +878,14 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             {/* Live Coin Math Summary Tracker */}
             <div className="p-2.5 rounded-xl bg-purple-950/70 border border-purple-500/30 space-y-1.5 text-xs font-mono-crypto">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] text-purple-300 uppercase">Coins Allocated for Sale:</span>
+                <span className="text-[10px] text-purple-300 uppercase">Virtually Locked in Queue:</span>
                 <span className={`font-black ${isOverAllocated ? 'text-rose-400' : 'text-amber-300'}`}>
                   {totalAllocatedTokens.toLocaleString()} / {tokenQuantity.toLocaleString()} NXBC
                 </span>
               </div>
               
               <div className="flex justify-between items-center text-[10px]">
-                <span className="text-purple-300">Unallocated (Hold in Wallet):</span>
+                <span className="text-purple-300">Free to Trade (Hold in Wallet):</span>
                 <span className="text-emerald-400 font-bold">
                   {remainingTokens.toLocaleString()} NXBC ({tokenQuantity > 0 ? Math.round((remainingTokens / tokenQuantity) * 100) : 0}%)
                 </span>
@@ -999,7 +893,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
               {totalPhaseUsdReturn > 0 && (
                 <div className="flex justify-between items-center text-[10px] pt-1 border-t border-purple-500/20">
-                  <span className="text-amber-200/90 font-sans font-semibold">Total Projected Phase Cashout:</span>
+                  <span className="text-amber-200/90 font-sans font-semibold">Projected Wallet Swap Value:</span>
                   <span className="text-emerald-400 font-black font-mono-crypto text-xs">
                     +${totalPhaseUsdReturn.toLocaleString()} USD
                   </span>

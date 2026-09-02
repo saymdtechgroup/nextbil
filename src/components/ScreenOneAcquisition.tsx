@@ -1094,7 +1094,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
               10-Level Plan
             </h3>
             <p className="text-[9px] text-purple-300/70 font-mono-crypto">
-              Earn up to 25% Multi-Tier
+              10% Sponsor • 10-Tiers
             </p>
           </div>
           <div className="mt-2 flex items-center justify-between text-[9px] text-amber-300 font-medium pt-1 border-t border-purple-500/10">

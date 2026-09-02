@@ -17,7 +17,10 @@ import {
 import { AllocationState } from '../types/crypto';
 import { GoldCoinGraphic } from './GoldCoinGraphic';
 
+import { UserEarnings } from '../types/crypto';
+
 interface ScreenTwoAssetsProps {
+  userEarnings?: UserEarnings;
   allocation: AllocationState;
   onOpenTeamPlanModal: () => void;
   onOpenMatrixModal: () => void;
@@ -26,6 +29,7 @@ interface ScreenTwoAssetsProps {
 }
 
 export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
+  userEarnings,
   allocation,
   onOpenTeamPlanModal,
   onOpenMatrixModal,
@@ -90,7 +94,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <span className="text-[9px] font-semibold text-purple-300/80 uppercase tracking-wider">
-              Total Community Holdings
+              Connected Wallet Balance (NXBC)
             </span>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-2xl font-black font-mono-crypto gold-gradient-text">
@@ -98,7 +102,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               </span>
             </div>
             <span className="text-[10px] text-emerald-400 font-mono-crypto font-medium">
-              ≈ ${showValues ? initialCostUsd.toFixed(2) : '•••'} USD (Acquisition Base)
+              100% held safely in your Trust Wallet
             </span>
           </div>
 
@@ -111,7 +115,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
           <div className="mt-2 pt-2 border-t border-purple-500/20 flex items-center justify-between text-[9px] font-mono-crypto">
             <span className="text-emerald-300 flex items-center gap-1">
               <ShieldCheck className="w-3 h-3 text-emerald-400" />
-              Contract Schedule Locked
+              FIFO Queue Virtually Registered
             </span>
             <span className="text-purple-400">{allocation.lockedTimestamp || 'Active'}</span>
           </div>
@@ -145,7 +149,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
             </div>
             <div className="my-1">
               <span className="text-xs font-black font-mono-crypto text-slate-100 block">
-                {showValues ? `${p2Tokens.toLocaleString()} NXBC` : '••••'}
+                {showValues ? `${(allocation.p2Tokens?.allocated || p2Tokens).toLocaleString()} NXBC (Sold: ${allocation.p2Tokens?.sold || 0})` : '••••'}
               </span>
               <span className="text-[9px] font-mono-crypto text-amber-400/90 font-semibold">
                 @ $0.10 Rate
@@ -170,7 +174,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
             </div>
             <div className="my-1">
               <span className="text-xs font-black font-mono-crypto text-slate-100 block">
-                {showValues ? `${p3Tokens.toLocaleString()} NXBC` : '••••'}
+                {showValues ? `${(allocation.p3Tokens?.allocated || p3Tokens).toLocaleString()} NXBC (Sold: ${allocation.p3Tokens?.sold || 0})` : '••••'}
               </span>
               <span className="text-[9px] font-mono-crypto text-amber-400/90 font-semibold">
                 @ $0.20 Rate
@@ -195,7 +199,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
             </div>
             <div className="my-1">
               <span className="text-xs font-black font-mono-crypto text-slate-100 block">
-                {showValues ? `${p4Tokens.toLocaleString()} NXBC` : '••••'}
+                {showValues ? `${(allocation.p4Tokens?.allocated || p4Tokens).toLocaleString()} NXBC (Sold: ${allocation.p4Tokens?.sold || 0})` : '••••'}
               </span>
               <span className="text-[9px] font-mono-crypto text-fuchsia-400/90 font-semibold">
                 @ $0.30 Rate
@@ -220,7 +224,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
             </div>
             <div className="my-1">
               <span className="text-xs font-black font-mono-crypto text-slate-100 block">
-                {showValues ? `${p5Tokens.toLocaleString()} NXBC` : '••••'}
+                {showValues ? `${(allocation.p5Tokens?.allocated || p5Tokens).toLocaleString()} NXBC (Sold: ${allocation.p5Tokens?.sold || 0})` : '••••'}
               </span>
               <span className="text-[9px] font-mono-crypto text-fuchsia-400/90 font-semibold">
                 @ $0.40 Rate

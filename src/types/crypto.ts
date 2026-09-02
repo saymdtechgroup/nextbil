@@ -20,6 +20,10 @@ export interface AllocationState {
   p5Percent: number;
   dexPercent: number;
   unallocatedPercent: number;
+  p2Tokens?: PhaseAllocation;
+  p3Tokens?: PhaseAllocation;
+  p4Tokens?: PhaseAllocation;
+  p5Tokens?: PhaseAllocation;
   totalTokensPurchased: number;
   isLocked: boolean;
   lockedTimestamp?: string;
@@ -56,9 +60,14 @@ export interface RankReward {
   id: string;
   rankNumber: number;
   name: string;
-  requiredDirects: number;
-  requiredTeamVolume: number;
+  requiredDirectVolume: number; // Direct Business ($ USD)
+  requiredTeamVolume: number;   // Team Business ($ USD)
+  requiredDirects?: number;
+  rewardType?: 'one_time' | 'salary' | 'travel' | 'car' | 'house' | 'fund';
+  rewardTitle: string;          // e.g. "$100 USD Team Development Fund", "$100/mo for 12 Months Salary"
   oneTimeBonusUsd: number;
+  monthlySalaryUsd?: number;
+  salaryMonths?: number;
   rewardTokens: number;
   monthlyRoyaltyPercent: number;
   currentQualifiedCount: number;
@@ -93,3 +102,21 @@ export interface MatrixNode {
 export type ActiveScreen = 'home' | 'assets' | 'team' | 'withdraw' | 'mine' | 'admin';
 export type ViewMode = 'trio' | 'single';
 
+
+export interface PhaseAllocation {
+  allocated: number;
+  sold: number;
+}
+
+export interface UserEarnings {
+  availableUsdt: number;
+  withdrawnUsdt: number;
+}
+
+export interface QueueEntry {
+  id: string;
+  userId: string;
+  phaseNumber: number;
+  tokensRequested: number;
+  tokensSold: number;
+}

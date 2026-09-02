@@ -47,6 +47,7 @@ interface SecretAdminPageProps {
   onUpdateRankRewards: (ranks: RankReward[]) => void;
   onUpdateSystemConfig: (config: AdminSystemConfig) => void;
   onUpdateMatrixConfig: (config: MatrixConfig) => void;
+  onSimulateExternalBuy?: (amount: number) => void;
   onResetToDefaults: () => void;
   onExitAdmin: () => void;
 }
@@ -72,6 +73,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
   onUpdateRankRewards,
   onUpdateSystemConfig,
   onUpdateMatrixConfig,
+  onSimulateExternalBuy,
   onResetToDefaults,
   onExitAdmin,
 }) => {
@@ -1273,25 +1275,28 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div>
-                        <label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">
-                          Directs Req
+                        <label className="text-[9px] uppercase text-amber-300 font-bold block mb-1">
+                          Direct Business ($ USD)
                         </label>
                         <input
                           type="number"
-                          value={rank.requiredDirects}
-                          onChange={(e) => handleRankChange(idx, 'requiredDirects', parseInt(e.target.value) || 0)}
-                          className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-1.5 px-2 text-xs font-mono-crypto text-slate-100 focus:outline-none"
+                          step="5000"
+                          min="0"
+                          value={rank.requiredDirectVolume || 0}
+                          onChange={(e) => handleRankChange(idx, 'requiredDirectVolume', parseInt(e.target.value) || 0)}
+                          className="w-full bg-[#06020c] border border-amber-500/50 rounded-xl py-1.5 px-2 text-xs font-mono-crypto text-amber-300 font-bold focus:outline-none"
                         />
                       </div>
 
                       <div>
                         <label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">
-                          Team Volume ($)
+                          Team Business ($ USD)
                         </label>
                         <input
                           type="number"
-                          step="1000"
-                          value={rank.requiredTeamVolume}
+                          step="10000"
+                          min="0"
+                          value={rank.requiredTeamVolume || 0}
                           onChange={(e) => handleRankChange(idx, 'requiredTeamVolume', parseInt(e.target.value) || 0)}
                           className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-1.5 px-2 text-xs font-mono-crypto text-slate-100 focus:outline-none"
                         />
@@ -1299,7 +1304,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
 
                       <div>
                         <label className="text-[9px] uppercase text-emerald-400 font-bold block mb-1">
-                          One-Time Bonus ($)
+                          Reward Value ($ USD)
                         </label>
                         <input
                           type="number"
@@ -1312,7 +1317,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
 
                       <div>
                         <label className="text-[9px] uppercase text-amber-300 font-bold block mb-1">
-                          Reward Coins
+                          Reward NXBC Coins
                         </label>
                         <input
                           type="number"

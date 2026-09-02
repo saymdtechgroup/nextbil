@@ -26,7 +26,7 @@ import {
   PhaseConfig,
   MatrixConfig,
   RankReward,
-  AdminSystemConfig,
+  AdminSystemConfig, UserEarnings, QueueEntry,
 } from './types/crypto';
 import { AnalyticalBackground } from './components/AnalyticalBackground';
 import { DeviceFrame } from './components/DeviceFrame';
@@ -34,6 +34,7 @@ import { BottomNavBar } from './components/BottomNavBar';
 import { ScreenOneAcquisition } from './components/ScreenOneAcquisition';
 import { ScreenTwoAssets } from './components/ScreenTwoAssets';
 import { ScreenThreeWallet } from './components/ScreenThreeWallet';
+import { LandingPage } from './components/LandingPage';
 import { ScreenTeam } from './components/ScreenTeam';
 import { ScreenMine } from './components/ScreenMine';
 import { BuyTokenModal } from './components/BuyTokenModal';
@@ -47,6 +48,7 @@ import { GoldCoinGraphic } from './components/GoldCoinGraphic';
 
 export default function App() {
   // Default to 'single' full mobile screen mode
+  const [isAppLaunched, setIsAppLaunched] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('single');
   const [activeSingleScreen, setActiveSingleScreen] = useState<ActiveScreen>('home');
   const [showSecretAdminPage, setShowSecretAdminPage] = useState<boolean>(false);
@@ -75,8 +77,8 @@ export default function App() {
         shortName: 'P1',
         rate: 0.01,
         rateLabel: '$0.01',
-        totalSupply: 10000000, // 10,000,000 NXBC
-        tokensSold: 0, // Clean real state for live payments
+        totalSupply: 1000000, // 10 Lakh (5 Lakh Sale, 5 Lakh Reserve)
+        tokensSold: 0,
         status: 'active',
         multiplier: 'Base Seed Rate',
         unlockRequirement: 'Live Now (Stage 1)',
@@ -89,7 +91,7 @@ export default function App() {
         shortName: 'P2',
         rate: 0.10,
         rateLabel: '$0.10',
-        totalSupply: 15000000, // 15,000,000 NXBC
+        totalSupply: 2500000, // 25 Lakh
         tokensSold: 0,
         status: 'locked',
         multiplier: '10x Growth',
@@ -100,12 +102,12 @@ export default function App() {
         phaseNumber: 3,
         name: 'Phase 3',
         shortName: 'P3',
-        rate: 0.20,
-        rateLabel: '$0.20',
-        totalSupply: 20000000, // 20,000,000 NXBC
+        rate: 1.00,
+        rateLabel: '$1.00',
+        totalSupply: 7000000, // 70 Lakh
         tokensSold: 0,
         status: 'locked',
-        multiplier: '20x Growth',
+        multiplier: '100x Growth',
         unlockRequirement: 'Phase 2 must be 100% sold to unlock',
       },
       {
@@ -113,12 +115,12 @@ export default function App() {
         phaseNumber: 4,
         name: 'Phase 4',
         shortName: 'P4',
-        rate: 0.30,
-        rateLabel: '$0.30',
-        totalSupply: 25000000, // 25,000,000 NXBC
+        rate: 10.00,
+        rateLabel: '$10.00',
+        totalSupply: 19500000, // 195 Lakh
         tokensSold: 0,
         status: 'locked',
-        multiplier: '30x Growth',
+        multiplier: '1000x Growth',
         unlockRequirement: 'Phase 3 must be 100% sold to unlock',
       },
       {
@@ -126,29 +128,28 @@ export default function App() {
         phaseNumber: 5,
         name: 'Phase 5',
         shortName: 'P5',
-        rate: 0.40,
-        rateLabel: '$0.40',
-        totalSupply: 30000000, // 30,000,000 NXBC
+        rate: 100.00,
+        rateLabel: '$100.00',
+        totalSupply: 40000000, // 400 Lakh
         tokensSold: 0,
         status: 'locked',
-        multiplier: '40x Growth',
+        multiplier: '10000x Growth',
         unlockRequirement: 'Phase 4 must be 100% sold to unlock',
       },
       {
         id: 'dex',
         phaseNumber: 6,
-        name: 'Live DEX Launch',
+        name: 'DEX Launch',
         shortName: 'DEX',
-        rate: 1500.00,
-        rateLabel: '$1,500 – $3,000',
-        totalSupply: 50000000, // 50,000,000 NXBC
+        rate: 100.00,
+        rateLabel: 'Market Rate',
+        totalSupply: 0,
         tokensSold: 0,
         status: 'locked',
-        multiplier: '50x+ Open Market Trading',
+        multiplier: 'Open Market Trading',
         unlockRequirement: 'Phase 5 must be 100% sold to unlock',
       },
-    ];
-  });
+    ]});
 
   const activePhase = phases.find((p) => p.status === 'active') || phases[0];
 
@@ -174,6 +175,39 @@ export default function App() {
       lockedTimestamp: '',
     };
   });
+
+
+  const [userEarnings, setUserEarnings] = useState<UserEarnings>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_user_earnings');
+      if (saved) {
+        try { return JSON.parse(saved); } catch(e) {}
+      }
+    }
+    return { availableUsdt: 0, withdrawnUsdt: 0 };
+  });
+
+  const [sellQueue, setSellQueue] = useState<QueueEntry[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_sell_queue');
+      if (saved) {
+        try { return JSON.parse(saved); } catch(e) {}
+      }
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_user_earnings', JSON.stringify(userEarnings));
+    }
+  }, [userEarnings]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_sell_queue', JSON.stringify(sellQueue));
+    }
+  }, [sellQueue]);
 
   // Wallet & Income State (Loads persisted wallet if present, or checks injected web3)
   const [walletConnected, setWalletConnected] = useState<boolean>(() => {
@@ -436,32 +470,34 @@ export default function App() {
   });
 
   // 10-Level Referral Plan Data (Admin Managed & Persisted)
+  const defaultPlanLevels: ReferralLevel[] = [
+    { level: 1, commissionPercent: 3, directRequirement: 1, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 2, commissionPercent: 2, directRequirement: 2, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 3, commissionPercent: 1, directRequirement: 3, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 4, commissionPercent: 1, directRequirement: 4, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 5, commissionPercent: 0.5, directRequirement: 5, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 6, commissionPercent: 0.5, directRequirement: 6, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 7, commissionPercent: 0.5, directRequirement: 7, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 8, commissionPercent: 0.5, directRequirement: 8, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 9, commissionPercent: 0.5, directRequirement: 9, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+    { level: 10, commissionPercent: 0.5, directRequirement: 10, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+  ];
+
   const [referralLevels, setReferralLevels] = useState<ReferralLevel[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('nxbc_admin_levels');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (parsed?.[0]?.directMembers === 8 || parsed?.[0]?.totalVolumeUsd === 4500) {
-            localStorage.removeItem('nxbc_admin_levels');
-          } else {
-            return parsed;
+          if (parsed?.[0]?.commissionPercent === 10 || parsed?.[1]?.commissionPercent === 5) {
+            localStorage.setItem('nxbc_admin_levels', JSON.stringify(defaultPlanLevels));
+            return defaultPlanLevels;
           }
+          return parsed;
         } catch (e) {}
       }
     }
-    return [
-      { level: 1, commissionPercent: 10, directRequirement: 1, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 2, commissionPercent: 5, directRequirement: 2, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 3, commissionPercent: 3, directRequirement: 3, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 4, commissionPercent: 2, directRequirement: 4, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 5, commissionPercent: 1, directRequirement: 5, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 6, commissionPercent: 1, directRequirement: 6, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 7, commissionPercent: 1, directRequirement: 7, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 8, commissionPercent: 1, directRequirement: 8, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 9, commissionPercent: 1, directRequirement: 9, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 10, commissionPercent: 1, directRequirement: 10, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-    ];
+    return defaultPlanLevels;
   });
 
   // 2x2 Matrix System Config (Dynamic via Admin & Persisted)
@@ -482,94 +518,107 @@ export default function App() {
   });
 
   // Rank Rewards & Leadership Pool (Dynamic via Admin & Persisted)
+  const defaultRankRewards: RankReward[] = [
+    {
+      id: 'rank-1',
+      rankNumber: 1,
+      name: 'Team Development Fund',
+      requiredDirectVolume: 50000,
+      requiredTeamVolume: 0,
+      requiredDirects: 5,
+      rewardType: 'fund',
+      rewardTitle: '$100 Team Development Fund',
+      oneTimeBonusUsd: 100,
+      rewardTokens: 0,
+      monthlyRoyaltyPercent: 1,
+      currentQualifiedCount: 0,
+      status: 'locked',
+    },
+    {
+      id: 'rank-2',
+      rankNumber: 2,
+      name: 'Monthly Leadership Salary',
+      requiredDirectVolume: 100000,
+      requiredTeamVolume: 0,
+      requiredDirects: 10,
+      rewardType: 'salary',
+      rewardTitle: '$100 / Month (12 Months Salary)',
+      oneTimeBonusUsd: 1200,
+      monthlySalaryUsd: 100,
+      salaryMonths: 12,
+      rewardTokens: 0,
+      monthlyRoyaltyPercent: 2,
+      currentQualifiedCount: 0,
+      status: 'locked',
+    },
+    {
+      id: 'rank-3',
+      rankNumber: 3,
+      name: 'Travel Tour Fund',
+      requiredDirectVolume: 100000,
+      requiredTeamVolume: 150000,
+      requiredDirects: 15,
+      rewardType: 'travel',
+      rewardTitle: '$500 International Travel Fund',
+      oneTimeBonusUsd: 500,
+      rewardTokens: 0,
+      monthlyRoyaltyPercent: 3,
+      currentQualifiedCount: 0,
+      status: 'locked',
+    },
+    {
+      id: 'rank-4',
+      rankNumber: 4,
+      name: 'Dream Car Fund',
+      requiredDirectVolume: 100000,
+      requiredTeamVolume: 2000000,
+      requiredDirects: 20,
+      rewardType: 'car',
+      rewardTitle: 'Dream Car Fund ($50,000 USD Value)',
+      oneTimeBonusUsd: 50000,
+      rewardTokens: 0,
+      monthlyRoyaltyPercent: 4,
+      currentQualifiedCount: 0,
+      status: 'locked',
+    },
+    {
+      id: 'rank-5',
+      rankNumber: 5,
+      name: 'Luxury House Fund',
+      requiredDirectVolume: 100000,
+      requiredTeamVolume: 5000000,
+      requiredDirects: 25,
+      rewardType: 'house',
+      rewardTitle: 'Luxury House Fund ($100,000 USD Value)',
+      oneTimeBonusUsd: 100000,
+      rewardTokens: 0,
+      monthlyRoyaltyPercent: 5,
+      currentQualifiedCount: 0,
+      status: 'locked',
+    },
+  ];
+
   const [rankRewards, setRankRewards] = useState<RankReward[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('nxbc_admin_ranks');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (parsed?.[0]?.currentQualifiedCount === 42) {
-            localStorage.removeItem('nxbc_admin_ranks');
-          } else {
-            return parsed;
+          if (
+            parsed?.[0]?.name === 'Bronze Leader' ||
+            parsed?.[0]?.requiredDirectVolume === undefined ||
+            parsed?.[3]?.oneTimeBonusUsd !== 50000 ||
+            parsed?.[4]?.oneTimeBonusUsd !== 100000 ||
+            parsed?.[0]?.rewardTokens > 0
+          ) {
+            localStorage.setItem('nxbc_admin_ranks', JSON.stringify(defaultRankRewards));
+            return defaultRankRewards;
           }
+          return parsed;
         } catch (e) {}
       }
     }
-    return [
-      {
-        id: 'rank-1',
-        rankNumber: 1,
-        name: 'Bronze Leader',
-        requiredDirects: 5,
-        requiredTeamVolume: 5000,
-        oneTimeBonusUsd: 150,
-        rewardTokens: 10000,
-        monthlyRoyaltyPercent: 1,
-        currentQualifiedCount: 0,
-        status: 'locked',
-      },
-      {
-        id: 'rank-2',
-        rankNumber: 2,
-        name: 'Silver Director',
-        requiredDirects: 10,
-        requiredTeamVolume: 15000,
-        oneTimeBonusUsd: 500,
-        rewardTokens: 35000,
-        monthlyRoyaltyPercent: 2,
-        currentQualifiedCount: 0,
-        status: 'locked',
-      },
-      {
-        id: 'rank-3',
-        rankNumber: 3,
-        name: 'Gold Executive',
-        requiredDirects: 20,
-        requiredTeamVolume: 50000,
-        oneTimeBonusUsd: 1500,
-        rewardTokens: 100000,
-        monthlyRoyaltyPercent: 3,
-        currentQualifiedCount: 0,
-        status: 'locked',
-      },
-      {
-        id: 'rank-4',
-        rankNumber: 4,
-        name: 'Platinum Vice President',
-        requiredDirects: 35,
-        requiredTeamVolume: 150000,
-        oneTimeBonusUsd: 5000,
-        rewardTokens: 300000,
-        monthlyRoyaltyPercent: 4,
-        currentQualifiedCount: 0,
-        status: 'locked',
-      },
-      {
-        id: 'rank-5',
-        rankNumber: 5,
-        name: 'Diamond President',
-        requiredDirects: 50,
-        requiredTeamVolume: 500000,
-        oneTimeBonusUsd: 15000,
-        rewardTokens: 1000000,
-        monthlyRoyaltyPercent: 5,
-        currentQualifiedCount: 0,
-        status: 'locked',
-      },
-      {
-        id: 'rank-6',
-        rankNumber: 6,
-        name: 'Crown Global Ambassador',
-        requiredDirects: 100,
-        requiredTeamVolume: 2000000,
-        oneTimeBonusUsd: 50000,
-        rewardTokens: 5000000,
-        monthlyRoyaltyPercent: 5,
-        currentQualifiedCount: 0,
-        status: 'locked',
-      },
-    ];
+    return defaultRankRewards;
   });
 
   // General System & Global Parameters (Dynamic via Admin & Persisted)
@@ -578,20 +627,25 @@ export default function App() {
       const saved = localStorage.getItem('nxbc_admin_system');
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          if (parsed.directSponsorPercent === 5) {
+            parsed.directSponsorPercent = 10;
+            localStorage.setItem('nxbc_admin_system', JSON.stringify(parsed));
+          }
+          return parsed;
         } catch (e) {}
       }
     }
     return {
       tokenName: 'NXBC',
       tokenSymbol: 'NXBC',
-      contractAddress: '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7',
-      receivingAddress: '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
-      minPurchaseUsd: 10,
+      contractAddress: '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
+      receivingAddress: '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
+      minPurchaseUsd: 1,
       maxPurchaseUsd: 50000,
       minMlmQualifyUsd: 100,
       presalePaused: false,
-      directSponsorPercent: 5,
+      directSponsorPercent: 10,
       withdrawalFeePercent: 2,
       matrixConfig: {
         placementIncomeUsd: 1.00,
@@ -711,6 +765,12 @@ export default function App() {
       return;
     }
 
+    
+    const p2TokensAllocated = Math.floor(tokenAmount * (sellAlloc.p2Percent / 100));
+    const p3TokensAllocated = Math.floor(tokenAmount * (sellAlloc.p3Percent / 100));
+    const p4TokensAllocated = Math.floor(tokenAmount * (sellAlloc.p4Percent / 100));
+    const p5TokensAllocated = Math.floor(tokenAmount * (sellAlloc.p5Percent / 100));
+
     const updatedAlloc: AllocationState = {
       p2Percent: sellAlloc.p2Percent,
       p3Percent: sellAlloc.p3Percent,
@@ -718,10 +778,36 @@ export default function App() {
       p5Percent: sellAlloc.p5Percent,
       dexPercent: sellAlloc.dexPercent,
       unallocatedPercent: sellAlloc.unallocatedPercent,
+      p2Tokens: {
+        allocated: (allocation.p2Tokens?.allocated || 0) + p2TokensAllocated,
+        sold: allocation.p2Tokens?.sold || 0,
+      },
+      p3Tokens: {
+        allocated: (allocation.p3Tokens?.allocated || 0) + p3TokensAllocated,
+        sold: allocation.p3Tokens?.sold || 0,
+      },
+      p4Tokens: {
+        allocated: (allocation.p4Tokens?.allocated || 0) + p4TokensAllocated,
+        sold: allocation.p4Tokens?.sold || 0,
+      },
+      p5Tokens: {
+        allocated: (allocation.p5Tokens?.allocated || 0) + p5TokensAllocated,
+        sold: allocation.p5Tokens?.sold || 0,
+      },
       totalTokensPurchased: allocation.totalTokensPurchased + tokenAmount,
       isLocked: true,
       lockedTimestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
+
+    // Add to global sell queue
+    const newQueueEntries = [];
+    if (p2TokensAllocated > 0) newQueueEntries.push({ id: Math.random().toString(), userId: 'me', phaseNumber: 2, tokensRequested: p2TokensAllocated, tokensSold: 0 });
+    if (p3TokensAllocated > 0) newQueueEntries.push({ id: Math.random().toString(), userId: 'me', phaseNumber: 3, tokensRequested: p3TokensAllocated, tokensSold: 0 });
+    if (p4TokensAllocated > 0) newQueueEntries.push({ id: Math.random().toString(), userId: 'me', phaseNumber: 4, tokensRequested: p4TokensAllocated, tokensSold: 0 });
+    if (p5TokensAllocated > 0) newQueueEntries.push({ id: Math.random().toString(), userId: 'me', phaseNumber: 5, tokensRequested: p5TokensAllocated, tokensSold: 0 });
+
+    setSellQueue(prev => [...prev, ...newQueueEntries]);
+
     setAllocation(updatedAlloc);
     if (typeof window !== 'undefined') {
       localStorage.setItem('nxbc_user_allocation', JSON.stringify(updatedAlloc));
@@ -905,6 +991,74 @@ export default function App() {
   };
 
   // Helper to easily simulate 100% phase completion for sequential demo
+  
+  const handleSimulateExternalBuy = (amount: number) => {
+    // Determine current active phase
+    const activeIdx = phases.findIndex((p) => p.status === 'active');
+    if (activeIdx === -1) return; // No active phase
+    const currentPhase = phases[activeIdx];
+    
+    // Total tokens purchased by the external buyer
+    // 20% of this goes to fulfilling user queued sell orders
+    const userAllocationFulfillment = Math.floor(amount * 0.20);
+    let remainingToFulfill = userAllocationFulfillment;
+    let earnedUsdt = 0;
+
+    setSellQueue((prevQueue) => {
+      let newQueue = [...prevQueue];
+      let queueUpdated = false;
+
+      for (let i = 0; i < newQueue.length; i++) {
+        const entry = newQueue[i];
+        if (entry.phaseNumber === currentPhase.phaseNumber && entry.tokensSold < entry.tokensRequested) {
+          queueUpdated = true;
+          const tokensNeeded = entry.tokensRequested - entry.tokensSold;
+          if (remainingToFulfill >= tokensNeeded) {
+            // Completely fulfill this entry
+            remainingToFulfill -= tokensNeeded;
+            entry.tokensSold = entry.tokensRequested;
+            earnedUsdt += tokensNeeded * currentPhase.rate;
+          } else {
+            // Partially fulfill
+            entry.tokensSold += remainingToFulfill;
+            earnedUsdt += remainingToFulfill * currentPhase.rate;
+            remainingToFulfill = 0;
+            break; // Used up all fulfillment allocation
+          }
+        }
+      }
+      return queueUpdated ? newQueue : prevQueue;
+    });
+
+    if (earnedUsdt > 0) {
+      setUserEarnings((prev) => ({
+        ...prev,
+        availableUsdt: prev.availableUsdt + earnedUsdt
+      }));
+      
+      // Update allocation state sold counts for the user
+      setAllocation((prev) => {
+         const newAlloc = { ...prev };
+         const soldTokens = userAllocationFulfillment - remainingToFulfill;
+         if (currentPhase.phaseNumber === 2 && newAlloc.p2Tokens) newAlloc.p2Tokens.sold += soldTokens;
+         if (currentPhase.phaseNumber === 3 && newAlloc.p3Tokens) newAlloc.p3Tokens.sold += soldTokens;
+         if (currentPhase.phaseNumber === 4 && newAlloc.p4Tokens) newAlloc.p4Tokens.sold += soldTokens;
+         if (currentPhase.phaseNumber === 5 && newAlloc.p5Tokens) newAlloc.p5Tokens.sold += soldTokens;
+         return newAlloc;
+      });
+    }
+    
+    // Also increase total tokens sold in the phase so it moves forward
+    setPhases((prevPhases) => {
+      return prevPhases.map((p, idx) => {
+        if (idx === activeIdx) {
+           return { ...p, tokensSold: Math.min(p.totalSupply, p.tokensSold + amount) };
+        }
+        return p;
+      });
+    });
+  };
+
   const handleSimulateFillPhase = () => {
     setPhases((prevPhases) => {
       const activeIdx = prevPhases.findIndex((p) => p.status === 'active');
@@ -935,12 +1089,12 @@ export default function App() {
         shortName: 'P1',
         rate: 0.01,
         rateLabel: '$0.01',
-        totalSupply: 10000000,
-        tokensSold: 7650000,
+        totalSupply: 1000000, // 10 Lakh (5 Lakh Sale, 5 Lakh Reserve)
+        tokensSold: 0,
         status: 'active',
         multiplier: 'Base Seed Rate',
         unlockRequirement: 'Live Now (Stage 1)',
-        targetDate: 'Ends in 03d 14h 22m',
+        targetDate: 'Active Now',
       },
       {
         id: 'p2',
@@ -949,7 +1103,7 @@ export default function App() {
         shortName: 'P2',
         rate: 0.10,
         rateLabel: '$0.10',
-        totalSupply: 15000000,
+        totalSupply: 2500000, // 25 Lakh
         tokensSold: 0,
         status: 'locked',
         multiplier: '10x Growth',
@@ -960,12 +1114,12 @@ export default function App() {
         phaseNumber: 3,
         name: 'Phase 3',
         shortName: 'P3',
-        rate: 0.20,
-        rateLabel: '$0.20',
-        totalSupply: 20000000,
+        rate: 1.00,
+        rateLabel: '$1.00',
+        totalSupply: 7000000, // 70 Lakh
         tokensSold: 0,
         status: 'locked',
-        multiplier: '20x Growth',
+        multiplier: '100x Growth',
         unlockRequirement: 'Phase 2 must be 100% sold to unlock',
       },
       {
@@ -973,12 +1127,12 @@ export default function App() {
         phaseNumber: 4,
         name: 'Phase 4',
         shortName: 'P4',
-        rate: 0.30,
-        rateLabel: '$0.30',
-        totalSupply: 25000000,
+        rate: 10.00,
+        rateLabel: '$10.00',
+        totalSupply: 19500000, // 195 Lakh
         tokensSold: 0,
         status: 'locked',
-        multiplier: '30x Growth',
+        multiplier: '1000x Growth',
         unlockRequirement: 'Phase 3 must be 100% sold to unlock',
       },
       {
@@ -986,25 +1140,25 @@ export default function App() {
         phaseNumber: 5,
         name: 'Phase 5',
         shortName: 'P5',
-        rate: 0.40,
-        rateLabel: '$0.40',
-        totalSupply: 30000000,
+        rate: 100.00,
+        rateLabel: '$100.00',
+        totalSupply: 40000000, // 400 Lakh
         tokensSold: 0,
         status: 'locked',
-        multiplier: '40x Growth',
+        multiplier: '10000x Growth',
         unlockRequirement: 'Phase 4 must be 100% sold to unlock',
       },
       {
         id: 'dex',
         phaseNumber: 6,
-        name: 'Live DEX Launch',
+        name: 'DEX Launch',
         shortName: 'DEX',
-        rate: 1500.00,
-        rateLabel: '$1500 - $3000',
-        totalSupply: 50000000,
+        rate: 100.00,
+        rateLabel: 'Market Rate',
+        totalSupply: 0,
         tokensSold: 0,
         status: 'locked',
-        multiplier: '50x+ Open Market Trading',
+        multiplier: 'Open Market Trading',
         unlockRequirement: 'Phase 5 must be 100% sold to unlock',
       },
     ]);
@@ -1095,16 +1249,16 @@ export default function App() {
     ];
 
     const defaultLevels: ReferralLevel[] = [
-      { level: 1, commissionPercent: 10, directRequirement: 1, directMembers: 8, totalVolumeUsd: 4500, earnedUsd: 450.00 },
-      { level: 2, commissionPercent: 5, directRequirement: 2, directMembers: 14, totalVolumeUsd: 3800, earnedUsd: 190.00 },
-      { level: 3, commissionPercent: 3, directRequirement: 3, directMembers: 22, totalVolumeUsd: 2900, earnedUsd: 87.00 },
-      { level: 4, commissionPercent: 2, directRequirement: 4, directMembers: 31, totalVolumeUsd: 2200, earnedUsd: 44.00 },
-      { level: 5, commissionPercent: 1, directRequirement: 5, directMembers: 18, totalVolumeUsd: 1800, earnedUsd: 18.00 },
-      { level: 6, commissionPercent: 1, directRequirement: 6, directMembers: 15, totalVolumeUsd: 1500, earnedUsd: 15.00 },
-      { level: 7, commissionPercent: 1, directRequirement: 7, directMembers: 12, totalVolumeUsd: 1200, earnedUsd: 12.00 },
-      { level: 8, commissionPercent: 1, directRequirement: 8, directMembers: 10, totalVolumeUsd: 1400, earnedUsd: 14.00 },
-      { level: 9, commissionPercent: 1, directRequirement: 9, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 15.00 },
-      { level: 10, commissionPercent: 1, directRequirement: 10, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 15.00 },
+      { level: 1, commissionPercent: 3, directRequirement: 1, directMembers: 8, totalVolumeUsd: 4500, earnedUsd: 135.00 },
+      { level: 2, commissionPercent: 2, directRequirement: 2, directMembers: 14, totalVolumeUsd: 3800, earnedUsd: 76.00 },
+      { level: 3, commissionPercent: 1, directRequirement: 3, directMembers: 22, totalVolumeUsd: 2900, earnedUsd: 29.00 },
+      { level: 4, commissionPercent: 1, directRequirement: 4, directMembers: 31, totalVolumeUsd: 2200, earnedUsd: 22.00 },
+      { level: 5, commissionPercent: 0.5, directRequirement: 5, directMembers: 18, totalVolumeUsd: 1800, earnedUsd: 9.00 },
+      { level: 6, commissionPercent: 0.5, directRequirement: 6, directMembers: 15, totalVolumeUsd: 1500, earnedUsd: 7.50 },
+      { level: 7, commissionPercent: 0.5, directRequirement: 7, directMembers: 12, totalVolumeUsd: 1200, earnedUsd: 6.00 },
+      { level: 8, commissionPercent: 0.5, directRequirement: 8, directMembers: 10, totalVolumeUsd: 1400, earnedUsd: 7.00 },
+      { level: 9, commissionPercent: 0.5, directRequirement: 9, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 7.50 },
+      { level: 10, commissionPercent: 0.5, directRequirement: 10, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 7.50 },
     ];
 
     const defaultMatrix: MatrixConfig = {
@@ -1116,13 +1270,13 @@ export default function App() {
     const defaultSystem: AdminSystemConfig = {
       tokenName: 'NXBC',
       tokenSymbol: 'NXBC',
-      contractAddress: '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7',
-      receivingAddress: '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
-      minPurchaseUsd: 10,
+      contractAddress: '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
+      receivingAddress: '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
+      minPurchaseUsd: 1,
       maxPurchaseUsd: 50000,
       minMlmQualifyUsd: 100,
       presalePaused: false,
-      directSponsorPercent: 5,
+      directSponsorPercent: 10,
       withdrawalFeePercent: 2,
       matrixConfig: defaultMatrix,
       royaltyPoolUsd: 25000,
@@ -1135,12 +1289,31 @@ export default function App() {
   };
 
   // Withdrawal handler
+  
   const handleWithdraw = (amountUsd: number) => {
-    setClaimableBalanceUsd((prev) => Math.max(0, prev - amountUsd));
+    let remainingToDeduct = amountUsd;
+    
+    setUserEarnings(prev => {
+      if (prev.availableUsdt >= remainingToDeduct) {
+        return {
+          availableUsdt: prev.availableUsdt - remainingToDeduct,
+          withdrawnUsdt: prev.withdrawnUsdt + remainingToDeduct
+        };
+      } else {
+        remainingToDeduct -= prev.availableUsdt;
+        return {
+          availableUsdt: 0,
+          withdrawnUsdt: prev.withdrawnUsdt + prev.availableUsdt
+        };
+      }
+    });
+
+    setClaimableBalanceUsd((prev) => Math.max(0, prev - remainingToDeduct));
+    
     const newTx: Transaction = {
       id: `tx-${Date.now()}`,
       type: 'withdrawal',
-      title: 'Instant Smart Contract Withdrawal',
+      title: 'Guaranteed OTC Smart Contract Payout',
       amountUsd: amountUsd,
       timestamp: 'Just now',
       status: 'completed',
@@ -1148,6 +1321,7 @@ export default function App() {
     };
     setTransactions((prev) => [newTx, ...prev]);
   };
+
 
   // Simulate quick bonus drop
   const handleAddDemoBonus = () => {
@@ -1194,6 +1368,11 @@ export default function App() {
     );
   }
 
+  // Show Landing Page if user hasn't entered dashboard yet
+  if (!isAppLaunched) {
+    return <LandingPage onLaunch={() => setIsAppLaunched(true)} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#070312] text-slate-100 relative font-['Outfit',sans-serif] selection:bg-[#f59e0b] selection:text-black">
       {/* Background with Dark Analytical Graphs, Candlesticks & 3D Gold Coins */}
@@ -1204,7 +1383,7 @@ export default function App() {
         
         {/* Top Header Bar */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 mb-3 sm:mb-4 border-b border-purple-500/20 bg-[#0e0720]/80 backdrop-blur-md px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl border">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between w-full md:w-auto">
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base sm:text-lg font-black tracking-wider text-slate-100 font-cinzel">
@@ -1223,6 +1402,20 @@ export default function App() {
                 NXBC is a next-generation utility coin designed for secure, high-yield P2P trading. By participating in this exclusive presale, early adopters secure their allocation at the lowest entry prices. This provides massive growth potential, automated instant payouts via our FIFO smart contract, and guaranteed liquidity before the official Decentralized Exchange (DEX) launch.
               </p>
             </div>
+            <button
+              onClick={() => setIsAppLaunched(false)}
+              className="md:hidden px-2.5 py-1 text-[10px] rounded-lg bg-purple-900/50 hover:bg-purple-800 text-purple-200 border border-purple-500/30 whitespace-nowrap"
+            >
+              Landing Page
+            </button>
+          </div>
+          <div className="hidden md:flex items-center gap-2">
+            <button
+              onClick={() => setIsAppLaunched(false)}
+              className="px-3 py-1.5 text-xs rounded-xl bg-purple-900/40 hover:bg-purple-800/60 text-purple-200 border border-purple-500/30 transition-all"
+            >
+              ← Back to Landing Page
+            </button>
           </div>
         </header>
 
@@ -1270,6 +1463,7 @@ export default function App() {
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
                   onSimulateFillPhase={handleSimulateFillPhase}
+                  onSimulateExternalBuy={handleSimulateExternalBuy}
                   onResetPhases={handleResetPhases}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
@@ -1280,6 +1474,7 @@ export default function App() {
 
               {activeSingleScreen === 'assets' && (
                 <ScreenTwoAssets
+                  userEarnings={userEarnings}
                   allocation={allocation}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
@@ -1306,7 +1501,7 @@ export default function App() {
                 <ScreenThreeWallet
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
-                  claimableBalanceUsd={claimableBalanceUsd}
+                  claimableBalanceUsd={claimableBalanceUsd + (userEarnings?.availableUsdt || 0)}
                   transactions={transactions}
                   onWithdraw={handleWithdraw}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
@@ -1376,6 +1571,7 @@ export default function App() {
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
                   onSimulateFillPhase={handleSimulateFillPhase}
+                  onSimulateExternalBuy={handleSimulateExternalBuy}
                   onResetPhases={handleResetPhases}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
@@ -1402,6 +1598,7 @@ export default function App() {
                 isHero={true}
               >
                 <ScreenTwoAssets
+                  userEarnings={userEarnings}
                   allocation={allocation}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
@@ -1430,7 +1627,7 @@ export default function App() {
                 <ScreenThreeWallet
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
-                  claimableBalanceUsd={claimableBalanceUsd}
+                  claimableBalanceUsd={claimableBalanceUsd + (userEarnings?.availableUsdt || 0)}
                   transactions={transactions}
                   onWithdraw={handleWithdraw}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
