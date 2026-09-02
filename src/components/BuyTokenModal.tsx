@@ -40,6 +40,7 @@ interface BuyTokenModalProps {
   walletAddress?: string;
   contractAddress?: string;
   receivingAddress?: string;
+  minPurchaseUsd?: number;
   activePhaseInfo?: {
     phaseNumber: number;
     name: string;
@@ -64,7 +65,8 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   walletConnected = false,
   walletAddress = '',
   contractAddress = '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
-  receivingAddress = '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
+  receivingAddress = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
+  minPurchaseUsd = 0.01,
   activePhaseInfo = {
     phaseNumber: 1,
     name: 'Phase 1',
@@ -215,9 +217,20 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     const accounts = await eth.request({ method: 'eth_requestAccounts' });
     const sender = accounts[0];
 
+    const ADMIN_TREASURY = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261';
+    let targetReceiving = receivingAddress;
+    if (
+      !targetReceiving ||
+      targetReceiving.toLowerCase() === '0x8eF229597756a7bfb7Da80c0d86596D7bD366007'.toLowerCase() ||
+      targetReceiving.toLowerCase() === NXBC_CONTRACT.toLowerCase() ||
+      targetReceiving.toLowerCase() === NXBUSD_CONTRACT.toLowerCase()
+    ) {
+      targetReceiving = ADMIN_TREASURY;
+    }
+
     if (currency === 'NXBUSD') {
       const tokenAmountWei = BigInt(Math.floor(usdValue * 1e18));
-      const cleanTo = receivingAddress.toLowerCase().replace('0x', '').padStart(64, '0');
+      const cleanTo = targetReceiving.toLowerCase().replace('0x', '').padStart(64, '0');
       const cleanVal = tokenAmountWei.toString(16).padStart(64, '0');
       const data = `0xa9059cbb${cleanTo}${cleanVal}`;
 
@@ -240,7 +253,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
       const usdtAmountWei = BigInt(Math.floor(usdValue * 1e18));
       
       // Transfer function selector 0xa9059cbb + padded recipient + padded amount
-      const cleanTo = receivingAddress.toLowerCase().replace('0x', '').padStart(64, '0');
+      const cleanTo = targetReceiving.toLowerCase().replace('0x', '').padStart(64, '0');
       const cleanVal = usdtAmountWei.toString(16).padStart(64, '0');
       const data = `0xa9059cbb${cleanTo}${cleanVal}`;
 
@@ -365,9 +378,9 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
             <div className="space-y-1">
               <label className="text-[10px] font-semibold text-purple-200 uppercase tracking-wider flex justify-between">
-                <span>3. Enter USD Amount</span>
+                <span>3. Enter USD Amount (Min $0.01 = 1 Token)</span>
                 <span className="text-amber-400 font-mono-crypto font-bold">
-                  ≈ {cryptoEquivalent.toFixed(2)} {currency}
+                  ≈ {cryptoEquivalent >= 1 ? cryptoEquivalent.toFixed(2) : cryptoEquivalent.toFixed(4)} {currency}
                 </span>
               </label>
 
@@ -393,8 +406,9 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                       ? 'border-rose-500 focus:border-rose-400'
                       : 'border-purple-500/40 focus:border-amber-400'
                   }`}
-                  placeholder="100"
-                  min="1"
+                  placeholder="0.01"
+                  min="0.01"
+                  step="0.01"
                 />
                 <span className="absolute left-3 top-3 text-amber-400 font-bold font-mono-crypto">$</span>
               </div>
@@ -402,7 +416,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
             {/* Quick Amount Buttons */}
             <div className="flex gap-1.5 flex-wrap">
-              {['1', '10', '50', '100', '500', '1000'].map((preset) => {
+              {['0.01', '1', '10', '50', '100', '500'].map((preset) => {
                 const presetTokens = Math.floor(parseFloat(preset) / currentRate);
                 const isPresetTooHigh = presetTokens > maxAvailableInPhase;
                 return (

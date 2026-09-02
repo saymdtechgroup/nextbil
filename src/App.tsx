@@ -623,6 +623,9 @@ export default function App() {
 
   // General System & Global Parameters (Dynamic via Admin & Persisted)
   const [systemConfig, setSystemConfig] = useState<AdminSystemConfig>(() => {
+    const defaultReceiving = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261';
+    const defaultContract = '0x8eF229597756a7bfb7Da80c0d86596D7bD366007';
+
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('nxbc_admin_system');
       if (saved) {
@@ -630,8 +633,18 @@ export default function App() {
           const parsed = JSON.parse(saved);
           if (parsed.directSponsorPercent === 5) {
             parsed.directSponsorPercent = 10;
-            localStorage.setItem('nxbc_admin_system', JSON.stringify(parsed));
           }
+          // Ensure receiving address is the admin's personal receiving wallet, not the contract
+          if (
+            !parsed.receivingAddress ||
+            parsed.receivingAddress.toLowerCase() === defaultContract.toLowerCase() ||
+            parsed.receivingAddress.toLowerCase() === '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7'.toLowerCase()
+          ) {
+            parsed.receivingAddress = defaultReceiving;
+          }
+          parsed.contractAddress = defaultContract;
+          parsed.minPurchaseUsd = 0.01;
+          localStorage.setItem('nxbc_admin_system', JSON.stringify(parsed));
           return parsed;
         } catch (e) {}
       }
@@ -639,9 +652,9 @@ export default function App() {
     return {
       tokenName: 'NXBC',
       tokenSymbol: 'NXBC',
-      contractAddress: '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
-      receivingAddress: '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
-      minPurchaseUsd: 1,
+      contractAddress: defaultContract,
+      receivingAddress: defaultReceiving,
+      minPurchaseUsd: 0.01,
       maxPurchaseUsd: 50000,
       minMlmQualifyUsd: 100,
       presalePaused: false,
@@ -1661,6 +1674,7 @@ export default function App() {
         walletAddress={walletAddress}
         contractAddress={systemConfig.contractAddress}
         receivingAddress={systemConfig.receivingAddress}
+        minPurchaseUsd={systemConfig.minPurchaseUsd}
         activePhaseInfo={{
           phaseNumber: activePhase.phaseNumber,
           name: activePhase.name,

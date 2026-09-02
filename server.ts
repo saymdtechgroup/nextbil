@@ -448,7 +448,20 @@ async function startServer() {
     rankRewards?: any;
     systemConfig?: any;
     matrixConfig?: any;
-  } = {};
+  } = {
+    systemConfig: {
+      tokenName: 'NXBC',
+      tokenSymbol: 'NXBC',
+      contractAddress: '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
+      receivingAddress: '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
+      minPurchaseUsd: 0.01,
+      maxPurchaseUsd: 50000,
+      minMlmQualifyUsd: 100,
+      presalePaused: false,
+      directSponsorPercent: 10,
+      withdrawalFeePercent: 2,
+    },
+  };
 
   // Verify PIN Endpoint (Strict & Secure - No password leakage)
   app.post("/api/admin/verify-pin", async (req, res) => {

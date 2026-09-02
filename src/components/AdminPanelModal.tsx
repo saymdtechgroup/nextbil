@@ -1065,7 +1065,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   </label>
                   <input
                     type="number"
-                    min="1"
+                    min="0.01"
+                    step="0.01"
                     value={localSystem.minPurchaseUsd}
                     onChange={(e) => setLocalSystem({ ...localSystem, minPurchaseUsd: parseFloat(e.target.value) || 0 })}
                     className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-slate-100 focus:border-amber-400 focus:outline-none"
