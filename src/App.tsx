@@ -1471,7 +1471,7 @@ export default function App() {
         
         {/* Top Header Bar */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 mb-3 sm:mb-4 border-b border-purple-500/20 bg-[#0e0720]/80 backdrop-blur-md px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl border">
-          <div className="flex items-center justify-between w-full md:w-auto">
+          <div className="flex items-center justify-between w-full">
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base sm:text-lg font-black tracking-wider text-slate-100 font-cinzel">
@@ -1490,20 +1490,6 @@ export default function App() {
                 NXBC is a next-generation utility coin designed for secure, high-yield P2P trading. By participating in this exclusive presale, early adopters secure their allocation at the lowest entry prices. This provides massive growth potential, automated instant payouts via our FIFO smart contract, and guaranteed liquidity before the official Decentralized Exchange (DEX) launch.
               </p>
             </div>
-            <button
-              onClick={() => setIsAppLaunched(false)}
-              className="md:hidden px-2.5 py-1 text-[10px] rounded-lg bg-purple-900/50 hover:bg-purple-800 text-purple-200 border border-purple-500/30 whitespace-nowrap"
-            >
-              Landing Page
-            </button>
-          </div>
-          <div className="hidden md:flex items-center gap-2">
-            <button
-              onClick={() => setIsAppLaunched(false)}
-              className="px-3 py-1.5 text-xs rounded-xl bg-purple-900/40 hover:bg-purple-800/60 text-purple-200 border border-purple-500/30 transition-all"
-            >
-              ← Back to Landing Page
-            </button>
           </div>
         </header>
 
