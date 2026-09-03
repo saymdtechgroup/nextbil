@@ -31,7 +31,8 @@ export interface AllocationState {
 
 export interface Transaction {
   id: string;
-  type: 'buy' | 'allocation_lock' | 'withdrawal' | 'referral_bonus' | 'matrix_spillover';
+  type: 'buy' | 'allocation_lock' | 'withdrawal' | 'referral_bonus' | 'matrix_spillover' | 'token_sell_settlement' | 'token_transfer';
+  walletType?: 'token_sell' | 'mlm' | 'main';
   title: string;
   amountTokens?: number;
   amountUsd: number;
@@ -111,6 +112,10 @@ export interface PhaseAllocation {
 export interface UserEarnings {
   availableUsdt: number;
   withdrawnUsdt: number;
+  tokenSellAvailableUsdt?: number;
+  tokenSellWithdrawnUsdt?: number;
+  mlmAvailableUsdt?: number;
+  mlmWithdrawnUsdt?: number;
 }
 
 export interface QueueEntry {
@@ -120,3 +125,18 @@ export interface QueueEntry {
   tokensRequested: number;
   tokensSold: number;
 }
+
+export interface TokenSellLedgerItem {
+  id: string;
+  phaseIndex: number;
+  phaseName: string;
+  tokenPrice: number;
+  tokensSold: number;
+  tokensReturned: number;
+  grossUsdt: number;
+  withdrawnUsdt: number;
+  availableUsdt: number;
+  status: 'unclaimed' | 'partially_claimed' | 'fully_claimed';
+  timestamp: string;
+}
+

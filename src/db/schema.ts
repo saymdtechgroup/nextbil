@@ -80,6 +80,26 @@ export const systemConfigs = pgTable('system_configs', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Phase-by-Phase Token Auto-Sell Internal Settlement Ledger
+export const tokenSellLedgers = pgTable('token_sell_ledgers', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  walletAddress: text('wallet_address').notNull(),
+  phaseIndex: integer('phase_index').notNull(), // 2 for Phase 2, 3 for Phase 3, etc.
+  phaseName: text('phase_name').notNull(),
+  tokenPrice: doublePrecision('token_price').notNull(),
+  tokensSold: doublePrecision('tokens_sold').notNull(),
+  tokensReturned: doublePrecision('tokens_returned').notNull().default(0),
+  grossUsdt: doublePrecision('gross_usdt').notNull(),
+  withdrawnUsdt: doublePrecision('withdrawn_usdt').notNull().default(0),
+  serviceFeeUsdt: doublePrecision('service_fee_usdt').notNull().default(0),
+  status: text('status').notNull().default('unclaimed'), // 'unclaimed', 'partially_claimed', 'fully_claimed'
+  returnTxHash: text('return_tx_hash'),
+  payoutTxHash: text('payout_tx_hash'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   matrixNodes: many(matrixNodes),
@@ -87,6 +107,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   generatedEarnings: many(levelEarnings, { relationName: 'sourceEarnings' }),
   transactions: many(transactions),
   sellOrders: many(sellOrders),
+  tokenSellLedgers: many(tokenSellLedgers),
 }));
 
 export const matrixNodesRelations = relations(matrixNodes, ({ one }) => ({

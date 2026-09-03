@@ -45,6 +45,11 @@ import { MatrixPlanModal } from './components/MatrixPlanModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
 import { SecretAdminPage } from './components/SecretAdminPage';
 import { GoldCoinGraphic } from './components/GoldCoinGraphic';
+import {
+  fetchOnChainTokenBalance,
+  NXBUSD_CONTRACT,
+  USDT_CONTRACT,
+} from './utils/web3Helper';
 
 export default function App() {
   // Default to 'single' full mobile screen mode
@@ -702,8 +707,40 @@ export default function App() {
       const s = localStorage.getItem('nxbc_usdt_balance');
       if (s) return parseFloat(s) || 0;
     }
-    return 250;
+    return 0;
   });
+
+  // Automatically fetch live on-chain balances when wallet is connected
+  useEffect(() => {
+    if (!walletAddress || !walletConnected) return;
+
+    let isMounted = true;
+    const fetchBalances = async () => {
+      try {
+        const [nxBalance, uBalance] = await Promise.all([
+          fetchOnChainTokenBalance(NXBUSD_CONTRACT, walletAddress),
+          fetchOnChainTokenBalance(USDT_CONTRACT, walletAddress),
+        ]);
+        if (isMounted) {
+          setNxbusdBalance(nxBalance);
+          setUsdtBalance(uBalance);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('nxbc_nxbusd_balance', nxBalance.toString());
+            localStorage.setItem('nxbc_usdt_balance', uBalance.toString());
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to sync on-chain balances:', e);
+      }
+    };
+
+    fetchBalances();
+    const interval = setInterval(fetchBalances, 15000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [walletAddress, walletConnected]);
 
   const handleSwapSuccess = (fromToken: 'USDT' | 'NXBUSD', toToken: 'USDT' | 'NXBUSD', amount: number) => {
     if (fromToken === 'USDT') {
@@ -753,8 +790,23 @@ export default function App() {
       p5Percent: number;
       dexPercent: number;
       unallocatedPercent: number;
-    }
+    },
+    currency: 'NXBUSD' | 'USDT' = 'NXBUSD'
   ) => {
+    // Deduct local balance
+    if (currency === 'NXBUSD') {
+      setNxbusdBalance((prev) => {
+        const next = Math.max(0, prev - usdAmount);
+        if (typeof window !== 'undefined') localStorage.setItem('nxbc_nxbusd_balance', next.toString());
+        return next;
+      });
+    } else {
+      setUsdtBalance((prev) => {
+        const next = Math.max(0, prev - usdAmount);
+        if (typeof window !== 'undefined') localStorage.setItem('nxbc_usdt_balance', next.toString());
+        return next;
+      });
+    }
     // Check if presale is paused by Admin
     if (systemConfig.presalePaused) {
       alert('Presale is currently paused by the System.');
@@ -1301,38 +1353,61 @@ export default function App() {
     handleUpdateSystemConfig(defaultSystem);
   };
 
-  // Withdrawal handler
-  
-  const handleWithdraw = (amountUsd: number) => {
-    let remainingToDeduct = amountUsd;
-    
-    setUserEarnings(prev => {
-      if (prev.availableUsdt >= remainingToDeduct) {
-        return {
-          availableUsdt: prev.availableUsdt - remainingToDeduct,
-          withdrawnUsdt: prev.withdrawnUsdt + remainingToDeduct
-        };
-      } else {
-        remainingToDeduct -= prev.availableUsdt;
-        return {
-          availableUsdt: 0,
-          withdrawnUsdt: prev.withdrawnUsdt + prev.availableUsdt
-        };
-      }
-    });
+  // Withdrawal handler - supports strictly separated Token Auto-Sell & MLM Earnings wallets
+  const handleWithdraw = (amountUsd: number, walletType: 'token_sell' | 'mlm' = 'mlm', txHashParam?: string) => {
+    if (amountUsd <= 0) {
+      console.warn('Withdrawal rejected: invalid amount');
+      return;
+    }
 
-    setClaimableBalanceUsd((prev) => Math.max(0, prev - remainingToDeduct));
-    
-    const newTx: Transaction = {
-      id: `tx-${Date.now()}`,
-      type: 'withdrawal',
-      title: 'Guaranteed OTC Smart Contract Payout',
-      amountUsd: amountUsd,
-      timestamp: 'Just now',
-      status: 'completed',
-      txHash: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
-    };
-    setTransactions((prev) => [newTx, ...prev]);
+    if (walletType === 'token_sell') {
+      const availTokenSell = userEarnings?.availableUsdt || 0;
+      if (amountUsd > availTokenSell) {
+        console.warn('Withdrawal rejected: insufficient token sell balance');
+        return;
+      }
+
+      setUserEarnings(prev => ({
+        ...prev,
+        availableUsdt: Math.max(0, (prev.availableUsdt || 0) - amountUsd),
+        withdrawnUsdt: (prev.withdrawnUsdt || 0) + amountUsd,
+      }));
+
+      const newTx: Transaction = {
+        id: `tx-sell-${Date.now()}`,
+        type: 'withdrawal',
+        walletType: 'token_sell',
+        title: 'Token Auto-Sell Settlement Payout',
+        amountUsd: amountUsd,
+        timestamp: 'Just now',
+        status: 'completed',
+        txHash: txHashParam || `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
+      };
+      setTransactions((prev) => [newTx, ...prev]);
+    } else {
+      if (amountUsd > claimableBalanceUsd) {
+        console.warn('Withdrawal rejected: insufficient MLM earnings balance');
+        return;
+      }
+
+      setClaimableBalanceUsd((prev) => {
+        const next = Math.max(0, prev - amountUsd);
+        if (typeof window !== 'undefined') localStorage.setItem('nxbc_claimable_usd', next.toString());
+        return next;
+      });
+
+      const newTx: Transaction = {
+        id: `tx-mlm-${Date.now()}`,
+        type: 'withdrawal',
+        walletType: 'mlm',
+        title: 'MLM & Affiliate Earnings Payout',
+        amountUsd: amountUsd,
+        timestamp: 'Just now',
+        status: 'completed',
+        txHash: txHashParam || `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
+      };
+      setTransactions((prev) => [newTx, ...prev]);
+    }
   };
 
 
@@ -1514,7 +1589,11 @@ export default function App() {
                 <ScreenThreeWallet
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
-                  claimableBalanceUsd={claimableBalanceUsd + (userEarnings?.availableUsdt || 0)}
+                  tokenSellBalanceUsd={userEarnings?.availableUsdt || 0}
+                  mlmBalanceUsd={claimableBalanceUsd}
+                  allocation={allocation}
+                  levelIncomeUsd={levelIncomeUsd}
+                  matrixIncomeUsd={matrixIncomeUsd}
                   transactions={transactions}
                   onWithdraw={handleWithdraw}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
@@ -1640,7 +1719,11 @@ export default function App() {
                 <ScreenThreeWallet
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
-                  claimableBalanceUsd={claimableBalanceUsd + (userEarnings?.availableUsdt || 0)}
+                  tokenSellBalanceUsd={userEarnings?.availableUsdt || 0}
+                  mlmBalanceUsd={claimableBalanceUsd}
+                  allocation={allocation}
+                  levelIncomeUsd={levelIncomeUsd}
+                  matrixIncomeUsd={matrixIncomeUsd}
                   transactions={transactions}
                   onWithdraw={handleWithdraw}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
@@ -1675,6 +1758,12 @@ export default function App() {
         contractAddress={systemConfig.contractAddress}
         receivingAddress={systemConfig.receivingAddress}
         minPurchaseUsd={systemConfig.minPurchaseUsd}
+        nxbusdBalance={nxbusdBalance}
+        usdtBalance={usdtBalance}
+        onOpenSwapModal={() => {
+          setBuyModalOpen(false);
+          setSwapModalOpen(true);
+        }}
         activePhaseInfo={{
           phaseNumber: activePhase.phaseNumber,
           name: activePhase.name,

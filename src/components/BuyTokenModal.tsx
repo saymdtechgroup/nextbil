@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
   Zap,
@@ -9,16 +9,23 @@ import {
   AlertCircle,
   ArrowLeft,
   Coins,
-  Calculator,
   Sparkles,
   Copy,
-  ExternalLink,
   QrCode,
-  Wallet,
   Check,
   Loader2,
+  RefreshCw,
+  ArrowRightLeft,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import {
+  NXBUSD_CONTRACT,
+  NXBC_CONTRACT,
+  USDT_CONTRACT,
+  ADMIN_TREASURY_WALLET,
+  fetchOnChainTokenBalance,
+  waitForBscTxConfirmation,
+} from '../utils/web3Helper';
 
 interface BuyTokenModalProps {
   isOpen: boolean;
@@ -33,7 +40,8 @@ interface BuyTokenModalProps {
       p5Percent: number;
       dexPercent: number;
       unallocatedPercent: number;
-    }
+    },
+    currency?: 'NXBUSD' | 'USDT'
   ) => void;
   currentRate: number;
   walletConnected?: boolean;
@@ -41,6 +49,9 @@ interface BuyTokenModalProps {
   contractAddress?: string;
   receivingAddress?: string;
   minPurchaseUsd?: number;
+  nxbusdBalance?: number;
+  usdtBalance?: number;
+  onOpenSwapModal?: () => void;
   activePhaseInfo?: {
     phaseNumber: number;
     name: string;
@@ -67,6 +78,9 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   contractAddress = '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
   receivingAddress = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
   minPurchaseUsd = 0.01,
+  nxbusdBalance = 0,
+  usdtBalance = 0,
+  onOpenSwapModal,
   activePhaseInfo = {
     phaseNumber: 1,
     name: 'Phase 1',
@@ -85,13 +99,14 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   const [step, setStep] = useState<1 | 2>(1);
   const [currency, setCurrency] = useState<'NXBUSD' | 'USDT'>('NXBUSD');
   const [paymentMode, setPaymentMode] = useState<'web3' | 'manual'>('web3');
-  const [payAmount, setPayAmount] = useState<string>('100');
+  const [payAmount, setPayAmount] = useState<string>('1');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [txHashInput, setTxHashInput] = useState<string>('');
   const [copiedAddress, setCopiedAddress] = useState<boolean>(false);
-  const [copiedAmount, setCopiedAmount] = useState<boolean>(false);
   const [paymentStatusText, setPaymentStatusText] = useState<string>('');
   const [txErrorMessage, setTxErrorMessage] = useState<string | null>(null);
+  const [liveOnChainBalance, setLiveOnChainBalance] = useState<number | null>(null);
+  const [isRefreshingBalance, setIsRefreshingBalance] = useState<boolean>(false);
 
   // Exact Token Quantities assigned per phase based on user's purchased tokens
   const [p2Tokens, setP2Tokens] = useState<number>(0);
@@ -102,18 +117,40 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
   const usdValue = parseFloat(payAmount) || 0;
   const tokenQuantity = Math.floor(usdValue / (currentRate || 0.01));
-
   const cryptoEquivalent = usdValue;
-
-  // Contracts
-  const NXBUSD_CONTRACT = '0xbEFB5857cd4309a4a64f92Dd67507c34fCbca78b';
-  const NXBC_CONTRACT = '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7';
-  const USDT_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
 
   // Strict System Allotment Constraints
   const maxAvailableInPhase = Math.max(0, activePhaseInfo.totalSupply - activePhaseInfo.tokensSold);
-  const maxUsdAllowedInPhase = maxAvailableInPhase * currentRate;
   const isPhaseLimitExceeded = tokenQuantity > maxAvailableInPhase;
+
+  // Live effective balance of selected currency
+  const effectiveBalance = useMemo(() => {
+    if (liveOnChainBalance !== null) return liveOnChainBalance;
+    return currency === 'NXBUSD' ? nxbusdBalance : usdtBalance;
+  }, [liveOnChainBalance, currency, nxbusdBalance, usdtBalance]);
+
+  const isInsufficientBalance = walletConnected && usdValue > effectiveBalance;
+
+  // Refresh real on-chain balance when modal opens or currency changes
+  const refreshOnChainBalance = async () => {
+    if (!walletAddress) return;
+    setIsRefreshingBalance(true);
+    try {
+      const targetToken = currency === 'NXBUSD' ? NXBUSD_CONTRACT : USDT_CONTRACT;
+      const bal = await fetchOnChainTokenBalance(targetToken, walletAddress);
+      setLiveOnChainBalance(bal);
+    } catch (e) {
+      console.warn('Balance refresh error:', e);
+    } finally {
+      setIsRefreshingBalance(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && walletAddress) {
+      refreshOnChainBalance();
+    }
+  }, [isOpen, walletAddress, currency]);
 
   // Initialize token breakdown whenever tokenQuantity changes or when entering step 2
   useEffect(() => {
@@ -137,15 +174,10 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   const remainingTokens = Math.max(0, tokenQuantity - totalAllocatedTokens);
   const isOverAllocated = totalAllocatedTokens > tokenQuantity;
 
-  const handleCopy = (text: string, type: 'address' | 'amount') => {
+  const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
-    if (type === 'address') {
-      setCopiedAddress(true);
-      setTimeout(() => setCopiedAddress(false), 2000);
-    } else {
-      setCopiedAmount(true);
-      setTimeout(() => setCopiedAmount(false), 2000);
-    }
+    setCopiedAddress(true);
+    setTimeout(() => setCopiedAddress(false), 2000);
   };
 
   // Preset Allocation Helpers based on exact token quantity
@@ -186,11 +218,17 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
   const handleProceedToSellSchedule = () => {
     if (tokenQuantity <= 0) return;
+    if (isInsufficientBalance) {
+      setTxErrorMessage(
+        `Insufficient ${currency} balance! You only have ${effectiveBalance.toFixed(2)} ${currency} in your wallet, but this order requires $${usdValue.toFixed(2)} ${currency}. Please Swap USDT to NXBUSD first.`
+      );
+      return;
+    }
     setTxErrorMessage(null);
     setStep(2);
   };
 
-  // Real Web3 on-chain transaction execution
+  // Real Web3 on-chain transaction execution with STRICT balance check & on-chain receipt verification
   const executeWeb3Payment = async (): Promise<string | null> => {
     if (typeof window === 'undefined') return null;
 
@@ -217,7 +255,18 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     const accounts = await eth.request({ method: 'eth_requestAccounts' });
     const sender = accounts[0];
 
-    const ADMIN_TREASURY = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261';
+    // 1. STRICT PRE-FLIGHT ON-CHAIN BALANCE CHECK
+    const tokenContractAddress = currency === 'NXBUSD' ? NXBUSD_CONTRACT : USDT_CONTRACT;
+    setPaymentStatusText(`Verifying ${currency} balance on BSC blockchain...`);
+    const onChainBal = await fetchOnChainTokenBalance(tokenContractAddress, sender);
+    setLiveOnChainBalance(onChainBal);
+
+    if (onChainBal < usdValue) {
+      throw new Error(
+        `Insufficient ${currency} on blockchain! Your wallet holds ${onChainBal.toFixed(2)} ${currency}, but order requires ${usdValue.toFixed(2)} ${currency}. Please convert USDT to NXBUSD first.`
+      );
+    }
+
     let targetReceiving = receivingAddress;
     if (
       !targetReceiving ||
@@ -225,56 +274,57 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
       targetReceiving.toLowerCase() === NXBC_CONTRACT.toLowerCase() ||
       targetReceiving.toLowerCase() === NXBUSD_CONTRACT.toLowerCase()
     ) {
-      targetReceiving = ADMIN_TREASURY;
+      targetReceiving = ADMIN_TREASURY_WALLET;
     }
 
-    if (currency === 'NXBUSD') {
-      const tokenAmountWei = BigInt(Math.floor(usdValue * 1e18));
-      const cleanTo = targetReceiving.toLowerCase().replace('0x', '').padStart(64, '0');
-      const cleanVal = tokenAmountWei.toString(16).padStart(64, '0');
-      const data = `0xa9059cbb${cleanTo}${cleanVal}`;
+    const tokenAmountWei = BigInt(Math.floor(usdValue * 1e18));
+    const cleanTo = targetReceiving.toLowerCase().replace('0x', '').padStart(64, '0');
+    const cleanVal = tokenAmountWei.toString(16).padStart(64, '0');
+    // ERC-20 transfer(address to, uint256 amount)
+    const data = `0xa9059cbb${cleanTo}${cleanVal}`;
 
-      setPaymentStatusText('Approve NXBUSD token transfer in your wallet...');
-      const tx = await eth.request({
-        method: 'eth_sendTransaction',
-        params: [
-          {
-            from: sender,
-            to: NXBUSD_CONTRACT,
-            data: data,
-            value: '0x0',
-          },
-        ],
-      });
-      return tx;
-    } else {
-      // USDT BEP-20 on BSC Mainnet: 0x55d398326f99059fF775485246999027B3197955
-      const usdtContractBsc = USDT_CONTRACT;
-      const usdtAmountWei = BigInt(Math.floor(usdValue * 1e18));
-      
-      // Transfer function selector 0xa9059cbb + padded recipient + padded amount
-      const cleanTo = targetReceiving.toLowerCase().replace('0x', '').padStart(64, '0');
-      const cleanVal = usdtAmountWei.toString(16).padStart(64, '0');
-      const data = `0xa9059cbb${cleanTo}${cleanVal}`;
+    setPaymentStatusText(`Please approve ${usdValue} ${currency} transfer in your wallet...`);
+    
+    const txHash = await eth.request({
+      method: 'eth_sendTransaction',
+      params: [
+        {
+          from: sender,
+          to: tokenContractAddress,
+          data: data,
+          value: '0x0',
+        },
+      ],
+    });
 
-      setPaymentStatusText('Auto-Converting USDT ➔ NXBUSD & purchasing NXBC...');
-      const tx = await eth.request({
-        method: 'eth_sendTransaction',
-        params: [
-          {
-            from: sender,
-            to: usdtContractBsc,
-            data: data,
-            value: '0x0',
-          },
-        ],
-      });
-      return tx;
+    if (!txHash || typeof txHash !== 'string') {
+      throw new Error('Transaction was cancelled or rejected by user.');
     }
+
+    // 2. STRICT ON-CHAIN RECEIPT VERIFICATION
+    setPaymentStatusText('Transaction broadcasted! Verifying confirmation on BSC...');
+    const receiptResult = await waitForBscTxConfirmation(txHash, (msg) => setPaymentStatusText(msg));
+    
+    if (!receiptResult.success) {
+      throw new Error(receiptResult.error || 'Transaction reverted or failed on BSC blockchain.');
+    }
+
+    // Refresh new balance
+    const updatedBal = await fetchOnChainTokenBalance(tokenContractAddress, sender);
+    setLiveOnChainBalance(updatedBal);
+
+    return txHash;
   };
 
   const handleFinalConfirmBuy = async () => {
     if (tokenQuantity <= 0 || isOverAllocated) return;
+    if (isInsufficientBalance) {
+      setTxErrorMessage(
+        `Insufficient ${currency} balance! You only have ${effectiveBalance.toFixed(2)} ${currency}. Please convert USDT to NXBUSD first.`
+      );
+      return;
+    }
+
     setIsProcessing(true);
     setTxErrorMessage(null);
 
@@ -290,7 +340,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
         }
       } catch (err: any) {
         console.error('Web3 Payment Error:', err);
-        setTxErrorMessage(err?.message || 'Transaction was rejected or failed. You can also pay via Direct Deposit.');
+        setTxErrorMessage(err?.message || 'Transaction was rejected or failed on BSC blockchain.');
         setIsProcessing(false);
         setPaymentStatusText('');
         return;
@@ -307,14 +357,19 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     const dexPercent = tokenQuantity > 0 ? Math.round((dexTokens / tokenQuantity) * 100) : 0;
     const unallocatedPercent = Math.max(0, 100 - (p2Percent + p3Percent + p4Percent + p5Percent + dexPercent));
 
-    onConfirmPurchase(tokenQuantity, usdValue, {
-      p2Percent,
-      p3Percent,
-      p4Percent,
-      p5Percent,
-      dexPercent,
-      unallocatedPercent,
-    });
+    onConfirmPurchase(
+      tokenQuantity,
+      usdValue,
+      {
+        p2Percent,
+        p3Percent,
+        p4Percent,
+        p5Percent,
+        dexPercent,
+        unallocatedPercent,
+      },
+      currency
+    );
 
     setIsProcessing(false);
     setPaymentStatusText('');
@@ -345,7 +400,6 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
       <div className="w-full max-w-md max-h-[94vh] overflow-y-auto rounded-3xl bg-[#110725] border border-amber-500/30 p-4 sm:p-5 shadow-[0_0_50px_rgba(245,158,11,0.25)] relative text-slate-100 scroll-smooth">
         
-        
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -370,15 +424,118 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                 <span>Decentralized Hold & Swap Notice</span>
               </div>
               <p className="text-slate-200">
-                <strong className="text-emerald-300 font-semibold">100% tokens aapke Trust Wallet mein turant mint (transfer) ho jayenge.</strong> Allocations queue mein virtually register rahenge, jabki tokens aapke safe self-custody wallet mein rehte hain.
+                <strong className="text-emerald-300 font-semibold">100% tokens aapke Trust Wallet mein turant credit ho jayenge.</strong> Allocations queue mein virtually register rahenge, jabki tokens aapke safe self-custody wallet mein rehte hain.
               </p>
             </div>
 
-            {/* Amount Input */}
+            {/* Currency Selector with Live Balance Display */}
+            <div className="space-y-1.5 bg-[#090317] p-2.5 rounded-2xl border border-purple-500/30">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-[10px] uppercase font-bold text-purple-200 font-mono-crypto">
+                  Pay With Token:
+                </span>
+                <div className="flex items-center gap-1.5 text-[10px] font-mono-crypto">
+                  <span className="text-purple-300">Available:</span>
+                  <span className={`font-bold ${isInsufficientBalance ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    {effectiveBalance >= 1 ? effectiveBalance.toFixed(2) : effectiveBalance.toFixed(4)} {currency}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={refreshOnChainBalance}
+                    disabled={isRefreshingBalance}
+                    title="Refresh Blockchain Balance"
+                    className="p-1 rounded bg-purple-900/60 hover:bg-purple-800 text-purple-300 transition-all cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isRefreshingBalance ? 'animate-spin text-amber-400' : ''}`} />
+                  </button>
+                </div>
+              </div>
 
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrency('NXBUSD');
+                    setLiveOnChainBalance(null);
+                  }}
+                  className={`py-2 px-2.5 rounded-xl text-xs font-bold font-mono-crypto flex items-center justify-between border transition-all cursor-pointer ${
+                    currency === 'NXBUSD'
+                      ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
+                      : 'bg-purple-950/40 border-purple-800/40 text-purple-300 hover:border-purple-600'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span>NXBUSD</span>
+                  </div>
+                  <span className="text-[9px] opacity-80">${nxbusdBalance.toFixed(2)}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrency('USDT');
+                    setLiveOnChainBalance(null);
+                  }}
+                  className={`py-2 px-2.5 rounded-xl text-xs font-bold font-mono-crypto flex items-center justify-between border transition-all cursor-pointer ${
+                    currency === 'USDT'
+                      ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+                      : 'bg-purple-950/40 border-purple-800/40 text-purple-300 hover:border-purple-600'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <span>USDT</span>
+                  </div>
+                  <span className="text-[9px] opacity-80">${usdtBalance.toFixed(2)}</span>
+                </button>
+              </div>
+
+              {/* Insufficient Balance Callout & Convert Prompt */}
+              {isInsufficientBalance && (
+                <div className="p-2.5 rounded-xl bg-rose-950/90 border border-rose-500/60 text-rose-200 text-[10px] space-y-2 animate-fade-in">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold block text-rose-300">Insufficient {currency} Balance!</span>
+                      <span>
+                        Aapke wallet me sirf <strong>{effectiveBalance.toFixed(2)} {currency}</strong> hai, jabki order ke liye <strong>${usdValue.toFixed(2)} {currency}</strong> chahiye.
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    {onOpenSwapModal && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onOpenSwapModal();
+                        }}
+                        className="flex-1 py-1.5 px-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold font-mono-crypto text-[10px] flex items-center justify-center gap-1 shadow cursor-pointer"
+                      >
+                        <ArrowRightLeft className="w-3.5 h-3.5" />
+                        <span>Swap USDT ➔ NXBUSD</span>
+                      </button>
+                    )}
+                    {effectiveBalance > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPayAmount(effectiveBalance >= 0.01 ? effectiveBalance.toFixed(2) : '0.01')}
+                        className="py-1.5 px-2.5 rounded-lg bg-purple-900 hover:bg-purple-800 text-amber-300 font-bold font-mono-crypto text-[10px] border border-purple-500/40 cursor-pointer"
+                      >
+                        Use Max (${effectiveBalance.toFixed(2)})
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Amount Input */}
             <div className="space-y-1">
               <label className="text-[10px] font-semibold text-purple-200 uppercase tracking-wider flex justify-between">
-                <span>3. Enter USD Amount (Min $0.01 = 1 Token)</span>
+                <span>Enter Purchase Amount (Min $0.01 = 1 Token)</span>
                 <span className="text-amber-400 font-mono-crypto font-bold">
                   ≈ {cryptoEquivalent >= 1 ? cryptoEquivalent.toFixed(2) : cryptoEquivalent.toFixed(4)} {currency}
                 </span>
@@ -402,7 +559,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                   value={payAmount}
                   onChange={(e) => setPayAmount(e.target.value)}
                   className={`w-full bg-[#090314] border rounded-xl py-2.5 px-3 pl-8 text-base font-mono-crypto text-slate-100 font-bold focus:outline-none transition-colors ${
-                    isPhaseLimitExceeded
+                    isInsufficientBalance || isPhaseLimitExceeded
                       ? 'border-rose-500 focus:border-rose-400'
                       : 'border-purple-500/40 focus:border-amber-400'
                   }`}
@@ -428,7 +585,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                     className={`flex-1 min-w-[45px] py-1.5 rounded-lg text-[10px] font-mono-crypto border font-semibold transition-all ${
                       isPresetTooHigh
                         ? 'bg-purple-950/20 text-purple-600 border-purple-900/30 cursor-not-allowed opacity-40'
-                        : 'bg-purple-900/40 hover:bg-purple-800 text-purple-200 border-purple-600/30'
+                        : 'bg-purple-900/40 hover:bg-purple-800 text-purple-200 border-purple-600/30 cursor-pointer'
                     }`}
                   >
                     +${preset}
@@ -437,68 +594,14 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               })}
             </div>
 
-            {/* Direct Deposit Address & QR Box if Manual mode is active */}
-            {paymentMode === 'manual' && (
-              <div className="p-3.5 rounded-2xl bg-[#090317] border border-amber-500/40 space-y-2.5 shadow-lg animate-fade-in">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono-crypto font-bold text-amber-300 uppercase flex items-center gap-1.5">
-                    <QrCode className="w-3.5 h-3.5" />
-                    Deposit to Official Presale Vault (BEP-20)
-                  </span>
-                  <span className="text-[9px] font-mono-crypto text-emerald-400 bg-emerald-950 px-1.5 py-0.2 rounded border border-emerald-500/40">
-                    Auto-Verified
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3 bg-[#130728] p-2.5 rounded-xl border border-purple-500/30">
-                  <div className="w-16 h-16 bg-white p-1 rounded-lg shrink-0 flex items-center justify-center">
-                    <img
-                      src={qrImageUrl}
-                      alt="Deposit QR"
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                  <div className="flex-1 space-y-1 overflow-hidden">
-                    <span className="text-[9px] text-purple-300 block font-mono-crypto">
-                      Receiving Address (BEP-20 Network):
-                    </span>
-                    <p className="text-[10px] font-mono-crypto text-amber-300 font-bold break-all leading-tight">
-                      {receivingAddress}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(receivingAddress, 'address')}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[9px] font-mono-crypto font-bold border border-amber-500/40"
-                    >
-                      {copiedAddress ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedAddress ? 'Address Copied!' : 'Copy Address'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[9px] text-purple-300 block font-mono-crypto">
-                    Optional: Paste Transaction Hash / TXID (After sending from Binance/Trust/MetaMask):
-                  </label>
-                  <input
-                    type="text"
-                    value={txHashInput}
-                    onChange={(e) => setTxHashInput(e.target.value)}
-                    placeholder="0x..."
-                    className="w-full bg-[#130728] border border-purple-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-slate-100 focus:outline-none"
-                  />
-                </div>
-              </div>
-            )}
-
             {/* Calculated Receive Box */}
             <div className={`p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/80 to-[#1c0a35] border space-y-1.5 ${
-              isPhaseLimitExceeded ? 'border-rose-500/50' : 'border-amber-400/30'
+              isPhaseLimitExceeded || isInsufficientBalance ? 'border-rose-500/50' : 'border-amber-400/30'
             }`}>
               <div className="flex justify-between text-xs text-purple-300">
                 <span>Coins To Receive:</span>
                 <span className={`font-black font-mono-crypto text-base ${
-                  isPhaseLimitExceeded ? 'text-rose-400' : 'text-amber-300'
+                  isPhaseLimitExceeded || isInsufficientBalance ? 'text-rose-400' : 'text-amber-300'
                 }`}>
                   {tokenQuantity.toLocaleString()} NXBC
                 </span>
@@ -522,10 +625,10 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             {/* Proceed to Step 2 Button */}
             <button
               type="button"
-              disabled={tokenQuantity <= 0 || isPhaseLimitExceeded}
+              disabled={tokenQuantity <= 0 || isPhaseLimitExceeded || isInsufficientBalance}
               onClick={handleProceedToSellSchedule}
               className={`w-full py-3 rounded-xl font-black text-xs tracking-wider uppercase transition-all shadow-lg flex items-center justify-center gap-2 ${
-                tokenQuantity <= 0 || isPhaseLimitExceeded
+                tokenQuantity <= 0 || isPhaseLimitExceeded || isInsufficientBalance
                   ? 'bg-purple-950/60 text-purple-400/50 border border-purple-800/40 cursor-not-allowed'
                   : 'bg-gradient-to-r from-amber-500 via-amber-400 to-fuchsia-600 hover:opacity-95 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.3)] cursor-pointer'
               }`}
@@ -548,7 +651,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                     {tokenQuantity.toLocaleString()} NXBC
                   </span>
                   <span className="text-[10px] font-mono-crypto text-emerald-400 font-bold">
-                    (${usdValue.toFixed(2)} USD)
+                    (${usdValue.toFixed(2)} {currency})
                   </span>
                 </div>
               </div>
@@ -578,32 +681,33 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                 </span>
                 <span className="text-[9px] text-purple-400 font-mono-crypto">Click to Auto-Fill</span>
               </div>
+
               <div className="grid grid-cols-4 gap-1.5">
                 <button
                   type="button"
                   onClick={applyPresetEqual}
-                  className="py-1 px-1.5 rounded-lg bg-purple-950 hover:bg-purple-900 border border-purple-600/30 text-[9px] font-rajdhani font-bold text-slate-200"
+                  className="py-1 px-1.5 rounded-lg bg-purple-900/40 hover:bg-purple-800 border border-purple-500/30 text-[9px] font-rajdhani font-bold text-purple-200 cursor-pointer"
                 >
-                  Equal (20% ea)
+                  20% Split
                 </button>
                 <button
                   type="button"
                   onClick={applyPresetEarlyProfit}
-                  className="py-1 px-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 text-[9px] font-rajdhani font-bold text-amber-300"
+                  className="py-1 px-1.5 rounded-lg bg-purple-900/40 hover:bg-purple-800 border border-purple-500/30 text-[9px] font-rajdhani font-bold text-amber-300 cursor-pointer"
                 >
-                  P2 & P3 Fast
+                  Fast Cash
                 </button>
                 <button
                   type="button"
                   onClick={applyPresetHodl}
-                  className="py-1 px-1.5 rounded-lg bg-purple-950 hover:bg-purple-900 border border-purple-600/30 text-[9px] font-rajdhani font-bold text-purple-200"
+                  className="py-1 px-1.5 rounded-lg bg-purple-900/40 hover:bg-purple-800 border border-purple-500/30 text-[9px] font-rajdhani font-bold text-emerald-300 cursor-pointer"
                 >
                   Hold 50%
                 </button>
                 <button
                   type="button"
                   onClick={applyPresetAllDex}
-                  className="py-1 px-1.5 rounded-lg bg-fuchsia-950/60 hover:bg-fuchsia-900 border border-fuchsia-500/40 text-[9px] font-rajdhani font-bold text-fuchsia-300"
+                  className="py-1 px-1.5 rounded-lg bg-fuchsia-950/60 hover:bg-fuchsia-900 border border-fuchsia-500/40 text-[9px] font-rajdhani font-bold text-fuchsia-300 cursor-pointer"
                 >
                   100% DEX
                 </button>
@@ -841,7 +945,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setDexTokens(remainingTokens + dexTokens)}
-                    className="text-[9px] font-mono-crypto text-amber-400 underline font-semibold"
+                    className="text-[9px] font-mono-crypto text-amber-400 underline font-semibold cursor-pointer"
                   >
                     + Add Remaining
                   </button>
@@ -950,10 +1054,10 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
               <button
                 type="button"
-                disabled={isProcessing || isOverAllocated || totalAllocatedTokens === 0}
+                disabled={isProcessing || isOverAllocated || totalAllocatedTokens === 0 || isInsufficientBalance}
                 onClick={handleFinalConfirmBuy}
                 className={`col-span-2 py-2.5 rounded-xl font-bold text-xs tracking-wider uppercase transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer ${
-                  isOverAllocated || totalAllocatedTokens === 0
+                  isOverAllocated || totalAllocatedTokens === 0 || isInsufficientBalance
                     ? 'bg-purple-950/60 text-purple-400/50 border border-purple-800/40 cursor-not-allowed'
                     : 'bg-gradient-to-r from-amber-500 via-amber-400 to-fuchsia-600 hover:opacity-95 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
                 }`}
@@ -961,7 +1065,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                 {isProcessing ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin text-black" />
-                    <span>Processing Real Payment...</span>
+                    <span>Processing Blockchain Tx...</span>
                   </span>
                 ) : (
                   <>

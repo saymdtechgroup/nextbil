@@ -2,8 +2,8 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { db } from "./src/db/index.ts";
-import { users, matrixNodes, levelEarnings, transactions, sellOrders, systemConfigs } from "./src/db/schema.ts";
-import { eq, desc, asc } from "drizzle-orm";
+import { users, matrixNodes, levelEarnings, transactions, sellOrders, systemConfigs, tokenSellLedgers } from "./src/db/schema.ts";
+import { eq, desc, asc, and } from "drizzle-orm";
 import { ethers } from "ethers";
 
 // ERC20 Minimal ABI for USDT / Token Transfers
@@ -46,15 +46,175 @@ async function startServer() {
     }
   });
 
-  // Fully Automated Instant Crypto Payout Bot API
+  // Get Phase-Wise Token Auto-Sell Internal Settlement Ledger for a specific Trust Wallet
+  app.get("/api/wallet/token-sell-ledger", async (req, res) => {
+    try {
+      const { walletAddress } = req.query;
+      if (!walletAddress || typeof walletAddress !== "string") {
+        return res.status(400).json({ error: "walletAddress is required" });
+      }
+
+      const normalizedAddress = walletAddress.toLowerCase();
+      const user = await db.query.users.findFirst({
+        where: eq(users.walletAddress, normalizedAddress),
+      });
+
+      if (!user) {
+        return res.json({
+          walletAddress: normalizedAddress,
+          entries: [],
+          totalGrossUsdt: 0,
+          totalWithdrawnUsdt: 0,
+          availableUsdt: 0,
+          totalTokensSold: 0,
+          totalTokensReturned: 0,
+          pendingTokensToReturn: 0,
+        });
+      }
+
+      const entries = await db.select()
+        .from(tokenSellLedgers)
+        .where(eq(tokenSellLedgers.walletAddress, normalizedAddress))
+        .orderBy(asc(tokenSellLedgers.phaseIndex), asc(tokenSellLedgers.createdAt));
+
+      let totalGrossUsdt = 0;
+      let totalWithdrawnUsdt = 0;
+      let availableUsdt = 0;
+      let totalTokensSold = 0;
+      let totalTokensReturned = 0;
+      let pendingTokensToReturn = 0;
+
+      const formattedEntries = entries.map((e) => {
+        const remainingGross = Math.max(0, e.grossUsdt - e.withdrawnUsdt);
+        const remainingTokens = Math.max(0, e.tokensSold - e.tokensReturned);
+        totalGrossUsdt += e.grossUsdt;
+        totalWithdrawnUsdt += e.withdrawnUsdt;
+        availableUsdt += remainingGross;
+        totalTokensSold += e.tokensSold;
+        totalTokensReturned += e.tokensReturned;
+        pendingTokensToReturn += remainingTokens;
+
+        return {
+          id: `ledger-${e.id}`,
+          phaseIndex: e.phaseIndex,
+          phaseName: e.phaseName,
+          tokenPrice: e.tokenPrice,
+          tokensSold: e.tokensSold,
+          tokensReturned: e.tokensReturned,
+          grossUsdt: e.grossUsdt,
+          withdrawnUsdt: e.withdrawnUsdt,
+          availableUsdt: remainingGross,
+          pendingTokens: remainingTokens,
+          serviceFeeUsdt: e.serviceFeeUsdt,
+          status: e.status,
+          returnTxHash: e.returnTxHash,
+          payoutTxHash: e.payoutTxHash,
+          createdAt: e.createdAt,
+        };
+      });
+
+      return res.json({
+        walletAddress: normalizedAddress,
+        entries: formattedEntries,
+        totalGrossUsdt,
+        totalWithdrawnUsdt,
+        availableUsdt,
+        totalTokensSold,
+        totalTokensReturned,
+        pendingTokensToReturn,
+      });
+    } catch (error: any) {
+      console.error("Error in /api/wallet/token-sell-ledger:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch token sell ledger" });
+    }
+  });
+
+  // Record a new Phase Auto-Sell entry into the internal ledger
+  app.post("/api/wallet/token-sell-ledger/record", async (req, res) => {
+    try {
+      const {
+        walletAddress,
+        phaseIndex,
+        phaseName,
+        tokenPrice,
+        tokensSold,
+        grossUsdt,
+      } = req.body;
+
+      if (!walletAddress || !tokensSold || Number(tokensSold) <= 0) {
+        return res.status(400).json({ error: "Invalid ledger payload" });
+      }
+
+      const normalizedAddress = walletAddress.toLowerCase();
+      let user = await db.query.users.findFirst({
+        where: eq(users.walletAddress, normalizedAddress),
+      });
+
+      if (!user) {
+        const refCode = `NX${normalizedAddress.substring(2, 8).toUpperCase()}`;
+        const [newUser] = await db.insert(users).values({
+          walletAddress: normalizedAddress,
+          referralCode: refCode,
+          availableUsdt: 0,
+        }).returning();
+        user = newUser;
+      }
+
+      const calculatedGross = Number(grossUsdt) || (Number(tokensSold) * Number(tokenPrice));
+
+      const [entry] = await db.insert(tokenSellLedgers).values({
+        userId: user.id,
+        walletAddress: normalizedAddress,
+        phaseIndex: Number(phaseIndex) || 2,
+        phaseName: phaseName || `Phase ${phaseIndex}`,
+        tokenPrice: Number(tokenPrice) || 0.10,
+        tokensSold: Number(tokensSold),
+        tokensReturned: 0,
+        grossUsdt: calculatedGross,
+        withdrawnUsdt: 0,
+        serviceFeeUsdt: 0,
+        status: 'unclaimed',
+      }).returning();
+
+      // Update user's availableUsdt in DB
+      await db.update(users)
+        .set({
+          availableUsdt: (user.availableUsdt || 0) + calculatedGross,
+          totalEarnedUsdt: (user.totalEarnedUsdt || 0) + calculatedGross,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+
+      return res.json({
+        success: true,
+        entry,
+        message: `Successfully recorded ${tokensSold} NXBC auto-sold in ${entry.phaseName} for $${calculatedGross.toFixed(2)} USDT!`,
+      });
+    } catch (error: any) {
+      console.error("Error in /api/wallet/token-sell-ledger/record:", error);
+      res.status(500).json({ error: error.message || "Failed to record token sell entry" });
+    }
+  });
+
+  // Fully Automated Instant Crypto Payout Bot API with 10% Service Charge & Token Return Validation
   app.post("/api/wallet/withdraw", async (req, res) => {
     try {
-      const { walletAddress, amountUsdt } = req.body;
+      const {
+        walletAddress,
+        amountUsdt,
+        walletType = 'mlm',
+        tokenReturnTxHash,
+        tokensReturned = 0,
+      } = req.body;
+
       if (!walletAddress || !amountUsdt || Number(amountUsdt) <= 0) {
         return res.status(400).json({ error: "Invalid wallet address or withdrawal amount" });
       }
 
-      const withdrawAmount = Number(amountUsdt);
+      const grossAmount = Number(amountUsdt);
+      const SERVICE_FEE_RATE = 0.10; // 10% Service Charge
+      const serviceFee = grossAmount * SERVICE_FEE_RATE;
+      const netPayout = Math.max(0, grossAmount - serviceFee);
       const normalizedAddress = walletAddress.toLowerCase();
 
       // Check user in database
@@ -63,14 +223,74 @@ async function startServer() {
       });
 
       if (!user) {
-        return res.status(404).json({ error: "User not registered in database" });
+        return res.status(404).json({ success: false, error: "User not registered in database. Connect your wallet first." });
       }
 
       const currentAvailable = user.availableUsdt || 0;
-      // Allow withdrawal test if simulated or if available balance is sufficient
-      if (currentAvailable < withdrawAmount && user.totalEarnedUsdt === 0) {
-        // Warning if strict, but allow demo testing with dynamic fallback
+      if (currentAvailable < grossAmount) {
+        const walletName = walletType === 'token_sell' ? 'Token Auto-Sell Settlement Wallet' : 'MLM & Community Earnings Wallet';
+        return res.status(400).json({
+          success: false,
+          error: `Insufficient withdrawable balance in your ${walletName}! Available: $${currentAvailable.toFixed(2)} USDT, Requested: $${grossAmount.toFixed(2)} USDT.`,
+        });
       }
+
+      // If Token Auto-Sell Withdrawal: Update Phase-by-Phase Internal Ledger (FIFO)
+      let phaseBreakdown: Array<{ phaseIndex: number; phaseName: string; tokensToReturn: number; grossDeducted: number }> = [];
+      let totalCalculatedTokensToReturn = 0;
+
+      if (walletType === 'token_sell') {
+        const activeLedgerEntries = await db.select()
+          .from(tokenSellLedgers)
+          .where(
+            and(
+              eq(tokenSellLedgers.walletAddress, normalizedAddress),
+              eq(tokenSellLedgers.status, 'unclaimed')
+            )
+          )
+          .orderBy(asc(tokenSellLedgers.phaseIndex), asc(tokenSellLedgers.createdAt));
+
+        let remainingToDeduct = grossAmount;
+
+        for (const entry of activeLedgerEntries) {
+          if (remainingToDeduct <= 0) break;
+
+          const entryRemainingGross = Math.max(0, entry.grossUsdt - entry.withdrawnUsdt);
+          const deductFromEntry = Math.min(entryRemainingGross, remainingToDeduct);
+          
+          if (deductFromEntry > 0) {
+            // Calculate exact proportion of tokens for this phase
+            const tokensProportion = (deductFromEntry / entry.grossUsdt) * entry.tokensSold;
+            const newWithdrawn = entry.withdrawnUsdt + deductFromEntry;
+            const newReturned = entry.tokensReturned + tokensProportion;
+            const newStatus = newWithdrawn >= entry.grossUsdt - 0.001 ? 'fully_claimed' : 'partially_claimed';
+
+            phaseBreakdown.push({
+              phaseIndex: entry.phaseIndex,
+              phaseName: entry.phaseName,
+              tokensToReturn: Math.round(tokensProportion * 1000) / 1000,
+              grossDeducted: deductFromEntry,
+            });
+
+            totalCalculatedTokensToReturn += tokensProportion;
+            remainingToDeduct -= deductFromEntry;
+
+            // Update ledger record
+            await db.update(tokenSellLedgers)
+              .set({
+                withdrawnUsdt: newWithdrawn,
+                tokensReturned: newReturned,
+                serviceFeeUsdt: (entry.serviceFeeUsdt || 0) + (deductFromEntry * 0.10),
+                status: newStatus,
+                returnTxHash: tokenReturnTxHash || null,
+                updatedAt: new Date(),
+              })
+              .where(eq(tokenSellLedgers.id, entry.id));
+          }
+        }
+      }
+
+      const finalTokensReturned = tokensReturned > 0 ? tokensReturned : Math.round(totalCalculatedTokensToReturn);
 
       let txHash = "";
       let executionMode = "simulated_blockchain";
@@ -86,11 +306,11 @@ async function startServer() {
           const wallet = new ethers.Wallet(privateKey, provider);
           const usdtContract = new ethers.Contract(usdtContractAddress, ERC20_ABI, wallet);
 
-          // Convert amount to 18 decimals (USDT on BSC has 18 decimals)
+          // Convert NET payout amount to 18 decimals (after 10% service fee deduction)
           const decimals = 18;
-          const parsedAmount = ethers.parseUnits(withdrawAmount.toString(), decimals);
+          const parsedAmount = ethers.parseUnits(netPayout.toFixed(4), decimals);
 
-          console.log(`[PAYOUT BOT] Initiating automated payout of ${withdrawAmount} USDT to ${walletAddress}...`);
+          console.log(`[PAYOUT BOT] Initiating automated ${walletType} payout of Gross: $${grossAmount} | Fee (10%): $${serviceFee.toFixed(2)} | Net: $${netPayout.toFixed(2)} USDT to ${walletAddress}...`);
           const tx = await usdtContract.transfer(walletAddress, parsedAmount);
           console.log(`[PAYOUT BOT] Transaction submitted: ${tx.hash}`);
           
@@ -107,30 +327,41 @@ async function startServer() {
       }
 
       // Record in Transactions Database
+      const txTitle = walletType === 'token_sell'
+        ? `Token Auto-Sell Settlement Payout (Net $${netPayout.toFixed(2)} after 10% Fee)`
+        : `MLM & Community Earnings Payout (Net $${netPayout.toFixed(2)} after 10% Fee)`;
+
       const [txRecord] = await db.insert(transactions).values({
         userId: user.id,
         type: 'withdrawal',
-        amountUsdt: withdrawAmount,
-        tokenAmount: 0,
+        amountUsdt: netPayout,
+        tokenAmount: finalTokensReturned,
         tokenPrice: 1.0,
         status: 'completed',
         txHash: txHash,
       }).returning();
 
       // Deduct available USDT and update withdrawn stats
-      const newAvailable = Math.max(0, currentAvailable - withdrawAmount);
+      const newAvailable = Math.max(0, currentAvailable - grossAmount);
       await db.update(users)
         .set({
           availableUsdt: newAvailable,
-          totalWithdrawnUsdt: (user.totalWithdrawnUsdt || 0) + withdrawAmount,
+          totalWithdrawnUsdt: (user.totalWithdrawnUsdt || 0) + grossAmount,
           updatedAt: new Date(),
         })
         .where(eq(users.id, user.id));
 
       return res.json({
         success: true,
-        message: "Instant automated payout processed successfully!",
+        message: `${txTitle} processed successfully!`,
         txHash,
+        walletType,
+        grossAmount,
+        serviceFee,
+        netPayout,
+        tokenReturnTxHash: tokenReturnTxHash || null,
+        tokensReturned: finalTokensReturned,
+        phaseBreakdown,
         executionMode,
         transaction: txRecord,
         newAvailableBalance: newAvailable,
