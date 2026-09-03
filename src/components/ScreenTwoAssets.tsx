@@ -51,11 +51,11 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   );
 
   // Projected value calculation:
-  // P2: $0.10, P3: $0.20, P4: $0.30, P5: $0.40, DEX: est $1500.00, Unallocated at Phase 1 rate $0.01
+  // P2: $0.10, P3: $1.00, P4: $10.00, P5: $100.00, DEX: est $1500.00, Unallocated at Phase 1 rate $0.01
   const p2Val = p2Tokens * 0.10;
-  const p3Val = p3Tokens * 0.20;
-  const p4Val = p4Tokens * 0.30;
-  const p5Val = p5Tokens * 0.40;
+  const p3Val = p3Tokens * 1.00;
+  const p4Val = p4Tokens * 10.00;
+  const p5Val = p5Tokens * 100.00;
   const dexVal = dexTokens * 1500.00;
   const unallocatedVal = unallocatedTokens * 0.01;
 
@@ -177,7 +177,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                 {showValues ? `${(allocation.p3Tokens?.allocated || p3Tokens).toLocaleString()} NXBC (Sold: ${allocation.p3Tokens?.sold || 0})` : '••••'}
               </span>
               <span className="text-[9px] font-mono-crypto text-amber-400/90 font-semibold">
-                @ $0.20 Rate
+                @ $1.00 Rate
               </span>
             </div>
             <div className="text-[8px] text-purple-300/70 font-mono-crypto flex justify-between border-t border-purple-500/15 pt-1 mt-1">
@@ -202,7 +202,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                 {showValues ? `${(allocation.p4Tokens?.allocated || p4Tokens).toLocaleString()} NXBC (Sold: ${allocation.p4Tokens?.sold || 0})` : '••••'}
               </span>
               <span className="text-[9px] font-mono-crypto text-fuchsia-400/90 font-semibold">
-                @ $0.30 Rate
+                @ $10.00 Rate
               </span>
             </div>
             <div className="text-[8px] text-purple-300/70 font-mono-crypto flex justify-between border-t border-purple-500/15 pt-1 mt-1">
@@ -227,7 +227,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                 {showValues ? `${(allocation.p5Tokens?.allocated || p5Tokens).toLocaleString()} NXBC (Sold: ${allocation.p5Tokens?.sold || 0})` : '••••'}
               </span>
               <span className="text-[9px] font-mono-crypto text-fuchsia-400/90 font-semibold">
-                @ $0.40 Rate
+                @ $100.00 Rate
               </span>
             </div>
             <div className="text-[8px] text-purple-300/70 font-mono-crypto flex justify-between border-t border-purple-500/15 pt-1 mt-1">

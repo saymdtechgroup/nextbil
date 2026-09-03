@@ -717,15 +717,19 @@ export default function App() {
     let isMounted = true;
     const fetchBalances = async () => {
       try {
-        const [nxBalance, uBalance] = await Promise.all([
+        const [nxChainBalance, uBalance] = await Promise.all([
           fetchOnChainTokenBalance(NXBUSD_CONTRACT, walletAddress),
           fetchOnChainTokenBalance(USDT_CONTRACT, walletAddress),
         ]);
         if (isMounted) {
-          setNxbusdBalance(nxBalance);
+          // Preserve in-app swapped NXBUSD balance so it is not wiped out if on-chain contract returns 0
+          const storedNx = parseFloat(localStorage.getItem('nxbc_nxbusd_balance') || '0');
+          const effectiveNx = Math.max(nxChainBalance, storedNx, 0);
+
+          setNxbusdBalance(effectiveNx);
           setUsdtBalance(uBalance);
           if (typeof window !== 'undefined') {
-            localStorage.setItem('nxbc_nxbusd_balance', nxBalance.toString());
+            localStorage.setItem('nxbc_nxbusd_balance', effectiveNx.toString());
             localStorage.setItem('nxbc_usdt_balance', uBalance.toString());
           }
         }
@@ -1264,12 +1268,12 @@ export default function App() {
         phaseNumber: 3,
         name: 'Phase 3',
         shortName: 'P3',
-        rate: 0.20,
-        rateLabel: '$0.20',
-        totalSupply: 20000000,
+        rate: 1.00,
+        rateLabel: '$1.00',
+        totalSupply: 7000000,
         tokensSold: 0,
         status: 'locked',
-        multiplier: '20x Growth',
+        multiplier: '100x Growth',
         unlockRequirement: 'Phase 2 must be 100% sold to unlock',
       },
       {
@@ -1277,12 +1281,12 @@ export default function App() {
         phaseNumber: 4,
         name: 'Phase 4',
         shortName: 'P4',
-        rate: 0.30,
-        rateLabel: '$0.30',
-        totalSupply: 25000000,
+        rate: 10.00,
+        rateLabel: '$10.00',
+        totalSupply: 19500000,
         tokensSold: 0,
         status: 'locked',
-        multiplier: '30x Growth',
+        multiplier: '1000x Growth',
         unlockRequirement: 'Phase 3 must be 100% sold to unlock',
       },
       {
@@ -1290,12 +1294,12 @@ export default function App() {
         phaseNumber: 5,
         name: 'Phase 5',
         shortName: 'P5',
-        rate: 0.40,
-        rateLabel: '$0.40',
-        totalSupply: 30000000,
+        rate: 100.00,
+        rateLabel: '$100.00',
+        totalSupply: 40000000,
         tokensSold: 0,
         status: 'locked',
-        multiplier: '40x Growth',
+        multiplier: '10000x Growth',
         unlockRequirement: 'Phase 4 must be 100% sold to unlock',
       },
       {

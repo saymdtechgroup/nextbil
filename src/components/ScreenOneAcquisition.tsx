@@ -82,9 +82,9 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   const unallocatedTokens = Math.max(0, totalTokens - (p2Tokens + p3Tokens + p4Tokens + p5Tokens + dexTokens));
 
   const p2Val = p2Tokens * 0.10;
-  const p3Val = p3Tokens * 0.20;
-  const p4Val = p4Tokens * 0.30;
-  const p5Val = p5Tokens * 0.40;
+  const p3Val = p3Tokens * 1.00;
+  const p4Val = p4Tokens * 10.00;
+  const p5Val = p5Tokens * 100.00;
   const dexVal = dexTokens * 1500.00;
   const totalProjectedVal = p2Val + p3Val + p4Val + p5Val + dexVal;
 
@@ -563,7 +563,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-bold text-slate-100 font-rajdhani">Phase 3 Target Unlock</span>
                 <span className="text-[9px] font-mono-crypto text-amber-400 font-semibold bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-500/30">
-                  @ $0.20 Rate
+                  @ $1.00 Rate
                 </span>
               </div>
               <span className="text-[10px] text-purple-300/70 font-mono-crypto block mt-0.5">
@@ -575,7 +575,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                 {allocation.p3Percent}%
               </span>
               <span className="text-[9px] font-mono-crypto text-emerald-400 block font-semibold">
-                ${(Math.floor(allocation.totalTokensPurchased * (allocation.p3Percent / 100)) * 0.20).toLocaleString()} USD
+                ${(Math.floor(allocation.totalTokensPurchased * (allocation.p3Percent / 100)) * 1.00).toLocaleString()} USD
               </span>
             </div>
           </div>
@@ -586,7 +586,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-bold text-slate-100 font-rajdhani">Phase 4 Target Unlock</span>
                 <span className="text-[9px] font-mono-crypto text-fuchsia-400 font-semibold bg-fuchsia-950/60 px-1.5 py-0.2 rounded border border-fuchsia-500/30">
-                  @ $0.30 Rate
+                  @ $10.00 Rate
                 </span>
               </div>
               <span className="text-[10px] text-purple-300/70 font-mono-crypto block mt-0.5">
@@ -598,7 +598,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                 {allocation.p4Percent}%
               </span>
               <span className="text-[9px] font-mono-crypto text-emerald-400 block font-semibold">
-                ${(Math.floor(allocation.totalTokensPurchased * (allocation.p4Percent / 100)) * 0.30).toLocaleString()} USD
+                ${(Math.floor(allocation.totalTokensPurchased * (allocation.p4Percent / 100)) * 10.00).toLocaleString()} USD
               </span>
             </div>
           </div>
@@ -609,7 +609,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-bold text-slate-100 font-rajdhani">Phase 5 Target Unlock</span>
                 <span className="text-[9px] font-mono-crypto text-fuchsia-400 font-semibold bg-fuchsia-950/60 px-1.5 py-0.2 rounded border border-fuchsia-500/30">
-                  @ $0.40 Rate
+                  @ $100.00 Rate
                 </span>
               </div>
               <span className="text-[10px] text-purple-300/70 font-mono-crypto block mt-0.5">
@@ -621,7 +621,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                 {allocation.p5Percent}%
               </span>
               <span className="text-[9px] font-mono-crypto text-emerald-400 block font-semibold">
-                ${(Math.floor(allocation.totalTokensPurchased * (allocation.p5Percent / 100)) * 0.40).toLocaleString()} USD
+                ${(Math.floor(allocation.totalTokensPurchased * (allocation.p5Percent / 100)) * 100.00).toLocaleString()} USD
               </span>
             </div>
           </div>
@@ -800,7 +800,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                   : 'bg-purple-950/40 text-purple-300 border-purple-500/20 hover:border-purple-400/40'
               }`}
             >
-              Phase 3 ($0.20)
+              Phase 3 ($1.00)
             </button>
             <button
               onClick={() => setSelectedQueuePhase('p4')}
@@ -810,7 +810,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                   : 'bg-purple-950/40 text-purple-300 border-purple-500/20 hover:border-purple-400/40'
               }`}
             >
-              Phase 4 ($0.30)
+              Phase 4 ($10.00)
             </button>
             <button
               onClick={() => setSelectedQueuePhase('p5')}
@@ -820,7 +820,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                   : 'bg-purple-950/40 text-purple-300 border-purple-500/20 hover:border-purple-400/40'
               }`}
             >
-              Phase 5 ($0.40)
+              Phase 5 ($100.00)
             </button>
             <button
               onClick={() => setSelectedQueuePhase('dex')}
@@ -892,7 +892,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-bold text-slate-100 font-rajdhani">Phase 3 Queue</span>
                     <span className="text-[9px] font-mono-crypto text-amber-400 font-semibold bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-500/30">
-                      @ $0.20 Target
+                      @ $1.00 Target
                     </span>
                   </div>
                   <span className="text-[9px] font-mono-crypto px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/40 text-amber-300 font-black">
@@ -937,7 +937,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-bold text-slate-100 font-rajdhani">Phase 4 Queue</span>
                     <span className="text-[9px] font-mono-crypto text-fuchsia-400 font-semibold bg-fuchsia-950/60 px-1.5 py-0.2 rounded border border-fuchsia-500/30">
-                      @ $0.30 Target
+                      @ $10.00 Target
                     </span>
                   </div>
                   <span className="text-[9px] font-mono-crypto px-2 py-0.5 rounded-md bg-fuchsia-500/20 border border-fuchsia-400/40 text-fuchsia-300 font-black">
@@ -982,7 +982,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-bold text-slate-100 font-rajdhani">Phase 5 Queue</span>
                     <span className="text-[9px] font-mono-crypto text-fuchsia-400 font-semibold bg-fuchsia-950/60 px-1.5 py-0.2 rounded border border-fuchsia-500/30">
-                      @ $0.40 Target
+                      @ $100.00 Target
                     </span>
                   </div>
                   <span className="text-[9px] font-mono-crypto px-2 py-0.5 rounded-md bg-fuchsia-500/20 border border-fuchsia-400/40 text-fuchsia-300 font-black">

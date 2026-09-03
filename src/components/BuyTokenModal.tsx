@@ -169,14 +169,31 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
   const isInsufficientBalance = walletConnected && usdValue > effectiveBalance;
 
+  // Auto-select token that has sufficient balance when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (nxbusdBalance >= usdValue && nxbusdBalance > 0) {
+        setCurrency('NXBUSD');
+      } else if (usdtBalance >= usdValue && usdtBalance > 0) {
+        setCurrency('USDT');
+      }
+    }
+  }, [isOpen, nxbusdBalance, usdtBalance]);
+
   // Refresh real on-chain balance when modal opens or currency changes
   const refreshOnChainBalance = async () => {
     if (!walletAddress) return;
     setIsRefreshingBalance(true);
     try {
-      const targetToken = currency === 'NXBUSD' ? NXBUSD_CONTRACT : USDT_CONTRACT;
-      const bal = await fetchOnChainTokenBalance(targetToken, walletAddress);
-      setLiveOnChainBalance(bal);
+      if (currency === 'USDT') {
+        const bal = await fetchOnChainTokenBalance(USDT_CONTRACT, walletAddress);
+        setLiveOnChainBalance(bal);
+      } else {
+        const bal = await fetchOnChainTokenBalance(NXBUSD_CONTRACT, walletAddress);
+        const storedNx = parseFloat(localStorage.getItem('nxbc_nxbusd_balance') || '0');
+        const eff = Math.max(bal, storedNx, nxbusdBalance);
+        setLiveOnChainBalance(eff);
+      }
     } catch (e) {
       console.warn('Balance refresh error:', e);
     } finally {
@@ -434,9 +451,9 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
   // Projected Return Calculation based on exact token amounts
   const projectedReturnP2 = p2Tokens * 0.10;
-  const projectedReturnP3 = p3Tokens * 0.20;
-  const projectedReturnP4 = p4Tokens * 0.30;
-  const projectedReturnP5 = p5Tokens * 0.40;
+  const projectedReturnP3 = p3Tokens * 1.00;
+  const projectedReturnP4 = p4Tokens * 10.00;
+  const projectedReturnP5 = p5Tokens * 100.00;
   const totalPhaseUsdReturn = projectedReturnP2 + projectedReturnP3 + projectedReturnP4 + projectedReturnP5;
 
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
@@ -565,7 +582,33 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+                    {currency === 'NXBUSD' && usdtBalance >= usdValue && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrency('USDT');
+                          setLiveOnChainBalance(null);
+                        }}
+                        className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black font-mono-crypto text-[10px] flex items-center justify-center gap-1.5 shadow cursor-pointer"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        <span>Pay Directly with USDT (${usdtBalance.toFixed(2)} Available)</span>
+                      </button>
+                    )}
+                    {currency === 'USDT' && nxbusdBalance >= usdValue && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrency('NXBUSD');
+                          setLiveOnChainBalance(null);
+                        }}
+                        className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black font-mono-crypto text-[10px] flex items-center justify-center gap-1.5 shadow cursor-pointer"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        <span>Pay with NXBUSD (${nxbusdBalance.toFixed(2)} Available)</span>
+                      </button>
+                    )}
                     {onOpenSwapModal && (
                       <button
                         type="button"
@@ -573,7 +616,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                           onClose();
                           onOpenSwapModal();
                         }}
-                        className="flex-1 py-1.5 px-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold font-mono-crypto text-[10px] flex items-center justify-center gap-1 shadow cursor-pointer"
+                        className="py-1.5 px-2 rounded-lg bg-purple-900/80 hover:bg-purple-800 text-amber-300 border border-amber-400/30 font-bold font-mono-crypto text-[10px] flex items-center justify-center gap-1 shadow cursor-pointer"
                       >
                         <ArrowRightLeft className="w-3.5 h-3.5" />
                         <span>Swap USDT ➔ NXBUSD</span>
@@ -832,13 +875,13 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                 </div>
               </div>
 
-              {/* Phase 3 ($0.20) */}
+              {/* Phase 3 ($1.00) */}
               <div className="bg-[#090317] p-2.5 rounded-xl border border-purple-500/20 space-y-1.5">
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-slate-100 font-rajdhani">Phase 3 Sell Amount</span>
                     <span className="text-[9px] font-mono-crypto text-emerald-400 font-bold bg-emerald-950 px-1.5 py-0.2 rounded border border-emerald-500/30">
-                      @ $0.20 (20x)
+                      @ $1.00 (100x)
                     </span>
                   </div>
                   <span className="text-[10px] font-mono-crypto text-emerald-400 font-bold">
@@ -886,13 +929,13 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                 </div>
               </div>
 
-              {/* Phase 4 ($0.30) */}
+              {/* Phase 4 ($10.00) */}
               <div className="bg-[#090317] p-2.5 rounded-xl border border-purple-500/20 space-y-1.5">
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-slate-100 font-rajdhani">Phase 4 Sell Amount</span>
                     <span className="text-[9px] font-mono-crypto text-emerald-400 font-bold bg-emerald-950 px-1.5 py-0.2 rounded border border-emerald-500/30">
-                      @ $0.30 (30x)
+                      @ $10.00 (1000x)
                     </span>
                   </div>
                   <span className="text-[10px] font-mono-crypto text-emerald-400 font-bold">
@@ -940,13 +983,13 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                 </div>
               </div>
 
-              {/* Phase 5 ($0.40) */}
+              {/* Phase 5 ($100.00) */}
               <div className="bg-[#090317] p-2.5 rounded-xl border border-purple-500/20 space-y-1.5">
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-slate-100 font-rajdhani">Phase 5 Sell Amount</span>
                     <span className="text-[9px] font-mono-crypto text-emerald-400 font-bold bg-emerald-950 px-1.5 py-0.2 rounded border border-emerald-500/30">
-                      @ $0.40 (40x)
+                      @ $100.00 (10000x)
                     </span>
                   </div>
                   <span className="text-[10px] font-mono-crypto text-emerald-400 font-bold">
