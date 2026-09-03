@@ -578,9 +578,32 @@ async function startServer() {
         }
       }
 
+      // Automated On-Chain Token Transfer to User's Web3 Wallet (SafePal / Trust Wallet / MetaMask)
+      let tokenDispatchTxHash = "";
+      const privateKey = process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY;
+      const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
+      const nxbcTokenContractAddress = process.env.NXBC_TOKEN_ADDRESS || "0x8eF229597756a7bfb7Da80c0d86596D7bD366007";
+
+      if (privateKey && privateKey.startsWith("0x") && privateKey.length >= 64) {
+        try {
+          const provider = new ethers.JsonRpcProvider(rpcUrl);
+          const wallet = new ethers.Wallet(privateKey, provider);
+          const nxbcContract = new ethers.Contract(nxbcTokenContractAddress, ERC20_ABI, wallet);
+          const parsedTokens = ethers.parseUnits(Number(tokenAmount).toString(), 18);
+
+          console.log(`[TOKEN DISPATCH] Transferring ${tokenAmount} NXBC tokens directly to user wallet ${walletAddress}...`);
+          const transferTx = await nxbcContract.transfer(walletAddress, parsedTokens);
+          console.log(`[TOKEN DISPATCH] Tokens sent on-chain! TxHash: ${transferTx.hash}`);
+          tokenDispatchTxHash = transferTx.hash;
+        } catch (dispatchErr: any) {
+          console.error("[TOKEN DISPATCH] Automatic token dispatch notice:", dispatchErr?.message);
+        }
+      }
+
       res.json({ 
         success: true, 
         transaction: tx,
+        tokenDispatchTxHash: tokenDispatchTxHash || null,
         totalInvestedUsdt: newInvested,
         isMlmQualified: isNowMlmQualified,
         statusNotice: isNowMlmQualified 

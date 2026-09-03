@@ -107,6 +107,42 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   const [txErrorMessage, setTxErrorMessage] = useState<string | null>(null);
   const [liveOnChainBalance, setLiveOnChainBalance] = useState<number | null>(null);
   const [isRefreshingBalance, setIsRefreshingBalance] = useState<boolean>(false);
+  const [tokenImportNotice, setTokenImportNotice] = useState<string | null>(null);
+
+  const handleAddNxbcToWallet = async () => {
+    try {
+      const eth =
+        (window as any).trustwallet?.ethereum ||
+        (window as any).ethereum ||
+        (window as any).binancew3w?.ethereum ||
+        (window as any).okxwallet;
+
+      if (!eth || typeof eth.request !== 'function') {
+        navigator.clipboard.writeText('0x8eF229597756a7bfb7Da80c0d86596D7bD366007');
+        setTokenImportNotice('Contract Copied! Paste in SafePal / Trust Wallet > Add Custom Token.');
+        setTimeout(() => setTokenImportNotice(null), 5000);
+        return;
+      }
+
+      await eth.request({
+        method: 'wallet_watchAsset',
+        params: {
+          type: 'ERC20',
+          options: {
+            address: '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
+            symbol: 'NXBC',
+            decimals: 18,
+          },
+        },
+      });
+      setTokenImportNotice('NXBC Token added to your Web3 wallet asset list!');
+      setTimeout(() => setTokenImportNotice(null), 5000);
+    } catch (e: any) {
+      navigator.clipboard.writeText('0x8eF229597756a7bfb7Da80c0d86596D7bD366007');
+      setTokenImportNotice('Contract Copied! Paste in SafePal > Add Custom Token.');
+      setTimeout(() => setTokenImportNotice(null), 5000);
+    }
+  };
 
   // Exact Token Quantities assigned per phase based on user's purchased tokens
   const [p2Tokens, setP2Tokens] = useState<number>(0);
@@ -125,8 +161,10 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
   // Live effective balance of selected currency
   const effectiveBalance = useMemo(() => {
-    if (liveOnChainBalance !== null) return liveOnChainBalance;
-    return currency === 'NXBUSD' ? nxbusdBalance : usdtBalance;
+    if (currency === 'NXBUSD') {
+      return (liveOnChainBalance !== null && liveOnChainBalance > 0) ? liveOnChainBalance : nxbusdBalance;
+    }
+    return liveOnChainBalance !== null ? liveOnChainBalance : usdtBalance;
   }, [liveOnChainBalance, currency, nxbusdBalance, usdtBalance]);
 
   const isInsufficientBalance = walletConnected && usdValue > effectiveBalance;
@@ -331,19 +369,28 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     let recordedTxHash = txHashInput.trim();
 
     // If Web3 payment mode is selected and wallet is connected or detected
+    // When paying with USDT, execute on-chain transfer to Treasury
+    // When paying with NXBUSD, if user holds in-app swapped NXBUSD balance, deduct directly without double on-chain charge
     if (paymentMode === 'web3') {
-      try {
-        setPaymentStatusText('Connecting to BSC Blockchain...');
-        const realTx = await executeWeb3Payment();
-        if (realTx) {
-          recordedTxHash = realTx;
+      if (currency === 'USDT' || (liveOnChainBalance !== null && liveOnChainBalance >= usdValue)) {
+        try {
+          setPaymentStatusText('Connecting to BSC Blockchain...');
+          const realTx = await executeWeb3Payment();
+          if (realTx) {
+            recordedTxHash = realTx;
+          }
+        } catch (err: any) {
+          console.error('Web3 Payment Error:', err);
+          // If paying with NXBUSD and user has sufficient in-app balance, allow using internal balance
+          if (currency === 'NXBUSD' && nxbusdBalance >= usdValue) {
+            console.log('Falling back to In-App NXBUSD balance since swap was already paid in USDT.');
+          } else {
+            setTxErrorMessage(err?.message || 'Transaction was rejected or failed on BSC blockchain.');
+            setIsProcessing(false);
+            setPaymentStatusText('');
+            return;
+          }
         }
-      } catch (err: any) {
-        console.error('Web3 Payment Error:', err);
-        setTxErrorMessage(err?.message || 'Transaction was rejected or failed on BSC blockchain.');
-        setIsProcessing(false);
-        setPaymentStatusText('');
-        return;
       }
     }
 
@@ -418,14 +465,28 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             </div>
 
             {/* Decentralized Hold & Swap Warning Alert */}
-            <div className="p-2.5 rounded-xl bg-gradient-to-r from-emerald-950/60 to-indigo-950/60 border border-emerald-500/40 text-[10px] text-emerald-200 leading-snug shadow-sm">
-              <div className="flex items-center gap-1.5 font-bold text-emerald-300 mb-0.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Decentralized Hold & Swap Notice</span>
+            <div className="p-2.5 rounded-xl bg-gradient-to-r from-emerald-950/60 to-indigo-950/60 border border-emerald-500/40 text-[10px] text-emerald-200 leading-snug shadow-sm space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-bold text-emerald-300">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Direct Web3 Wallet Delivery</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddNxbcToWallet}
+                  className="py-0.5 px-2 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-300 font-bold text-[9px] flex items-center gap-1 cursor-pointer transition-all"
+                >
+                  <span>+ Add NXBC to SafePal</span>
+                </button>
               </div>
               <p className="text-slate-200">
-                <strong className="text-emerald-300 font-semibold">100% tokens aapke Trust Wallet mein turant credit ho jayenge.</strong> Allocations queue mein virtually register rahenge, jabki tokens aapke safe self-custody wallet mein rehte hain.
+                <strong className="text-emerald-300 font-semibold">100% NXBC टोकन्स सीधे आपके SafePal / Web3 वॉलेट में क्रेडिट होंगे।</strong> वेबसाइट का इंटरनल इंजन आपके लॉकअप व फेज़ ऑटो-सेल शेड्यूलिंग को मैनेज करेगा।
               </p>
+              {tokenImportNotice && (
+                <div className="p-1.5 rounded-lg bg-amber-950/80 border border-amber-500/40 text-[9px] text-amber-300 font-mono-crypto animate-fade-in">
+                  {tokenImportNotice}
+                </div>
+              )}
             </div>
 
             {/* Currency Selector with Live Balance Display */}
