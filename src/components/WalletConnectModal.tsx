@@ -153,24 +153,19 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
     onClose();
   };
 
-  const openDAppDeepLink = (walletType: 'trust' | 'metamask' | 'bitget' | 'okx') => {
+  const openDAppDeepLink = (walletType: 'tokenpocket' | 'safepal' | 'metamask') => {
     const currentUrl = typeof window !== 'undefined' ? window.location.href : 'https://nxbc.tech';
     const hostWithProtocol = currentUrl.replace(/^https?:\/\//, '');
 
-    if (walletType === 'trust') {
-      // Trust wallet universal deep link for dApp browser
-      const trustLink = `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(currentUrl)}`;
-      window.location.href = trustLink;
+    if (walletType === 'tokenpocket') {
+      const tpLink = `tpdapp://open?params=${encodeURIComponent(JSON.stringify({ url: currentUrl, chain: "BSC" }))}`;
+      window.location.href = tpLink;
+    } else if (walletType === 'safepal') {
+      const spLink = `safepalwallet://open?url=${encodeURIComponent(currentUrl)}`;
+      window.location.href = spLink;
     } else if (walletType === 'metamask') {
-      // MetaMask deep link
       const mmLink = `https://metamask.app.link/dapp/${hostWithProtocol}`;
       window.location.href = mmLink;
-    } else if (walletType === 'okx') {
-      const okxLink = `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(currentUrl)}`;
-      window.location.href = okxLink;
-    } else if (walletType === 'bitget') {
-      const bitgetLink = `bitkeep://bkconnect?action=dapp&url=${encodeURIComponent(currentUrl)}`;
-      window.location.href = bitgetLink;
     }
   };
 
@@ -276,61 +271,91 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
               </div>
             ) : null}
 
-            {/* MetaMask */}
+            {/* TokenPocket */}
             <button
-              onClick={() => handleInjectedConnect('MetaMask')}
-              className="w-full p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
+              onClick={() => handleInjectedConnect('TokenPocket')}
+              className="w-full p-3 rounded-2xl bg-gradient-to-r from-blue-500/20 to-indigo-500/20 border border-blue-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
             >
               <div className="flex items-center gap-3">
-                <span className="text-2xl">🦊</span>
+                <div className="w-9 h-9 rounded-xl bg-[#2980fe]/20 border border-[#2980fe]/40 p-1 flex items-center justify-center overflow-hidden">
+                  <img
+                    src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/assets/0x2B4c76d776FBE3E557424075654C8733719fa3f5/logo.png"
+                    alt="TokenPocket"
+                    className="w-7 h-7 object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                  <span className="text-xl">🔷</span>
+                </div>
                 <div>
                   <span className="text-xs font-bold text-slate-100 font-rajdhani block">
-                    MetaMask
+                    TokenPocket
                   </span>
                   <span className="text-[9px] font-mono-crypto text-purple-300/80">
                     Chrome Extension / DApp Browser
                   </span>
                 </div>
               </div>
+              <ArrowRight className="w-4 h-4 text-purple-300 group-hover:text-blue-300 group-hover:translate-x-0.5 transition-all" />
+            </button>
+
+            {/* SafePal */}
+            <button
+              onClick={() => handleInjectedConnect('SafePal')}
+              className="w-full p-3 rounded-2xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#4b35ef]/20 border border-[#4b35ef]/40 p-1 flex items-center justify-center overflow-hidden">
+                  <img
+                    src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/assets/0xd0763f338d3840733F4A5BE2c448f2B548e64e52/logo.png"
+                    alt="SafePal"
+                    className="w-7 h-7 object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                  <span className="text-xl">🔒</span>
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-100 font-rajdhani block">
+                    SafePal
+                  </span>
+                  <span className="text-[9px] font-mono-crypto text-purple-300/80">
+                    Hardware & Mobile Web3 DApp
+                  </span>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-purple-300 group-hover:text-indigo-300 group-hover:translate-x-0.5 transition-all" />
+            </button>
+
+            {/* MetaMask */}
+            <button
+              onClick={() => handleInjectedConnect('MetaMask')}
+              className="w-full p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-orange-500/20 border border-orange-500/40 p-1 flex items-center justify-center overflow-hidden">
+                  <img
+                    src="https://raw.githubusercontent.com/MetaMask/brand-resources/master/SVG/metamask-fox.svg"
+                    alt="MetaMask"
+                    className="w-7 h-7 object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                  <span className="text-xl">🦊</span>
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-100 font-rajdhani block">
+                    MetaMask
+                  </span>
+                  <span className="text-[9px] font-mono-crypto text-purple-300/80">
+                    EVM / BSC Native Browser
+                  </span>
+                </div>
+              </div>
               <ArrowRight className="w-4 h-4 text-purple-300 group-hover:text-amber-300 group-hover:translate-x-0.5 transition-all" />
-            </button>
-
-            {/* Trust Wallet */}
-            <button
-              onClick={() => handleInjectedConnect('Trust Wallet')}
-              className="w-full p-3 rounded-2xl bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">🛡️</span>
-                <div>
-                  <span className="text-xs font-bold text-slate-100 font-rajdhani block">
-                    Trust Wallet
-                  </span>
-                  <span className="text-[9px] font-mono-crypto text-purple-300/80">
-                    Web3 & Mobile DApp
-                  </span>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-purple-300 group-hover:text-cyan-300 group-hover:translate-x-0.5 transition-all" />
-            </button>
-
-            {/* Binance Web3 Wallet */}
-            <button
-              onClick={() => handleInjectedConnect('Binance Web3 Wallet')}
-              className="w-full p-3 rounded-2xl bg-gradient-to-r from-yellow-500/20 to-amber-500/20 border border-yellow-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">🟡</span>
-                <div>
-                  <span className="text-xs font-bold text-slate-100 font-rajdhani block">
-                    Binance Web3 Wallet
-                  </span>
-                  <span className="text-[9px] font-mono-crypto text-purple-300/80">
-                    EVM / BSC Native
-                  </span>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-purple-300 group-hover:text-yellow-300 group-hover:translate-x-0.5 transition-all" />
             </button>
           </div>
         )}
@@ -339,26 +364,65 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
         {activeTab === 'deeplink' && (
           <div className="space-y-2.5 mb-4">
             <div className="p-2.5 rounded-xl bg-purple-950/80 border border-purple-500/30 text-[11px] text-purple-200 leading-snug">
-              📱 <strong>Mobile Chrome User:</strong> Agar aap mobile browser me hain, to niche diye gaye button par click karke direct Trust Wallet ya MetaMask app me ye website kholein.
+              📱 <strong>Mobile Chrome User:</strong> Agar aap mobile browser me hain, to niche diye gaye button par click karke direct wallet app me ye website kholein.
             </div>
 
-            {/* Open in Trust Wallet App */}
+            {/* Open in TokenPocket App */}
             <button
-              onClick={() => openDAppDeepLink('trust')}
-              className="w-full p-3 rounded-2xl bg-gradient-to-r from-blue-600/30 to-cyan-600/30 border border-blue-400 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
+              onClick={() => openDAppDeepLink('tokenpocket')}
+              className="w-full p-3 rounded-2xl bg-gradient-to-r from-blue-600/30 to-indigo-600/30 border border-blue-400 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
             >
               <div className="flex items-center gap-3">
-                <span className="text-2xl">🛡️</span>
+                <div className="w-9 h-9 rounded-xl bg-[#2980fe]/20 border border-[#2980fe]/40 p-1 flex items-center justify-center overflow-hidden">
+                  <img
+                    src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/assets/0x2B4c76d776FBE3E557424075654C8733719fa3f5/logo.png"
+                    alt="TokenPocket"
+                    className="w-7 h-7 object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                  <span className="text-xl">🔷</span>
+                </div>
                 <div>
                   <span className="text-xs font-bold text-slate-100 font-rajdhani block">
-                    Open in Trust Wallet App
+                    Open in TokenPocket App
                   </span>
-                  <span className="text-[9px] font-mono-crypto text-cyan-300">
-                    Auto-opens in Trust DApp Browser
+                  <span className="text-[9px] font-mono-crypto text-blue-300">
+                    Auto-opens in TP DApp Browser
                   </span>
                 </div>
               </div>
-              <ExternalLink className="w-4 h-4 text-cyan-300 group-hover:translate-x-0.5 transition-all" />
+              <ExternalLink className="w-4 h-4 text-blue-300 group-hover:translate-x-0.5 transition-all" />
+            </button>
+
+            {/* Open in SafePal App */}
+            <button
+              onClick={() => openDAppDeepLink('safepal')}
+              className="w-full p-3 rounded-2xl bg-gradient-to-r from-indigo-600/30 to-purple-600/30 border border-indigo-400 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#4b35ef]/20 border border-[#4b35ef]/40 p-1 flex items-center justify-center overflow-hidden">
+                  <img
+                    src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/assets/0xd0763f338d3840733F4A5BE2c448f2B548e64e52/logo.png"
+                    alt="SafePal"
+                    className="w-7 h-7 object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                  <span className="text-xl">🔒</span>
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-100 font-rajdhani block">
+                    Open in SafePal App
+                  </span>
+                  <span className="text-[9px] font-mono-crypto text-indigo-300">
+                    Auto-opens in SafePal DApp
+                  </span>
+                </div>
+              </div>
+              <ExternalLink className="w-4 h-4 text-indigo-300 group-hover:translate-x-0.5 transition-all" />
             </button>
 
             {/* Open in MetaMask App */}
@@ -367,7 +431,17 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
               className="w-full p-3 rounded-2xl bg-gradient-to-r from-amber-600/30 to-orange-600/30 border border-amber-400 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
             >
               <div className="flex items-center gap-3">
-                <span className="text-2xl">🦊</span>
+                <div className="w-9 h-9 rounded-xl bg-orange-500/20 border border-orange-500/40 p-1 flex items-center justify-center overflow-hidden">
+                  <img
+                    src="https://raw.githubusercontent.com/MetaMask/brand-resources/master/SVG/metamask-fox.svg"
+                    alt="MetaMask"
+                    className="w-7 h-7 object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                  <span className="text-xl">🦊</span>
+                </div>
                 <div>
                   <span className="text-xs font-bold text-slate-100 font-rajdhani block">
                     Open in MetaMask App
@@ -378,25 +452,6 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
                 </div>
               </div>
               <ExternalLink className="w-4 h-4 text-amber-300 group-hover:translate-x-0.5 transition-all" />
-            </button>
-
-            {/* Open in OKX App */}
-            <button
-              onClick={() => openDAppDeepLink('okx')}
-              className="w-full p-3 rounded-2xl bg-gradient-to-r from-slate-700/30 to-purple-800/30 border border-purple-400/50 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">⬛</span>
-                <div>
-                  <span className="text-xs font-bold text-slate-100 font-rajdhani block">
-                    Open in OKX Wallet App
-                  </span>
-                  <span className="text-[9px] font-mono-crypto text-purple-300">
-                    Auto-opens in OKX DApp
-                  </span>
-                </div>
-              </div>
-              <ExternalLink className="w-4 h-4 text-purple-300 group-hover:translate-x-0.5 transition-all" />
             </button>
           </div>
         )}
