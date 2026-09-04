@@ -181,13 +181,44 @@ export const SwapModal: React.FC<SwapModalProps> = ({
       }
 
       // Switch to BSC Mainnet
-      try {
-        await eth.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0x38' }],
-        });
-      } catch (switchErr: any) {
-        console.log('BSC switch note:', switchErr?.message);
+      const provider = new ethers.BrowserProvider(eth);
+      const network = await provider.getNetwork();
+      if (network.chainId !== 56n) {
+        try {
+          await eth.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x38' }], // BSC Mainnet
+          });
+        } catch (switchErr: any) {
+           if (switchErr.code === 4902) {
+            await eth.request({
+              method: 'wallet_addEthereumChain',
+              params: [
+                {
+                  chainId: '0x38',
+                  chainName: 'BNB Smart Chain Mainnet',
+                  rpcUrls: ['https://bsc-dataseed.binance.org/'],
+                  nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+                  blockExplorerUrls: ['https://bscscan.com/'],
+                },
+              ],
+            });
+          } else {
+             setTxErrorMessage('Please switch your wallet network to BNB Smart Chain (BSC) before swapping.');
+             setIsProcessing(false);
+             setSwapStatus('');
+             return;
+          }
+        }
+        
+        // Double check after switch
+        const updatedNetwork = await provider.getNetwork();
+        if (updatedNetwork.chainId !== 56n) {
+           setTxErrorMessage('Failed to switch network. Please manually select BNB Smart Chain in your wallet.');
+           setIsProcessing(false);
+           setSwapStatus('');
+           return;
+        }
       }
 
       const accounts = await eth.request({ method: 'eth_requestAccounts' });

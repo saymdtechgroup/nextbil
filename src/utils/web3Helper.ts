@@ -334,13 +334,39 @@ export async function executeSmartContractBuy(
     const provider = new ethers.BrowserProvider(ethProvider);
     const signer = await provider.getSigner();
     
-    try {
-      await ethProvider.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0x38' }],
-      });
-    } catch (switchErr: any) {
-      console.log('BSC switch notice:', switchErr?.message);
+    // Strict network check - Force user to switch to BSC
+    const network = await provider.getNetwork();
+    if (network.chainId !== 56n) {
+      try {
+        await ethProvider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x38' }], // 0x38 is 56 in hex (BSC Mainnet)
+        });
+      } catch (switchErr: any) {
+        // If the network is not added to the user's wallet
+        if (switchErr.code === 4902) {
+          await ethProvider.request({
+            method: 'wallet_addEthereumChain',
+            params: [
+              {
+                chainId: '0x38',
+                chainName: 'BNB Smart Chain Mainnet',
+                rpcUrls: ['https://bsc-dataseed.binance.org/'],
+                nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+                blockExplorerUrls: ['https://bscscan.com/'],
+              },
+            ],
+          });
+        } else {
+          return { success: false, error: 'Please switch your wallet network to BNB Smart Chain (BSC) before buying.' };
+        }
+      }
+      
+      // Double check after switch
+      const updatedNetwork = await provider.getNetwork();
+      if (updatedNetwork.chainId !== 56n) {
+         return { success: false, error: 'Failed to switch network. Please manually select BNB Smart Chain in your wallet.' };
+      }
     }
 
     const amountWei = ethers.parseUnits(amountUsd.toString(), 18);
