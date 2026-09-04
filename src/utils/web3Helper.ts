@@ -400,7 +400,10 @@ export async function executeSmartContractBuy(
     onStatusUpdate(`Executing buyTokens on Smart Contract...`);
     
     // The new contract only takes usdtAmount
-    const buyTx = await presaleContract.buyTokens(amountWei);
+    // Adding explicit gas limit because sometimes estimateGas fails on BSC with tokens
+    const buyTx = await presaleContract.buyTokens(amountWei, {
+      gasLimit: 300000 
+    });
     
     onStatusUpdate(`Waiting for block confirmation...`);
     const receipt = await buyTx.wait();
