@@ -309,33 +309,90 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
     if (onChainBal < usdValue) {
       throw new Error(
-        `Insufficient ${currency} on blockchain! Your wallet holds ${onChainBal.toFixed(2)} ${currency}, but order requires ${usdValue.toFixed(2)} ${currency}.`
+        `Insufficient ${currency} on blockchain! Your wallet holds ${onChainBal.toFixed(2)} ${currency}, but order requires ${usdValue.toFixed(2)} ${currency}. Please convert USDT to NXBUSD first.`
       );
     }
 
-    // Attempt the smart contract buy
-    const sponsor = localStorage.getItem('nxbc_sponsor') || null;
-    const res = await executeSmartContractBuy(
-      currency as 'USDT' | 'NXBUSD',
-      usdValue,
-      sponsor,
-      p2Tokens,
-      p3Tokens,
-      p4Tokens,
-      p5Tokens,
-      dexTokens,
-      (msg) => setPaymentStatusText(msg)
-    );
+    let txHash: string;
+    const tokenAmountWei = BigInt(Math.floor(usdValue * 1e18));
 
-    if (!res.success || !res.txHash) {
-      throw new Error(res.error || 'Transaction reverted or failed on BSC blockchain.');
+    // Determine whether to use Direct Transfer or Smart Contract buyTokens
+    // If receiving address is the smart contract, execute buyTokens(uint256)
+    if (receivingAddress?.toLowerCase() === '0x8eF229597756a7bfb7Da80c0d86596D7bD366007'.toLowerCase()) {
+      setPaymentStatusText(`Approving Smart Contract...`);
+
+      // 1. Approve Smart Contract to spend USDT/NXBUSD
+      const contractAddress = '0x8eF229597756a7bfb7Da80c0d86596D7bD366007';
+      const cleanContract = contractAddress.toLowerCase().replace('0x', '').padStart(64, '0');
+      const cleanVal = tokenAmountWei.toString(16).padStart(64, '0');
+      const approveData = `0x095ea7b3${cleanContract}${cleanVal}`; // approve(address,uint256)
+
+      const approveTx = await eth.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: sender,
+          to: tokenContractAddress,
+          data: approveData,
+          value: '0x0'
+        }]
+      });
+
+      if (!approveTx) throw new Error('Approval cancelled.');
+      setPaymentStatusText(`Waiting for approval confirmation...`);
+      await waitForBscTxConfirmation(approveTx as string, (msg) => setPaymentStatusText(msg));
+
+      // 2. Call buyTokens(uint256) on the Smart Contract
+      // Keccak256 hash for buyTokens(uint256) is 0xd96a094a
+      setPaymentStatusText(`Calling Smart Contract...`);
+      const buyTokensData = `0xd96a094a${cleanVal}`;
+      
+      txHash = await eth.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: sender,
+          to: contractAddress,
+          data: buyTokensData,
+          value: '0x0'
+        }]
+      });
+    } else {
+      // Direct Transfer Mode (Fallback)
+      let targetReceiving = receivingAddress || ADMIN_TREASURY_WALLET;
+      
+      const cleanTo = targetReceiving.toLowerCase().replace('0x', '').padStart(64, '0');
+      const cleanVal = tokenAmountWei.toString(16).padStart(64, '0');
+      const transferData = `0xa9059cbb${cleanTo}${cleanVal}`; // transfer(address,uint256)
+
+      setPaymentStatusText(`Please approve ${usdValue} ${currency} transfer in your wallet...`);
+      
+      txHash = await eth.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: sender,
+          to: tokenContractAddress,
+          data: transferData,
+          value: '0x0',
+        }],
+      });
+    }
+
+    if (!txHash || typeof txHash !== 'string') {
+      throw new Error('Transaction was cancelled or rejected by user.');
+    }
+
+    // 2. STRICT ON-CHAIN RECEIPT VERIFICATION
+    setPaymentStatusText('Transaction broadcasted! Verifying confirmation on BSC...');
+    const receiptResult = await waitForBscTxConfirmation(txHash, (msg) => setPaymentStatusText(msg));
+    
+    if (!receiptResult.success) {
+      throw new Error(receiptResult.error || 'Transaction reverted or failed on BSC blockchain.');
     }
 
     // Refresh new balance
     const updatedBal = await fetchOnChainTokenBalance(tokenContractAddress, sender);
     setLiveOnChainBalance(updatedBal);
 
-    return res.txHash;
+    return txHash;
   };
 
   const handleFinalConfirmBuy = async () => {
