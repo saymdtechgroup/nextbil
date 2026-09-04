@@ -37,27 +37,33 @@ contract NXBCPresale {
         _;
     }
 
-    constructor(address _nxbcToken, address _usdtToken, address _adminWallet) {
+    constructor() {
         owner = msg.sender;
+        
+        // Hardcoded Addresses for BSC Mainnet
+        address _nxbcToken = 0xAe3D848c4c70D740C03c5825cF9E1d16c52a0a23;
+        address _usdtToken = 0x55d398326f99059fF775485246999027B3197955;
+        address _adminWallet = 0x8d1abCa8Cf0f42799b9a76254710e979bd59c261;
+
         nxbcToken = IERC20(_nxbcToken);
         usdtToken = IERC20(_usdtToken);
         adminWallet = _adminWallet;
 
-        // Note: Assuming both NXBC and USDT use 18 decimals on BSC.
-        // Phase 1: $0.01 | Supply for sale: 5 Lakh (500,000) (Admin keeps 500k separately)
-        phases[1] = Phase(0.01 * 10**18, 500_000 * 10**18, 0, true);
+        // Using precise values for prices (18 decimals assumed)
+        // Phase 1: $0.01 = 10000000000000000 (10^16) wei
+        phases[1] = Phase(10**16, 500_000 * 10**18, 0, true);
         
-        // Phase 2: $0.10 | Supply: 25 Lakh (2,500,000)
-        phases[2] = Phase(0.10 * 10**18, 2_500_000 * 10**18, 0, true);
+        // Phase 2: $0.10 = 100000000000000000 (10^17) wei
+        phases[2] = Phase(10**17, 2_500_000 * 10**18, 0, true);
         
-        // Phase 3: $1.00 | Supply: 70 Lakh (7,000,000)
-        phases[3] = Phase(1.00 * 10**18, 7_000_000 * 10**18, 0, true);
+        // Phase 3: $1.00 = 1000000000000000000 (10^18) wei
+        phases[3] = Phase(10**18, 7_000_000 * 10**18, 0, true);
         
-        // Phase 4: $10.00 | Supply: 195 Lakh (19,500,000)
-        phases[4] = Phase(10.00 * 10**18, 19_500_000 * 10**18, 0, true);
+        // Phase 4: $10.00 = 10000000000000000000 (10^19) wei
+        phases[4] = Phase(10 * 10**18, 19_500_000 * 10**18, 0, true);
         
-        // Phase 5: $100.00 | Supply: 400 Lakh (40,000,000)
-        phases[5] = Phase(100.00 * 10**18, 40_000_000 * 10**18, 0, true);
+        // Phase 5: $100.00 = 100000000000000000000 (10^20) wei
+        phases[5] = Phase(100 * 10**18, 40_000_000 * 10**18, 0, true);
 
         currentPhase = 1;
         presaleActive = true;

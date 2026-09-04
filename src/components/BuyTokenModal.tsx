@@ -76,7 +76,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   currentRate = 0.01,
   walletConnected = false,
   walletAddress = '',
-  contractAddress = '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
+  contractAddress = '0x4dcD8C548cddbdeaf4ed0e0C2Fa963B48e04Db9e',
   receivingAddress = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
   minPurchaseUsd = 0.01,
   nxbusdBalance = 0,
@@ -119,7 +119,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
         (window as any).okxwallet;
 
       if (!eth || typeof eth.request !== 'function') {
-        navigator.clipboard.writeText('0x8eF229597756a7bfb7Da80c0d86596D7bD366007');
+        navigator.clipboard.writeText('0x4dcD8C548cddbdeaf4ed0e0C2Fa963B48e04Db9e');
         setTokenImportNotice('Contract Copied! Paste in SafePal / Trust Wallet > Add Custom Token.');
         setTimeout(() => setTokenImportNotice(null), 5000);
         return;
@@ -130,7 +130,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
         params: {
           type: 'ERC20',
           options: {
-            address: '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
+            address: '0x4dcD8C548cddbdeaf4ed0e0C2Fa963B48e04Db9e',
             symbol: 'NXBC',
             decimals: 18,
           },
@@ -139,7 +139,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
       setTokenImportNotice('NXBC Token added to your Web3 wallet asset list!');
       setTimeout(() => setTokenImportNotice(null), 5000);
     } catch (e: any) {
-      navigator.clipboard.writeText('0x8eF229597756a7bfb7Da80c0d86596D7bD366007');
+      navigator.clipboard.writeText('0x4dcD8C548cddbdeaf4ed0e0C2Fa963B48e04Db9e');
       setTokenImportNotice('Contract Copied! Paste in SafePal > Add Custom Token.');
       setTimeout(() => setTokenImportNotice(null), 5000);
     }
@@ -321,7 +321,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
       setPaymentStatusText(`Approving Smart Contract...`);
 
       // 1. Approve Smart Contract to spend USDT
-      const contractAddress = '0x8eF229597756a7bfb7Da80c0d86596D7bD366007';
+      const contractAddress = '0x4dcD8C548cddbdeaf4ed0e0C2Fa963B48e04Db9e';
       const cleanContract = contractAddress.toLowerCase().replace('0x', '').padStart(64, '0');
       const cleanVal = tokenAmountWei.toString(16).padStart(64, '0');
       const approveData = `0x095ea7b3${cleanContract}${cleanVal}`; // approve(address,uint256)
