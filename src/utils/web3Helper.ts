@@ -385,58 +385,22 @@ export async function executeSmartContractBuy(
     const presaleContract = new ethers.Contract(
       NXBC_PRESALE_CONTRACT,
       [
-        "function swapUsdtToNxbUsd(uint256 usdtAmount) external",
-        "function buyTokens(uint256 nxbusdAmount, address sponsor, uint256 _p2Tokens, uint256 _p3Tokens, uint256 _p4Tokens, uint256 _p5Tokens, uint256 _dexTokens) external"
+        "function buyTokens(uint256 usdtAmount) external"
       ],
       signer
     );
 
-    if (currency === 'USDT') {
-      onStatusUpdate(`Approving ${amountUsd.toFixed(2)} USDT for swap...`);
-      const currentAllowance = await tokenContract.allowance(await signer.getAddress(), NXBC_PRESALE_CONTRACT);
-      if (currentAllowance < amountWei) {
-        const approveTx = await tokenContract.approve(NXBC_PRESALE_CONTRACT, amountWei);
-        await approveTx.wait();
-      }
-
-      onStatusUpdate(`Swapping ${amountUsd.toFixed(2)} USDT to NXBUSD on-chain...`);
-      const swapTx = await presaleContract.swapUsdtToNxbUsd(amountWei);
-      await swapTx.wait();
-    }
-
-    const nxbusdTokenContract = new ethers.Contract(
-      NXBUSD_CONTRACT,
-      [
-        "function approve(address spender, uint256 amount) public returns (bool)",
-        "function allowance(address owner, address spender) public view returns (uint256)"
-      ],
-      signer
-    );
-    
-    onStatusUpdate(`Approving ${amountUsd.toFixed(2)} NXBUSD for purchase...`);
-    const nxbusdAllowance = await nxbusdTokenContract.allowance(await signer.getAddress(), NXBC_PRESALE_CONTRACT);
-    if (nxbusdAllowance < amountWei) {
-      const approveNxbUsdTx = await nxbusdTokenContract.approve(NXBC_PRESALE_CONTRACT, amountWei);
-      await approveNxbUsdTx.wait();
+    onStatusUpdate(`Approving ${amountUsd.toFixed(2)} USDT for purchase...`);
+    const currentAllowance = await tokenContract.allowance(await signer.getAddress(), NXBC_PRESALE_CONTRACT);
+    if (currentAllowance < amountWei) {
+      const approveTx = await tokenContract.approve(NXBC_PRESALE_CONTRACT, amountWei);
+      await approveTx.wait();
     }
 
     onStatusUpdate(`Executing buyTokens on Smart Contract...`);
     
-    const p2Wei = ethers.parseUnits(p2Tokens.toString(), 18);
-    const p3Wei = ethers.parseUnits(p3Tokens.toString(), 18);
-    const p4Wei = ethers.parseUnits(p4Tokens.toString(), 18);
-    const p5Wei = ethers.parseUnits(p5Tokens.toString(), 18);
-    const dexWei = ethers.parseUnits(dexTokens.toString(), 18);
-
-    const buyTx = await presaleContract.buyTokens(
-      amountWei,
-      spAddress,
-      p2Wei,
-      p3Wei,
-      p4Wei,
-      p5Wei,
-      dexWei
-    );
+    // The new contract only takes usdtAmount
+    const buyTx = await presaleContract.buyTokens(amountWei);
     
     onStatusUpdate(`Waiting for block confirmation...`);
     const receipt = await buyTx.wait();
