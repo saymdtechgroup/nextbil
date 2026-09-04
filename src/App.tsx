@@ -639,14 +639,8 @@ export default function App() {
           if (parsed.directSponsorPercent === 5) {
             parsed.directSponsorPercent = 10;
           }
-          // Ensure receiving address is the admin's personal receiving wallet, not the contract
-          if (
-            !parsed.receivingAddress ||
-            parsed.receivingAddress.toLowerCase() === defaultContract.toLowerCase() ||
-            parsed.receivingAddress.toLowerCase() === '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7'.toLowerCase()
-          ) {
-            parsed.receivingAddress = defaultReceiving;
-          }
+          // Ensure receiving address is the smart contract for automated distribution
+          parsed.receivingAddress = defaultContract;
           parsed.contractAddress = defaultContract;
           parsed.minPurchaseUsd = 0.01;
           localStorage.setItem('nxbc_admin_system', JSON.stringify(parsed));

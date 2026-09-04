@@ -317,11 +317,11 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     const tokenAmountWei = BigInt(Math.floor(usdValue * 1e18));
 
     // Determine whether to use Direct Transfer or Smart Contract buyTokens
-    // If receiving address is the smart contract, execute buyTokens(uint256)
-    if (receivingAddress?.toLowerCase() === '0x8eF229597756a7bfb7Da80c0d86596D7bD366007'.toLowerCase()) {
+    // If receiving address is the smart contract AND currency is USDT, execute buyTokens(uint256)
+    if (currency === 'USDT' && receivingAddress?.toLowerCase() === '0x8eF229597756a7bfb7Da80c0d86596D7bD366007'.toLowerCase()) {
       setPaymentStatusText(`Approving Smart Contract...`);
 
-      // 1. Approve Smart Contract to spend USDT/NXBUSD
+      // 1. Approve Smart Contract to spend USDT
       const contractAddress = '0x8eF229597756a7bfb7Da80c0d86596D7bD366007';
       const cleanContract = contractAddress.toLowerCase().replace('0x', '').padStart(64, '0');
       const cleanVal = tokenAmountWei.toString(16).padStart(64, '0');
