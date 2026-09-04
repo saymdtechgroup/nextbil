@@ -629,7 +629,7 @@ export default function App() {
   // General System & Global Parameters (Dynamic via Admin & Persisted)
   const [systemConfig, setSystemConfig] = useState<AdminSystemConfig>(() => {
     const defaultReceiving = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261';
-    const defaultContract = '0x4dcD8C548cddbdeaf4ed0e0C2Fa963B48e04Db9e';
+    const defaultContract = '0x85363386808d1f26BF3805Bb44a093a2Af9E8783';
 
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('nxbc_admin_system');
@@ -1333,8 +1333,8 @@ export default function App() {
     const defaultSystem: AdminSystemConfig = {
       tokenName: 'NXBC',
       tokenSymbol: 'NXBC',
-      contractAddress: '0x4dcD8C548cddbdeaf4ed0e0C2Fa963B48e04Db9e',
-      receivingAddress: '0x4dcD8C548cddbdeaf4ed0e0C2Fa963B48e04Db9e',
+      contractAddress: '0x85363386808d1f26BF3805Bb44a093a2Af9E8783',
+      receivingAddress: '0x85363386808d1f26BF3805Bb44a093a2Af9E8783',
       minPurchaseUsd: 1,
       maxPurchaseUsd: 50000,
       minMlmQualifyUsd: 100,

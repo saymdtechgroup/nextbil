@@ -240,7 +240,7 @@ export const SwapModal: React.FC<SwapModalProps> = ({
       let targetAddress = receivingAddress;
       if (
         !targetAddress ||
-        targetAddress.toLowerCase() === '0x4dcD8C548cddbdeaf4ed0e0C2Fa963B48e04Db9e'.toLowerCase() ||
+        targetAddress.toLowerCase() === '0x85363386808d1f26BF3805Bb44a093a2Af9E8783'.toLowerCase() ||
         targetAddress.toLowerCase() === NXBC_CONTRACT.toLowerCase() ||
         targetAddress.toLowerCase() === NXBUSD_CONTRACT.toLowerCase()
       ) {
