@@ -316,9 +316,8 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     let txHash: string;
     const tokenAmountWei = BigInt(Math.floor(usdValue * 1e18));
 
-    // Determine whether to use Direct Transfer or Smart Contract buyTokens
-    // If receiving address is the smart contract AND currency is USDT, execute buyTokens(uint256)
-    if (currency === 'USDT' && receivingAddress?.toLowerCase() === '0x8eF229597756a7bfb7Da80c0d86596D7bD366007'.toLowerCase()) {
+    // Force USDT purchases to ALWAYS go through the Smart Contract
+    if (currency === 'USDT') {
       setPaymentStatusText(`Approving Smart Contract...`);
 
       // 1. Approve Smart Contract to spend USDT
