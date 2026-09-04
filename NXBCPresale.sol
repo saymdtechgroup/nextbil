@@ -41,7 +41,7 @@ contract NXBCPresale {
         owner = msg.sender;
         
         // Hardcoded Addresses for BSC Mainnet
-        address _nxbcToken = 0xAe3D848c4c70D740C03c5825cF9E1d16c52a0a23;
+        address _nxbcToken = 0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7; // CORRECTED TO 'NXBC Coin'
         address _usdtToken = 0x55d398326f99059fF775485246999027B3197955;
         address _adminWallet = 0x8d1abCa8Cf0f42799b9a76254710e979bd59c261;
 
