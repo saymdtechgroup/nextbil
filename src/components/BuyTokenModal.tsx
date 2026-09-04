@@ -342,9 +342,9 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
       await waitForBscTxConfirmation(approveTx as string, (msg) => setPaymentStatusText(msg));
 
       // 2. Call buyTokens(uint256) on the Smart Contract
-      // Keccak256 hash for buyTokens(uint256) is 0xd96a094a
+      // Keccak256 hash for buyTokens(uint256) is 0x543118cf
       setPaymentStatusText(`Calling Smart Contract...`);
-      const buyTokensData = `0xd96a094a${cleanVal}`;
+      const buyTokensData = `0x543118cf${cleanVal}`;
       
       txHash = await eth.request({
         method: 'eth_sendTransaction',
