@@ -1,7 +1,10 @@
+import { ethers } from "ethers";
 // Web3 Utility Helpers for BSC Mainnet Token Balances and Strict On-Chain Receipt Verification
 
 export const NXBUSD_CONTRACT = '0xbEFB5857cd4309a4a64f92Dd67507c34fCbca78b';
-export const NXBC_CONTRACT = '0x8eF229597756a7bfb7Da80c0d86596D7bD366007';
+export const NXBC_TOKEN_CONTRACT = '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7';
+export const NXBC_PRESALE_CONTRACT = '0x8eF229597756a7bfb7Da80c0d86596D7bD366007';
+export const NXBC_CONTRACT = NXBC_TOKEN_CONTRACT; // Standard token import points to the actual BEP-20 token
 export const USDT_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
 export const ADMIN_TREASURY_WALLET = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261';
 
@@ -299,3 +302,127 @@ export async function addTokenToWallet(
   }
 }
 
+
+
+/**
+ * Executes a token purchase using the NXBCPresale smart contract
+ */
+export async function executeSmartContractBuy(
+  currency: 'USDT' | 'NXBUSD',
+  amountUsd: number,
+  sponsorAddress: string | null,
+  p2Tokens: number,
+  p3Tokens: number,
+  p4Tokens: number,
+  p5Tokens: number,
+  dexTokens: number,
+  onStatusUpdate: (msg: string) => void
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  if (typeof window === 'undefined') return { success: false, error: 'Web3 window not available' };
+
+  const ethProvider =
+    (window as any).trustwallet?.ethereum ||
+    (window as any).ethereum ||
+    (window as any).binancew3w?.ethereum ||
+    (window as any).okxwallet;
+
+  if (!ethProvider) {
+    return { success: false, error: 'Web3 wallet (Trust Wallet / MetaMask) not detected in browser.' };
+  }
+
+  try {
+    const provider = new ethers.BrowserProvider(ethProvider);
+    const signer = await provider.getSigner();
+    
+    try {
+      await ethProvider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x38' }],
+      });
+    } catch (switchErr: any) {
+      console.log('BSC switch notice:', switchErr?.message);
+    }
+
+    const amountWei = ethers.parseUnits(amountUsd.toString(), 18);
+    const spAddress = sponsorAddress || '0x0000000000000000000000000000000000000000';
+    
+    const tokenContractAddress = currency === 'NXBUSD' ? NXBUSD_CONTRACT : USDT_CONTRACT;
+    const tokenContract = new ethers.Contract(
+      tokenContractAddress,
+      [
+        "function approve(address spender, uint256 amount) public returns (bool)",
+        "function allowance(address owner, address spender) public view returns (uint256)"
+      ],
+      signer
+    );
+
+    const presaleContract = new ethers.Contract(
+      NXBC_PRESALE_CONTRACT,
+      [
+        "function swapUsdtToNxbUsd(uint256 usdtAmount) external",
+        "function buyTokens(uint256 nxbusdAmount, address sponsor, uint256 _p2Tokens, uint256 _p3Tokens, uint256 _p4Tokens, uint256 _p5Tokens, uint256 _dexTokens) external"
+      ],
+      signer
+    );
+
+    if (currency === 'USDT') {
+      onStatusUpdate(`Approving ${amountUsd.toFixed(2)} USDT for swap...`);
+      const currentAllowance = await tokenContract.allowance(await signer.getAddress(), NXBC_PRESALE_CONTRACT);
+      if (currentAllowance < amountWei) {
+        const approveTx = await tokenContract.approve(NXBC_PRESALE_CONTRACT, amountWei);
+        await approveTx.wait();
+      }
+
+      onStatusUpdate(`Swapping ${amountUsd.toFixed(2)} USDT to NXBUSD on-chain...`);
+      const swapTx = await presaleContract.swapUsdtToNxbUsd(amountWei);
+      await swapTx.wait();
+    }
+
+    const nxbusdTokenContract = new ethers.Contract(
+      NXBUSD_CONTRACT,
+      [
+        "function approve(address spender, uint256 amount) public returns (bool)",
+        "function allowance(address owner, address spender) public view returns (uint256)"
+      ],
+      signer
+    );
+    
+    onStatusUpdate(`Approving ${amountUsd.toFixed(2)} NXBUSD for purchase...`);
+    const nxbusdAllowance = await nxbusdTokenContract.allowance(await signer.getAddress(), NXBC_PRESALE_CONTRACT);
+    if (nxbusdAllowance < amountWei) {
+      const approveNxbUsdTx = await nxbusdTokenContract.approve(NXBC_PRESALE_CONTRACT, amountWei);
+      await approveNxbUsdTx.wait();
+    }
+
+    onStatusUpdate(`Executing buyTokens on Smart Contract...`);
+    
+    const p2Wei = ethers.parseUnits(p2Tokens.toString(), 18);
+    const p3Wei = ethers.parseUnits(p3Tokens.toString(), 18);
+    const p4Wei = ethers.parseUnits(p4Tokens.toString(), 18);
+    const p5Wei = ethers.parseUnits(p5Tokens.toString(), 18);
+    const dexWei = ethers.parseUnits(dexTokens.toString(), 18);
+
+    const buyTx = await presaleContract.buyTokens(
+      amountWei,
+      spAddress,
+      p2Wei,
+      p3Wei,
+      p4Wei,
+      p5Wei,
+      dexWei
+    );
+    
+    onStatusUpdate(`Waiting for block confirmation...`);
+    const receipt = await buyTx.wait();
+    
+    if (receipt && receipt.status === 1) {
+      return { success: true, txHash: receipt.hash };
+    } else {
+      return { success: false, error: 'Transaction reverted on BSC.' };
+    }
+
+  } catch (err: any) {
+    console.error("Smart Contract Buy Error:", err);
+    return { success: false, error: err?.reason || err?.message || 'Transaction failed or rejected by user' };
+  }
+}

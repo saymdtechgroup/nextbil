@@ -25,6 +25,7 @@ import {
   ADMIN_TREASURY_WALLET,
   fetchOnChainTokenBalance,
   waitForBscTxConfirmation,
+  executeSmartContractBuy,
 } from '../utils/web3Helper';
 
 interface BuyTokenModalProps {
@@ -297,16 +298,6 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
       throw new Error('Web3 wallet (Trust Wallet / MetaMask / Binance Web3) not detected in browser.');
     }
 
-    // Switch to BSC Mainnet
-    try {
-      await eth.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0x38' }], // 56 in hex (BSC Mainnet)
-      });
-    } catch (switchErr: any) {
-      console.log('BSC switch notice:', switchErr?.message);
-    }
-
     const accounts = await eth.request({ method: 'eth_requestAccounts' });
     const sender = accounts[0];
 
@@ -318,57 +309,33 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
     if (onChainBal < usdValue) {
       throw new Error(
-        `Insufficient ${currency} on blockchain! Your wallet holds ${onChainBal.toFixed(2)} ${currency}, but order requires ${usdValue.toFixed(2)} ${currency}. Please convert USDT to NXBUSD first.`
+        `Insufficient ${currency} on blockchain! Your wallet holds ${onChainBal.toFixed(2)} ${currency}, but order requires ${usdValue.toFixed(2)} ${currency}.`
       );
     }
 
-    let targetReceiving = receivingAddress;
-    if (
-      !targetReceiving ||
-      targetReceiving.toLowerCase() === '0x8eF229597756a7bfb7Da80c0d86596D7bD366007'.toLowerCase() ||
-      targetReceiving.toLowerCase() === NXBC_CONTRACT.toLowerCase() ||
-      targetReceiving.toLowerCase() === NXBUSD_CONTRACT.toLowerCase()
-    ) {
-      targetReceiving = ADMIN_TREASURY_WALLET;
-    }
+    // Attempt the smart contract buy
+    const sponsor = localStorage.getItem('nxbc_sponsor') || null;
+    const res = await executeSmartContractBuy(
+      currency as 'USDT' | 'NXBUSD',
+      usdValue,
+      sponsor,
+      p2Tokens,
+      p3Tokens,
+      p4Tokens,
+      p5Tokens,
+      dexTokens,
+      (msg) => setPaymentStatusText(msg)
+    );
 
-    const tokenAmountWei = BigInt(Math.floor(usdValue * 1e18));
-    const cleanTo = targetReceiving.toLowerCase().replace('0x', '').padStart(64, '0');
-    const cleanVal = tokenAmountWei.toString(16).padStart(64, '0');
-    // ERC-20 transfer(address to, uint256 amount)
-    const data = `0xa9059cbb${cleanTo}${cleanVal}`;
-
-    setPaymentStatusText(`Please approve ${usdValue} ${currency} transfer in your wallet...`);
-    
-    const txHash = await eth.request({
-      method: 'eth_sendTransaction',
-      params: [
-        {
-          from: sender,
-          to: tokenContractAddress,
-          data: data,
-          value: '0x0',
-        },
-      ],
-    });
-
-    if (!txHash || typeof txHash !== 'string') {
-      throw new Error('Transaction was cancelled or rejected by user.');
-    }
-
-    // 2. STRICT ON-CHAIN RECEIPT VERIFICATION
-    setPaymentStatusText('Transaction broadcasted! Verifying confirmation on BSC...');
-    const receiptResult = await waitForBscTxConfirmation(txHash, (msg) => setPaymentStatusText(msg));
-    
-    if (!receiptResult.success) {
-      throw new Error(receiptResult.error || 'Transaction reverted or failed on BSC blockchain.');
+    if (!res.success || !res.txHash) {
+      throw new Error(res.error || 'Transaction reverted or failed on BSC blockchain.');
     }
 
     // Refresh new balance
     const updatedBal = await fetchOnChainTokenBalance(tokenContractAddress, sender);
     setLiveOnChainBalance(updatedBal);
 
-    return txHash;
+    return res.txHash;
   };
 
   const handleFinalConfirmBuy = async () => {
