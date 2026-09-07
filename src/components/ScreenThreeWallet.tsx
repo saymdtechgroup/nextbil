@@ -28,7 +28,7 @@ import {
 import { Transaction, AllocationState, TokenSellLedgerItem } from '../types/crypto';
 import {
   NXBC_CONTRACT,
-  NXBUSD_CONTRACT,
+  
   ADMIN_TREASURY_WALLET,
   addTokenToWallet,
   returnNxbcTokensToAdmin,
@@ -48,8 +48,8 @@ interface ScreenThreeWalletProps {
   onWithdraw: (amountUsd: number, walletType: 'token_sell' | 'mlm', txHash?: string) => void;
   onToggleWallet: () => void;
   onOpenWalletModal: () => void;
-  onOpenSwapModal?: () => void;
-  nxbusdBalance?: number;
+  
+  
   usdtBalance?: number;
 }
 
@@ -65,8 +65,8 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
   onWithdraw,
   onToggleWallet,
   onOpenWalletModal,
-  onOpenSwapModal,
-  nxbusdBalance = 0,
+  
+  
   usdtBalance = 0,
 }) => {
   // Active Wallet Tab: 'token_sell' or 'mlm'
@@ -525,12 +525,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
     setTimeout(() => setTokenImportNotice(null), 5000);
   };
 
-  const handleAddNxbusdToTrustWallet = async () => {
-    const res = await addTokenToWallet(NXBUSD_CONTRACT, 'NXBUSD', 18);
-    setTokenImportNotice(res.message || 'Token import triggered in wallet.');
-    setTimeout(() => setTokenImportNotice(null), 5000);
-  };
-
+  
   return (
     <div className="flex-1 p-3.5 space-y-3.5 relative">
       {/* Header */}
@@ -571,7 +566,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
             Add Custom Tokens to Trust Wallet
           </span>
           <span className="text-[8.5px] text-purple-300/70 font-mono-crypto">
-            Display your NXBC Coins & NXBUSD directly in your wallet
+            Display your NXBC Coins directly in your wallet
           </span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -582,13 +577,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
             <PlusCircle className="w-3 h-3 text-fuchsia-400" />
             <span>+ NXBC</span>
           </button>
-          <button
-            onClick={handleAddNxbusdToTrustWallet}
-            className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-300 text-[9px] font-bold font-mono-crypto flex items-center gap-1 cursor-pointer transition-all active:scale-95"
-          >
-            <PlusCircle className="w-3 h-3 text-amber-400" />
-            <span>+ NXBUSD</span>
-          </button>
+          
         </div>
       </div>
 

@@ -60,7 +60,7 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
         <div className="flex-1">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-black text-slate-100 font-cinzel">
-              NXBC MEMBER #{walletAddress ? walletAddress.substring(2, 6).toUpperCase() : '8891'}
+              NXBC MEMBER #{walletAddress ? walletAddress.substring(2, 6).toUpperCase() : '0000'}
             </h2>
             <span className={`text-[8px] font-mono-crypto px-1.5 py-0.5 rounded border font-bold ${
               isMlmQualified
@@ -93,7 +93,7 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
         </div>
         <div className="p-2 flex gap-2 items-center bg-[#090317]">
           <div className="flex-1 overflow-hidden">
-            <p className="text-xs font-mono-crypto text-purple-300 truncate">https://nxbc.network/ref/{walletAddress ? walletAddress.substring(2, 8) : 'demo123'}</p>
+            <p className="text-xs font-mono-crypto text-purple-300 truncate">https://nxbc.network/ref/{walletAddress ? walletAddress.substring(2, 8) : 'guest'}</p>
           </div>
           <button 
             onClick={handleCopy}
@@ -112,14 +112,14 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
             <Target className="w-3.5 h-3.5 text-amber-400" />
             <span className="text-[9px] font-bold text-slate-300 uppercase tracking-wider">Directs</span>
           </div>
-          <p className="text-lg font-black font-mono-crypto text-amber-300">24</p>
+          <p className="text-lg font-black font-mono-crypto text-amber-300">0</p>
         </div>
         <div className="p-2.5 rounded-xl bg-[#110722] border border-purple-500/20 flex flex-col justify-center">
           <div className="flex items-center gap-1.5 mb-1">
             <Users className="w-3.5 h-3.5 text-fuchsia-400" />
             <span className="text-[9px] font-bold text-slate-300 uppercase tracking-wider">Total Team</span>
           </div>
-          <p className="text-lg font-black font-mono-crypto text-fuchsia-300">148</p>
+          <p className="text-lg font-black font-mono-crypto text-fuchsia-300">0</p>
         </div>
       </div>
 

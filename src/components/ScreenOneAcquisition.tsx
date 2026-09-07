@@ -33,15 +33,16 @@ interface ScreenOneAcquisitionProps {
   phases: PhaseConfig[];
   onUpdateAllocation: (newAlloc: AllocationState) => void;
   onOpenBuyModal: () => void;
-  onOpenSwapModal?: () => void;
+  
   onOpenWalletModal: () => void;
+  nxbcBalance?: number;
   onOpenTeamPlanModal: () => void;
   onOpenMatrixModal: () => void;
   onSimulateFillPhase?: () => void;
   onResetPhases?: () => void;
   walletConnected: boolean;
   walletAddress: string;
-  nxbusdBalance?: number;
+  
   usdtBalance?: number;
 }
 
@@ -49,15 +50,16 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   allocation,
   phases,
   onOpenBuyModal,
-  onOpenSwapModal,
+  
   onOpenWalletModal,
+  nxbcBalance = 0,
   onOpenTeamPlanModal,
   onOpenMatrixModal,
   onSimulateFillPhase,
   onResetPhases,
   walletConnected,
   walletAddress,
-  nxbusdBalance = 0,
+  
   usdtBalance = 0,
 }) => {
   const [selectedQueuePhase, setSelectedQueuePhase] = useState<'all' | 'p2' | 'p3' | 'p4' | 'p5' | 'dex'>('all');
@@ -99,92 +101,51 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
               BSC Mainnet
             </span>
           </div>
-
           {walletConnected && walletAddress ? (
-            <button
-              onClick={onOpenWalletModal}
-              className="px-2.5 py-1 rounded-xl bg-emerald-950/80 border border-emerald-400/60 text-emerald-300 text-[10px] font-mono-crypto font-bold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
-            >
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span>{walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}</span>
-            </button>
+            <div className="px-2 py-1 bg-emerald-950/50 border border-emerald-500/30 rounded-lg flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+              <span className="text-[9px] font-mono-crypto text-emerald-300">
+                {walletAddress.substring(0,6)}...{walletAddress.substring(walletAddress.length - 4)}
+              </span>
+            </div>
           ) : (
             <button
               onClick={onOpenWalletModal}
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-[11px] uppercase tracking-wider font-rajdhani flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.4)] active:scale-95 transition-all cursor-pointer"
+              className="px-2 py-1 bg-purple-950/50 border border-purple-500/30 rounded-lg flex items-center gap-1.5 text-purple-300 hover:text-amber-300 cursor-pointer transition-colors"
             >
-              <Wallet className="w-3.5 h-3.5 fill-black text-black" />
-              <span>Connect Wallet</span>
+              <div className="w-1.5 h-1.5 bg-purple-400 rounded-full" />
+              <span className="text-[9px] font-mono-crypto font-bold">Connect</span>
             </button>
           )}
         </div>
 
-        <GoldCoinGraphic size="xl" animated={true} glow={true} showBadge={false} />
-        <h1 className="text-2xl font-black tracking-widest text-slate-100 font-cinzel">
-          NXBC<span className="text-amber-400"> COIN</span>
-        </h1>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 2-TOKEN ECOSYSTEM OVERVIEW & 1:1 SWAP QUICK ACCESS BAR                    */}
-      {/* ========================================================================= */}
-      <div className="rounded-2xl bg-gradient-to-r from-[#17092e] via-[#100420] to-[#1c0836] border border-amber-500/35 p-3.5 shadow-lg space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between w-full px-2 mb-2">
+          <div className="flex flex-col">
             <span className="text-[10px] font-black uppercase font-rajdhani text-amber-300 flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              2-Token Ecosystem Matrix
+              1-Token Ecosystem Matrix
             </span>
           </div>
-          <button
-            type="button"
-            onClick={onOpenSwapModal}
-            className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-500 to-fuchsia-600 hover:opacity-90 text-slate-950 font-black text-[10px] uppercase font-mono-crypto flex items-center gap-1 shadow-sm transition-all cursor-pointer"
-          >
-            <ArrowDownUp className="w-3 h-3 font-bold" />
-            <span>1:1 Instant Swap</span>
-          </button>
         </div>
 
-        {/* 3 Live Balance Pill Grid */}
-        <div className="grid grid-cols-3 gap-2">
-          {/* NXBUSD Balance (Fuel) */}
-          <div className="bg-[#0b0318] p-2 rounded-xl border border-amber-500/30 text-center">
-            <span className="text-[8px] text-purple-300/70 font-mono-crypto block">Utility Fuel</span>
-            <span className="text-xs font-black font-mono-crypto text-amber-300 block">
-              {nxbusdBalance.toFixed(2)}
-            </span>
-            <span className="text-[8px] text-amber-400/90 font-mono-crypto font-bold">NXBUSD ($1.00)</span>
-          </div>
-
+        {/* Live Balance Pill Grid */}
+        <div className="grid grid-cols-2 gap-2 w-full">
           {/* USDT Balance */}
           <div className="bg-[#0b0318] p-2 rounded-xl border border-emerald-500/30 text-center">
-            <span className="text-[8px] text-purple-300/70 font-mono-crypto block">BEP-20 Reserve</span>
-            <span className="text-xs font-black font-mono-crypto text-emerald-400 block">
+            <span className="text-[8px] text-purple-300/70 font-mono-crypto block">Direct Payment</span>
+            <span className="text-sm font-black font-mono-crypto text-emerald-300 block my-0.5">
               {usdtBalance.toFixed(2)}
             </span>
-            <span className="text-[8px] text-emerald-300 font-mono-crypto font-bold">USDT (1:1)</span>
+            <span className="text-[8px] text-emerald-400/90 font-mono-crypto font-bold">USDT (BEP-20)</span>
           </div>
-
-          {/* NXBC Holdings */}
+          {/* NXBC Balance */}
           <div className="bg-[#0b0318] p-2 rounded-xl border border-fuchsia-500/30 text-center">
-            <span className="text-[8px] text-purple-300/70 font-mono-crypto block">Growth Coin</span>
-            <span className="text-xs font-black font-mono-crypto text-fuchsia-300 block">
-              {allocation.totalTokensPurchased.toLocaleString()}
+            <span className="text-[8px] text-purple-300/70 font-mono-crypto block">Future Asset</span>
+            <span className="text-sm font-black font-mono-crypto text-fuchsia-300 block my-0.5">
+              {nxbcBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
-            <span className="text-[8px] text-fuchsia-400 font-mono-crypto font-bold">NXBC (70M)</span>
+            <span className="text-[8px] text-fuchsia-400/90 font-mono-crypto font-bold">NXBC (Token)</span>
           </div>
-        </div>
-
-        <div className="flex items-center justify-between text-[9px] font-mono-crypto text-purple-200/80 pt-1 border-t border-purple-500/15">
-          <span>Flow: <strong>USDT</strong> ➔ <strong>NXBUSD (1:1)</strong> ➔ <strong>Buy NXBC (@ $0.01)</strong></span>
-          <button
-            type="button"
-            onClick={onOpenSwapModal}
-            className="text-amber-400 hover:underline font-bold"
-          >
-            Convert Now ➔
-          </button>
         </div>
       </div>
 

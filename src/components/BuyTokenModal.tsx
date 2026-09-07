@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
-  NXBUSD_CONTRACT,
   NXBC_CONTRACT,
   USDT_CONTRACT,
   ADMIN_TREASURY_WALLET,
@@ -42,7 +41,7 @@ interface BuyTokenModalProps {
       dexPercent: number;
       unallocatedPercent: number;
     },
-    currency?: 'NXBUSD' | 'USDT'
+    
   ) => void;
   currentRate: number;
   walletConnected?: boolean;
@@ -52,7 +51,7 @@ interface BuyTokenModalProps {
   minPurchaseUsd?: number;
   nxbusdBalance?: number;
   usdtBalance?: number;
-  onOpenSwapModal?: () => void;
+  
   activePhaseInfo?: {
     phaseNumber: number;
     name: string;
@@ -81,7 +80,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   minPurchaseUsd = 0.01,
   nxbusdBalance = 0,
   usdtBalance = 0,
-  onOpenSwapModal,
+  
   activePhaseInfo = {
     phaseNumber: 1,
     name: 'Phase 1',
@@ -98,7 +97,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   },
 }) => {
   const [step, setStep] = useState<1 | 2>(1);
-  const [currency, setCurrency] = useState<'NXBUSD' | 'USDT'>('NXBUSD');
+  const currency = 'USDT';
   const [paymentMode, setPaymentMode] = useState<'web3' | 'manual'>('web3');
   const [payAmount, setPayAmount] = useState<string>('1');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -162,7 +161,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
   // Live effective balance of selected currency
   const effectiveBalance = useMemo(() => {
-    if (currency === 'NXBUSD') {
+    if (false) {
       return (liveOnChainBalance !== null && liveOnChainBalance > 0) ? liveOnChainBalance : nxbusdBalance;
     }
     return liveOnChainBalance !== null ? liveOnChainBalance : usdtBalance;
@@ -174,9 +173,9 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       if (nxbusdBalance >= usdValue && nxbusdBalance > 0) {
-        setCurrency('NXBUSD');
+        
       } else if (usdtBalance >= usdValue && usdtBalance > 0) {
-        setCurrency('USDT');
+        
       }
     }
   }, [isOpen, nxbusdBalance, usdtBalance]);
@@ -186,11 +185,11 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     if (!walletAddress) return;
     setIsRefreshingBalance(true);
     try {
-      if (currency === 'USDT') {
+      if (true) {
         const bal = await fetchOnChainTokenBalance(USDT_CONTRACT, walletAddress);
         setLiveOnChainBalance(bal);
       } else {
-        const bal = await fetchOnChainTokenBalance(NXBUSD_CONTRACT, walletAddress);
+        const bal = await fetchOnChainTokenBalance(NXBC_CONTRACT, walletAddress);
         const storedNx = parseFloat(localStorage.getItem('nxbc_nxbusd_balance') || '0');
         const eff = Math.max(bal, storedNx, nxbusdBalance);
         setLiveOnChainBalance(eff);
@@ -276,7 +275,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     if (tokenQuantity <= 0) return;
     if (isInsufficientBalance) {
       setTxErrorMessage(
-        `Insufficient ${currency} balance! You only have ${effectiveBalance.toFixed(2)} ${currency} in your wallet, but this order requires $${usdValue.toFixed(2)} ${currency}. Please Swap USDT to NXBUSD first.`
+        `Insufficient ${currency} balance! You only have ${effectiveBalance.toFixed(2)} ${currency} in your wallet, but this order requires $${usdValue.toFixed(2)} ${currency}. `
       );
       return;
     }
@@ -302,14 +301,14 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     const sender = accounts[0];
 
     // 1. STRICT PRE-FLIGHT ON-CHAIN BALANCE CHECK
-    const tokenContractAddress = currency === 'NXBUSD' ? NXBUSD_CONTRACT : USDT_CONTRACT;
+    const tokenContractAddress = USDT_CONTRACT;
     setPaymentStatusText(`Verifying ${currency} balance on BSC blockchain...`);
     const onChainBal = await fetchOnChainTokenBalance(tokenContractAddress, sender);
     setLiveOnChainBalance(onChainBal);
 
     if (onChainBal < usdValue) {
       throw new Error(
-        `Insufficient ${currency} on blockchain! Your wallet holds ${onChainBal.toFixed(2)} ${currency}, but order requires ${usdValue.toFixed(2)} ${currency}. Please convert USDT to NXBUSD first.`
+        `Insufficient ${currency} on blockchain! Your wallet holds ${onChainBal.toFixed(2)} ${currency}, but order requires ${usdValue.toFixed(2)} ${currency}. `
       );
     }
 
@@ -317,7 +316,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     const tokenAmountWei = BigInt(Math.floor(usdValue * 1e18));
 
     // Force USDT purchases to ALWAYS go through the Smart Contract
-    if (currency === 'USDT') {
+    if (true) {
       setPaymentStatusText(`Approving Smart Contract...`);
 
       // 1. Approve Smart Contract to spend USDT
@@ -401,7 +400,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     if (tokenQuantity <= 0 || isOverAllocated) return;
     if (isInsufficientBalance) {
       setTxErrorMessage(
-        `Insufficient ${currency} balance! You only have ${effectiveBalance.toFixed(2)} ${currency}. Please convert USDT to NXBUSD first.`
+        `Insufficient ${currency} balance! You only have ${effectiveBalance.toFixed(2)} ${currency}. `
       );
       return;
     }
@@ -411,29 +410,29 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
     let recordedTxHash = txHashInput.trim();
 
-    // If Web3 payment mode is selected and wallet is connected or detected
-    // When paying with USDT, execute on-chain transfer to Treasury
-    // When paying with NXBUSD, if user holds in-app swapped NXBUSD balance, deduct directly without double on-chain charge
-    if (paymentMode === 'web3') {
-      if (currency === 'USDT' || (liveOnChainBalance !== null && liveOnChainBalance >= usdValue)) {
-        try {
-          setPaymentStatusText('Connecting to BSC Blockchain...');
-          const realTx = await executeWeb3Payment();
-          if (realTx) {
-            recordedTxHash = realTx;
-          }
-        } catch (err: any) {
-          console.error('Web3 Payment Error:', err);
-          // If paying with NXBUSD and user has sufficient in-app balance, allow using internal balance
-          if (currency === 'NXBUSD' && nxbusdBalance >= usdValue) {
-            console.log('Falling back to In-App NXBUSD balance since swap was already paid in USDT.');
-          } else {
-            setTxErrorMessage(err?.message || 'Transaction was rejected or failed on BSC blockchain.');
-            setIsProcessing(false);
-            setPaymentStatusText('');
-            return;
-          }
-        }
+        // If Web3 payment mode is selected and wallet is connected or detected
+    if (paymentMode === 'web3' && (walletConnected || (window as any).ethereum || (window as any).trustwallet?.ethereum)) {
+      try {
+        
+        const result = await executeSmartContractBuy(
+          usdValue,
+          '0x0000000000000000000000000000000000000000',
+          p2Tokens,
+          p3Tokens,
+          p4Tokens,
+          p5Tokens,
+          dexTokens,
+          (msg) => setPaymentStatusText(msg)
+        );
+        if (!result.success) throw new Error(result.error);
+        recordedTxHash = result.txHash || '';
+
+      } catch (err: any) {
+        console.error('Purchase Error:', err);
+        setTxErrorMessage(err?.message || 'Transaction was rejected or failed on BSC blockchain.');
+        setIsProcessing(false);
+        setPaymentStatusText('');
+        return;
       }
     }
 
@@ -555,108 +554,17 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrency('NXBUSD');
-                    setLiveOnChainBalance(null);
-                  }}
-                  className={`py-2 px-2.5 rounded-xl text-xs font-bold font-mono-crypto flex items-center justify-between border transition-all cursor-pointer ${
-                    currency === 'NXBUSD'
-                      ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
-                      : 'bg-purple-950/40 border-purple-800/40 text-purple-300 hover:border-purple-600'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                    <span>NXBUSD</span>
-                  </div>
-                  <span className="text-[9px] opacity-80">${nxbusdBalance.toFixed(2)}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrency('USDT');
-                    setLiveOnChainBalance(null);
-                  }}
-                  className={`py-2 px-2.5 rounded-xl text-xs font-bold font-mono-crypto flex items-center justify-between border transition-all cursor-pointer ${
-                    currency === 'USDT'
-                      ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
-                      : 'bg-purple-950/40 border-purple-800/40 text-purple-300 hover:border-purple-600'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                    <span>USDT</span>
-                  </div>
-                  <span className="text-[9px] opacity-80">${usdtBalance.toFixed(2)}</span>
-                </button>
-              </div>
-
-              {/* Insufficient Balance Callout & Convert Prompt */}
+              {/* Insufficient Balance Callout */}
               {isInsufficientBalance && (
                 <div className="p-2.5 rounded-xl bg-rose-950/90 border border-rose-500/60 text-rose-200 text-[10px] space-y-2 animate-fade-in">
                   <div className="flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold block text-rose-300">Insufficient {currency} Balance!</span>
+                      <span className="font-bold block text-rose-300">Insufficient USDT Balance!</span>
                       <span>
-                        Aapke wallet me sirf <strong>{effectiveBalance.toFixed(2)} {currency}</strong> hai, jabki order ke liye <strong>${usdValue.toFixed(2)} {currency}</strong> chahiye.
+                        Aapke wallet me sirf <strong>{effectiveBalance.toFixed(2)} USDT</strong> hai, jabki order ke liye <strong>${usdValue.toFixed(2)} USDT</strong> chahiye.
                       </span>
                     </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
-                    {currency === 'NXBUSD' && usdtBalance >= usdValue && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCurrency('USDT');
-                          setLiveOnChainBalance(null);
-                        }}
-                        className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black font-mono-crypto text-[10px] flex items-center justify-center gap-1.5 shadow cursor-pointer"
-                      >
-                        <Zap className="w-3.5 h-3.5" />
-                        <span>Pay Directly with USDT (${usdtBalance.toFixed(2)} Available)</span>
-                      </button>
-                    )}
-                    {currency === 'USDT' && nxbusdBalance >= usdValue && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCurrency('NXBUSD');
-                          setLiveOnChainBalance(null);
-                        }}
-                        className="flex-1 py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black font-mono-crypto text-[10px] flex items-center justify-center gap-1.5 shadow cursor-pointer"
-                      >
-                        <Zap className="w-3.5 h-3.5" />
-                        <span>Pay with NXBUSD (${nxbusdBalance.toFixed(2)} Available)</span>
-                      </button>
-                    )}
-                    {onOpenSwapModal && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          onOpenSwapModal();
-                        }}
-                        className="py-1.5 px-2 rounded-lg bg-purple-900/80 hover:bg-purple-800 text-amber-300 border border-amber-400/30 font-bold font-mono-crypto text-[10px] flex items-center justify-center gap-1 shadow cursor-pointer"
-                      >
-                        <ArrowRightLeft className="w-3.5 h-3.5" />
-                        <span>Swap USDT ➔ NXBUSD</span>
-                      </button>
-                    )}
-                    {effectiveBalance > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setPayAmount(effectiveBalance >= 0.01 ? effectiveBalance.toFixed(2) : '0.01')}
-                        className="py-1.5 px-2.5 rounded-lg bg-purple-900 hover:bg-purple-800 text-amber-300 font-bold font-mono-crypto text-[10px] border border-purple-500/40 cursor-pointer"
-                      >
-                        Use Max (${effectiveBalance.toFixed(2)})
-                      </button>
-                    )}
                   </div>
                 </div>
               )}

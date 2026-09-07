@@ -31,7 +31,7 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
   levels,
   rankRewards = [],
   directSponsorPercent = 10,
-  referralCode = 'NXBC-COMMUNITY-8891',
+  referralCode = 'NXBC-COMMUNITY-0000',
 }) => {
   const [activeTab, setActiveTab] = useState<'levels' | 'ranks'>('levels');
   const [copied, setCopied] = useState<boolean>(false);
@@ -256,7 +256,7 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
                           </span>
                         </div>
                         <span className="text-[8px] font-mono-crypto text-amber-300 font-semibold">
-                          Pure USDT / NXBUSD Payout
+                          Pure USDT Payout
                         </span>
                       </div>
                     </div>

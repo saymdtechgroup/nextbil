@@ -24,7 +24,7 @@ const myTree: TreeNode = {
   name: 'You (Satoshi)',
   wallet: '0x71C...a89F',
   rank: 'Gold Director',
-  totalTeam: 148,
+  totalTeam: 0,
   investment: 500,
   isExpanded: true,
   children: [

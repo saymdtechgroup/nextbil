@@ -48,7 +48,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
   const remainingToQualify = Math.max(0, minMlmQualifyUsd - totalInvestedUsd);
 
   const copyRef = () => {
-    navigator.clipboard.writeText('https://nxbc.network?ref=NXBC-COMMUNITY-8891');
+    navigator.clipboard.writeText('https://nxbc.network?ref=NXBC-COMMUNITY-0000');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -83,8 +83,8 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
       {/* MLM Qualification Status Banner */}
       <div className={`p-3 rounded-2xl border transition-all ${
         isMlmQualified 
-          ? 'bg-gradient-to-r from-emerald-950/60 via-[#10241e] to-[#071a13] border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.15)]' 
-          : 'bg-gradient-to-r from-amber-950/60 via-[#241708] to-[#140b04] border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.15)]'
+          ? 'bg-gradient-to-r from-emerald-950/60 via-[#1001e] to-[#071a13] border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.15)]' 
+          : 'bg-gradient-to-r from-amber-950/60 via-[#01708] to-[#140b04] border-amber-500/40 shadow-[0_0_20px_rgba(05,158,11,0.15)]'
       }`}>
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">

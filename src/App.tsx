@@ -38,7 +38,6 @@ import { LandingPage } from './components/LandingPage';
 import { ScreenTeam } from './components/ScreenTeam';
 import { ScreenMine } from './components/ScreenMine';
 import { BuyTokenModal } from './components/BuyTokenModal';
-import { SwapModal } from './components/SwapModal';
 import { WalletConnectModal } from './components/WalletConnectModal';
 import { TeamPlanModal } from './components/TeamPlanModal';
 import { MatrixPlanModal } from './components/MatrixPlanModal';
@@ -47,8 +46,8 @@ import { SecretAdminPage } from './components/SecretAdminPage';
 import { GoldCoinGraphic } from './components/GoldCoinGraphic';
 import {
   fetchOnChainTokenBalance,
-  NXBUSD_CONTRACT,
   USDT_CONTRACT,
+  NXBC_CONTRACT,
 } from './utils/web3Helper';
 
 export default function App() {
@@ -494,7 +493,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (parsed?.[0]?.commissionPercent === 10 || parsed?.[1]?.commissionPercent === 5) {
+          if (false) {
             localStorage.setItem('nxbc_admin_levels', JSON.stringify(defaultPlanLevels));
             return defaultPlanLevels;
           }
@@ -528,31 +527,29 @@ export default function App() {
       id: 'rank-1',
       rankNumber: 1,
       name: 'Team Development Fund',
-      requiredDirectVolume: 50000,
-      requiredTeamVolume: 0,
-      requiredDirects: 5,
+      requiredDirectVolume: 2000,
+      requiredTeamVolume: 3000,
+      requiredDirects: 0,
       rewardType: 'fund',
       rewardTitle: '$100 Team Development Fund',
       oneTimeBonusUsd: 100,
       rewardTokens: 0,
-      monthlyRoyaltyPercent: 1,
+      monthlyRoyaltyPercent: 0,
       currentQualifiedCount: 0,
       status: 'locked',
     },
     {
       id: 'rank-2',
       rankNumber: 2,
-      name: 'Monthly Leadership Salary',
-      requiredDirectVolume: 100000,
-      requiredTeamVolume: 0,
-      requiredDirects: 10,
-      rewardType: 'salary',
-      rewardTitle: '$100 / Month (12 Months Salary)',
-      oneTimeBonusUsd: 1200,
-      monthlySalaryUsd: 100,
-      salaryMonths: 12,
+      name: 'Charity Fund',
+      requiredDirectVolume: 50000,
+      requiredTeamVolume: 50000,
+      requiredDirects: 0,
+      rewardType: 'fund',
+      rewardTitle: '$500 Charity Fund',
+      oneTimeBonusUsd: 500,
       rewardTokens: 0,
-      monthlyRoyaltyPercent: 2,
+      monthlyRoyaltyPercent: 0,
       currentQualifiedCount: 0,
       status: 'locked',
     },
@@ -562,12 +559,12 @@ export default function App() {
       name: 'Travel Tour Fund',
       requiredDirectVolume: 100000,
       requiredTeamVolume: 150000,
-      requiredDirects: 15,
-      rewardType: 'travel',
+      requiredDirects: 0,
+      rewardType: 'fund',
       rewardTitle: '$500 International Travel Fund',
       oneTimeBonusUsd: 500,
       rewardTokens: 0,
-      monthlyRoyaltyPercent: 3,
+      monthlyRoyaltyPercent: 0,
       currentQualifiedCount: 0,
       status: 'locked',
     },
@@ -577,12 +574,12 @@ export default function App() {
       name: 'Dream Car Fund',
       requiredDirectVolume: 100000,
       requiredTeamVolume: 2000000,
-      requiredDirects: 20,
-      rewardType: 'car',
+      requiredDirects: 0,
+      rewardType: 'fund',
       rewardTitle: 'Dream Car Fund ($50,000 USD Value)',
       oneTimeBonusUsd: 50000,
       rewardTokens: 0,
-      monthlyRoyaltyPercent: 4,
+      monthlyRoyaltyPercent: 0,
       currentQualifiedCount: 0,
       status: 'locked',
     },
@@ -592,12 +589,12 @@ export default function App() {
       name: 'Luxury House Fund',
       requiredDirectVolume: 100000,
       requiredTeamVolume: 5000000,
-      requiredDirects: 25,
-      rewardType: 'house',
+      requiredDirects: 0,
+      rewardType: 'fund',
       rewardTitle: 'Luxury House Fund ($100,000 USD Value)',
       oneTimeBonusUsd: 100000,
       rewardTokens: 0,
-      monthlyRoyaltyPercent: 5,
+      monthlyRoyaltyPercent: 0,
       currentQualifiedCount: 0,
       status: 'locked',
     },
@@ -609,15 +606,9 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (
-            parsed?.[0]?.name === 'Bronze Leader' ||
-            parsed?.[0]?.requiredDirectVolume === undefined ||
-            parsed?.[3]?.oneTimeBonusUsd !== 50000 ||
-            parsed?.[4]?.oneTimeBonusUsd !== 100000 ||
-            parsed?.[0]?.rewardTokens > 0
-          ) {
-            localStorage.setItem('nxbc_admin_ranks', JSON.stringify(defaultRankRewards));
-            return defaultRankRewards;
+          if (parsed?.[0]?.requiredDirectVolume === 50000 || parsed?.[1]?.name === 'Monthly Leadership Salary') {
+             localStorage.setItem('nxbc_admin_ranks', JSON.stringify(defaultRankRewards));
+             return defaultRankRewards;
           }
           return parsed;
         } catch (e) {}
@@ -681,14 +672,13 @@ export default function App() {
 
   // Modals state
   const [buyModalOpen, setBuyModalOpen] = useState<boolean>(false);
-  const [swapModalOpen, setSwapModalOpen] = useState<boolean>(false);
   const [walletModalOpen, setWalletModalOpen] = useState<boolean>(false);
   const [teamModalOpen, setTeamModalOpen] = useState<boolean>(false);
   const [matrixModalOpen, setMatrixModalOpen] = useState<boolean>(false);
   const [adminModalOpen, setAdminModalOpen] = useState<boolean>(false);
 
-  // 2-Token Balances: NXBUSD ($1.00 Utility Token) & USDT (BEP-20)
-  const [nxbusdBalance, setNxbusdBalance] = useState<number>(() => {
+  // Token Balances
+  const [nxbcBalance, setNxbcBalance] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       const s = localStorage.getItem('nxbc_nxbusd_balance');
       if (s) return parseFloat(s) || 0;
@@ -712,15 +702,15 @@ export default function App() {
     const fetchBalances = async () => {
       try {
         const [nxChainBalance, uBalance] = await Promise.all([
-          fetchOnChainTokenBalance(NXBUSD_CONTRACT, walletAddress),
+          fetchOnChainTokenBalance(NXBC_CONTRACT, walletAddress),
           fetchOnChainTokenBalance(USDT_CONTRACT, walletAddress),
         ]);
         if (isMounted) {
-          // Preserve in-app swapped NXBUSD balance so it is not wiped out if on-chain contract returns 0
+          
           const storedNx = parseFloat(localStorage.getItem('nxbc_nxbusd_balance') || '0');
           const effectiveNx = Math.max(nxChainBalance, storedNx, 0);
 
-          setNxbusdBalance(effectiveNx);
+          setNxbcBalance(effectiveNx);
           setUsdtBalance(uBalance);
           if (typeof window !== 'undefined') {
             localStorage.setItem('nxbc_nxbusd_balance', effectiveNx.toString());
@@ -740,44 +730,7 @@ export default function App() {
     };
   }, [walletAddress, walletConnected]);
 
-  const handleSwapSuccess = (fromToken: 'USDT' | 'NXBUSD', toToken: 'USDT' | 'NXBUSD', amount: number) => {
-    if (fromToken === 'USDT') {
-      setUsdtBalance((prev) => {
-        const next = Math.max(0, prev - amount);
-        localStorage.setItem('nxbc_usdt_balance', next.toString());
-        return next;
-      });
-      setNxbusdBalance((prev) => {
-        const next = prev + amount;
-        localStorage.setItem('nxbc_nxbusd_balance', next.toString());
-        return next;
-      });
-    } else {
-      setNxbusdBalance((prev) => {
-        const next = Math.max(0, prev - amount);
-        localStorage.setItem('nxbc_nxbusd_balance', next.toString());
-        return next;
-      });
-      setUsdtBalance((prev) => {
-        const next = prev + amount;
-        localStorage.setItem('nxbc_usdt_balance', next.toString());
-        return next;
-      });
-    }
-
-    const newTx: Transaction = {
-      id: `tx-swap-${Date.now()}`,
-      type: 'referral_bonus',
-      title: `1:1 Swap: ${amount} ${fromToken} ➔ ${amount} ${toToken}`,
-      amountUsd: amount,
-      timestamp: 'Just now',
-      status: 'completed',
-      txHash: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
-    };
-    setTransactions((prev) => [newTx, ...prev]);
-  };
-
-  // Purchase handler with sequential phase progression & immutable allocation lock
+      // Purchase handler with sequential phase progression & immutable allocation lock
   const handleConfirmPurchase = (
     tokenAmount: number,
     usdAmount: number,
@@ -789,22 +742,15 @@ export default function App() {
       dexPercent: number;
       unallocatedPercent: number;
     },
-    currency: 'NXBUSD' | 'USDT' = 'NXBUSD'
+    currency: 'USDT' = 'USDT'
   ) => {
     // Deduct local balance
-    if (currency === 'NXBUSD') {
-      setNxbusdBalance((prev) => {
-        const next = Math.max(0, prev - usdAmount);
-        if (typeof window !== 'undefined') localStorage.setItem('nxbc_nxbusd_balance', next.toString());
-        return next;
-      });
-    } else {
+    
       setUsdtBalance((prev) => {
         const next = Math.max(0, prev - usdAmount);
         if (typeof window !== 'undefined') localStorage.setItem('nxbc_usdt_balance', next.toString());
         return next;
       });
-    }
     // Check if presale is paused by Admin
     if (systemConfig.presalePaused) {
       alert('Presale is currently paused by the System.');
@@ -914,24 +860,60 @@ export default function App() {
       localStorage.setItem('nxbc_total_invested', newTotalInvested.toString());
     }
 
-    // $100 Cumulative Qualification Rule Check:
-    // Only distribute / credit MLM referral commissions if user meets the cumulative threshold ($100 default)
+    // UNIVERSAL MLM Qualification Logic (Default $100 limit applies to Level, Direct, Matrix, Ranks)
     const minQualify = systemConfig.minMlmQualifyUsd || 100;
+    const wasQualified = totalInvestedUsd >= minQualify;
     const isNowQualified = newTotalInvested >= minQualify;
+    
+    let distributeAmount = 0;
+    let earnedLevelBonus = 0;
+    let earnedMatrixBonus = 0;
 
-    if (isNowQualified) {
-      // Credit direct sponsor and level 1 bonuses based on Admin dynamic percentages
-      const directBonus = (usdAmount * systemConfig.directSponsorPercent) / 100;
-      const l1Bonus = (usdAmount * (referralLevels[0]?.commissionPercent || 10)) / 100;
-      const totalBonus = directBonus + l1Bonus;
+    if (!wasQualified && isNowQualified) {
+      // User just crossed the qualification threshold (e.g. $100).
+      distributeAmount = newTotalInvested;
+      
+      // Matrix Placement happens ONLY ONCE when they fully qualify
+      if (systemConfig.matrixConfig?.enabled) {
+         earnedMatrixBonus = systemConfig.matrixConfig.placementIncomeUsd || 1.00;
+         console.log('User placed in Team Matrix! Earned Matrix Bonus:', earnedMatrixBonus);
+      }
+    } else if (wasQualified) {
+      // User was already qualified. Distribute on the new top-up amount.
+      distributeAmount = usdAmount;
+    }
 
-      const newClaimable = claimableBalanceUsd + totalBonus;
-      const newLevel = levelIncomeUsd + totalBonus;
-      setClaimableBalanceUsd(newClaimable);
-      setLevelIncomeUsd(newLevel);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('nxbc_claimable_usd', newClaimable.toString());
-        localStorage.setItem('nxbc_level_income', newLevel.toString());
+    // Distribute Direct & Level Bonuses
+    if (distributeAmount > 0) {
+      const directBonus = (distributeAmount * systemConfig.directSponsorPercent) / 100;
+      const l1Bonus = (distributeAmount * (referralLevels[0]?.commissionPercent || 10)) / 100;
+      earnedLevelBonus = directBonus + l1Bonus;
+    }
+
+    // Apply accumulated bonuses safely using state updater functions
+    if (earnedLevelBonus > 0 || earnedMatrixBonus > 0) {
+      const totalEarned = earnedLevelBonus + earnedMatrixBonus;
+      
+      setClaimableBalanceUsd(prev => {
+         const next = prev + totalEarned;
+         if (typeof window !== 'undefined') localStorage.setItem('nxbc_claimable_usd', next.toString());
+         return next;
+      });
+      
+      if (earnedLevelBonus > 0) {
+         setLevelIncomeUsd(prev => {
+            const next = prev + earnedLevelBonus;
+            if (typeof window !== 'undefined') localStorage.setItem('nxbc_level_income', next.toString());
+            return next;
+         });
+      }
+      
+      if (earnedMatrixBonus > 0) {
+         setMatrixIncomeUsd(prev => {
+            const next = prev + earnedMatrixBonus;
+            if (typeof window !== 'undefined') localStorage.setItem('nxbc_matrix_income', next.toString());
+            return next;
+         });
       }
     }
 
@@ -1435,11 +1417,16 @@ export default function App() {
         rankRewards={rankRewards}
         systemConfig={systemConfig}
         matrixConfig={matrixConfig}
+        sellQueue={sellQueue}
         onUpdatePhases={handleUpdatePhases}
         onUpdateReferralLevels={handleUpdateReferralLevels}
         onUpdateRankRewards={handleUpdateRankRewards}
         onUpdateSystemConfig={handleUpdateSystemConfig}
         onUpdateMatrixConfig={handleUpdateMatrixConfig}
+        onUpdateSellQueue={(newQueue) => {
+          setSellQueue(newQueue);
+          if (typeof window !== 'undefined') localStorage.setItem('nxbc_sell_queue', JSON.stringify(newQueue));
+        }}
         onResetToDefaults={handleResetToDefaults}
         onExitAdmin={() => {
           setShowSecretAdminPage(false);
@@ -1530,7 +1517,7 @@ export default function App() {
                   phases={phases}
                   onUpdateAllocation={setAllocation}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
-                  onOpenSwapModal={() => setSwapModalOpen(true)}
+                  
                   onOpenWalletModal={() => setWalletModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
@@ -1539,7 +1526,7 @@ export default function App() {
                   onResetPhases={handleResetPhases}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
-                  nxbusdBalance={nxbusdBalance}
+                  nxbcBalance={nxbcBalance}
                   usdtBalance={usdtBalance}
                 />
               )}
@@ -1582,8 +1569,8 @@ export default function App() {
                   onWithdraw={handleWithdraw}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
                   onOpenWalletModal={() => setWalletModalOpen(true)}
-                  onOpenSwapModal={() => setSwapModalOpen(true)}
-                  nxbusdBalance={nxbusdBalance}
+                  
+                  nxbcBalance={nxbcBalance}
                   usdtBalance={usdtBalance}
                 />
               )}
@@ -1642,7 +1629,7 @@ export default function App() {
                   phases={phases}
                   onUpdateAllocation={setAllocation}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
-                  onOpenSwapModal={() => setSwapModalOpen(true)}
+                  
                   onOpenWalletModal={() => setWalletModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
@@ -1651,7 +1638,7 @@ export default function App() {
                   onResetPhases={handleResetPhases}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
-                  nxbusdBalance={nxbusdBalance}
+                  nxbcBalance={nxbcBalance}
                   usdtBalance={usdtBalance}
                 />
                 <BottomNavBar
@@ -1712,8 +1699,8 @@ export default function App() {
                   onWithdraw={handleWithdraw}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
                   onOpenWalletModal={() => setWalletModalOpen(true)}
-                  onOpenSwapModal={() => setSwapModalOpen(true)}
-                  nxbusdBalance={nxbusdBalance}
+                  
+                  nxbcBalance={nxbcBalance}
                   usdtBalance={usdtBalance}
                 />
                 <BottomNavBar
@@ -1742,12 +1729,8 @@ export default function App() {
         contractAddress={systemConfig.contractAddress}
         receivingAddress={systemConfig.receivingAddress}
         minPurchaseUsd={systemConfig.minPurchaseUsd}
-        nxbusdBalance={nxbusdBalance}
-        usdtBalance={usdtBalance}
-        onOpenSwapModal={() => {
-          setBuyModalOpen(false);
-          setSwapModalOpen(true);
-        }}
+        nxbcBalance={nxbcBalance}
+                  usdtBalance={usdtBalance}
         activePhaseInfo={{
           phaseNumber: activePhase.phaseNumber,
           name: activePhase.name,
@@ -1764,18 +1747,8 @@ export default function App() {
         }}
       />
 
-      {/* 1:1 USDT ⮂ NXBUSD Swap Modal */}
-      <SwapModal
-        isOpen={swapModalOpen}
-        onClose={() => setSwapModalOpen(false)}
-        walletConnected={walletConnected}
-        walletAddress={walletAddress}
-        onOpenWalletModal={() => setWalletModalOpen(true)}
-        onSwapSuccess={handleSwapSuccess}
-        nxbusdBalance={nxbusdBalance}
-        usdtBalance={usdtBalance}
-        receivingAddress={systemConfig.receivingAddress}
-      />
+      
+      
 
       <WalletConnectModal
         isOpen={walletModalOpen}

@@ -349,7 +349,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                 <Users className="w-3.5 h-3.5" />
               </div>
               <div className="text-sm font-bold font-mono-crypto text-slate-100">
-                24 Directs / 148 Team
+                0 Directs / 0 Team
               </div>
             </div>
 

@@ -34,6 +34,7 @@ import {
   RankReward,
   AdminSystemConfig,
   MatrixConfig,
+  QueueEntry,
 } from '../types/crypto';
 
 interface SecretAdminPageProps {
@@ -42,11 +43,13 @@ interface SecretAdminPageProps {
   rankRewards: RankReward[];
   systemConfig: AdminSystemConfig;
   matrixConfig: MatrixConfig;
+  sellQueue?: QueueEntry[];
   onUpdatePhases: (phases: PhaseConfig[]) => void;
   onUpdateReferralLevels: (levels: ReferralLevel[]) => void;
   onUpdateRankRewards: (ranks: RankReward[]) => void;
   onUpdateSystemConfig: (config: AdminSystemConfig) => void;
   onUpdateMatrixConfig: (config: MatrixConfig) => void;
+  onUpdateSellQueue?: (queue: QueueEntry[]) => void;
   onSimulateExternalBuy?: (amount: number) => void;
   onResetToDefaults: () => void;
   onExitAdmin: () => void;

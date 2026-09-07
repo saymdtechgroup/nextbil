@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 // Web3 Utility Helpers for BSC Mainnet Token Balances and Strict On-Chain Receipt Verification
 
-export const NXBUSD_CONTRACT = '0xbEFB5857cd4309a4a64f92Dd67507c34fCbca78b';
+
 export const NXBC_TOKEN_CONTRACT = '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7';
 export const NXBC_PRESALE_CONTRACT = '0x85363386808d1f26BF3805Bb44a093a2Af9E8783'; // UPDATED CONTRACT
 export const NXBC_CONTRACT = NXBC_TOKEN_CONTRACT; // Standard token import points to the actual BEP-20 token
@@ -308,7 +308,7 @@ export async function addTokenToWallet(
  * Executes a token purchase using the NXBCPresale smart contract
  */
 export async function executeSmartContractBuy(
-  currency: 'USDT' | 'NXBUSD',
+  
   amountUsd: number,
   sponsorAddress: string | null,
   p2Tokens: number,
@@ -372,7 +372,7 @@ export async function executeSmartContractBuy(
     const amountWei = ethers.parseUnits(amountUsd.toString(), 18);
     const spAddress = sponsorAddress || '0x0000000000000000000000000000000000000000';
     
-    const tokenContractAddress = currency === 'NXBUSD' ? NXBUSD_CONTRACT : USDT_CONTRACT;
+    const tokenContractAddress = USDT_CONTRACT;
     const tokenContract = new ethers.Contract(
       tokenContractAddress,
       [
