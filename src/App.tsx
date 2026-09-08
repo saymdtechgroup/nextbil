@@ -830,10 +830,11 @@ export default function App() {
       const p = prevPhases[idx];
       const newSold = p.tokensSold + tokenAmount;
 
+      let updatedPhases = prevPhases;
       // If current phase hits exactly 100% (totalSupply), advance to next in sequence!
       if (newSold >= p.totalSupply) {
         const nextIdx = idx + 1;
-        return prevPhases.map((phase, pIndex) => {
+        updatedPhases = prevPhases.map((phase, pIndex) => {
           if (pIndex === idx) {
             return { ...phase, tokensSold: phase.totalSupply, status: 'completed' as const };
           }
@@ -846,11 +847,17 @@ export default function App() {
           }
           return phase;
         });
+      } else {
+        updatedPhases = prevPhases.map((phase, pIndex) =>
+          pIndex === idx ? { ...phase, tokensSold: newSold } : phase
+        );
       }
 
-      return prevPhases.map((phase, pIndex) =>
-        pIndex === idx ? { ...phase, tokensSold: newSold } : phase
-      );
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nxbc_admin_phases', JSON.stringify(updatedPhases));
+      }
+      syncConfigsToServer({ phases: updatedPhases });
+      return updatedPhases;
     });
 
     // Update cumulative investment
@@ -1095,12 +1102,17 @@ export default function App() {
     
     // Also increase total tokens sold in the phase so it moves forward
     setPhases((prevPhases) => {
-      return prevPhases.map((p, idx) => {
+      const updatedPhases = prevPhases.map((p, idx) => {
         if (idx === activeIdx) {
            return { ...p, tokensSold: Math.min(p.totalSupply, p.tokensSold + amount) };
         }
         return p;
       });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nxbc_admin_phases', JSON.stringify(updatedPhases));
+      }
+      syncConfigsToServer({ phases: updatedPhases });
+      return updatedPhases;
     });
   };
 
@@ -1112,7 +1124,7 @@ export default function App() {
       const currentP = prevPhases[activeIdx];
       const nextIdx = activeIdx + 1;
 
-      return prevPhases.map((p, idx) => {
+      const updatedPhases = prevPhases.map((p, idx) => {
         if (idx === activeIdx) {
           return { ...p, tokensSold: p.totalSupply, status: 'completed' as const };
         }
@@ -1121,12 +1133,17 @@ export default function App() {
         }
         return p;
       });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nxbc_admin_phases', JSON.stringify(updatedPhases));
+      }
+      syncConfigsToServer({ phases: updatedPhases });
+      return updatedPhases;
     });
   };
 
   // Helper to reset phases back to Phase 1 defaults
   const handleResetPhases = () => {
-    setPhases([
+    const initialPhases: PhaseConfig[] = [
       {
         id: 'p1',
         phaseNumber: 1,
@@ -1206,7 +1223,12 @@ export default function App() {
         multiplier: 'Open Market Trading',
         unlockRequirement: 'Phase 5 must be 100% sold to unlock',
       },
-    ]);
+    ];
+    setPhases(initialPhases);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_phases', JSON.stringify(initialPhases));
+    }
+    syncConfigsToServer({ phases: initialPhases });
   };
 
   // Reset all to system defaults
