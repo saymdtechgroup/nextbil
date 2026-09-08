@@ -645,6 +645,18 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
             <TrendingUp className="w-4 h-4 text-emerald-400" />
             <span>8. Live Revenue Sandbox</span>
           </button>
+
+          <button
+            onClick={() => setActiveSection('queue')}
+            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-bold font-rajdhani uppercase tracking-wider transition-all w-full text-left whitespace-nowrap ${
+              activeSection === 'queue'
+                ? 'bg-gradient-to-r from-blue-500/20 to-purple-900/50 text-blue-300 border border-blue-400 shadow-md'
+                : 'text-purple-300 hover:text-slate-100 hover:bg-purple-950/40'
+            }`}
+          >
+            <Database className="w-4 h-4 text-blue-400" />
+            <span>9. Auto-Sell FIFO Queue</span>
+          </button>
         </aside>
 
         {/* Right Dynamic Content Container */}
