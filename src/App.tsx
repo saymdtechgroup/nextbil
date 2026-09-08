@@ -1448,6 +1448,64 @@ export default function App() {
         onUpdateSellQueue={(newQueue) => {
           setSellQueue(newQueue);
           if (typeof window !== 'undefined') localStorage.setItem('nxbc_sell_queue', JSON.stringify(newQueue));
+
+          // Compute total fulfilled USDT based on phase rates
+          let totalEarnedUsdt = 0;
+          let p2Sold = 0;
+          let p3Sold = 0;
+          let p4Sold = 0;
+          let p5Sold = 0;
+
+          const rateMap: Record<number, number> = {
+            2: 0.10,
+            3: 1.00,
+            4: 10.00,
+            5: 100.00,
+          };
+
+          phases.forEach((p) => {
+            if (p.phaseNumber && p.rate) {
+              rateMap[p.phaseNumber] = p.rate;
+            }
+          });
+
+          newQueue.forEach((entry) => {
+            const sold = entry.tokensSold || 0;
+            const rate = rateMap[entry.phaseNumber] || 0.10;
+            totalEarnedUsdt += sold * rate;
+
+            if (entry.phaseNumber === 2) p2Sold += sold;
+            if (entry.phaseNumber === 3) p3Sold += sold;
+            if (entry.phaseNumber === 4) p4Sold += sold;
+            if (entry.phaseNumber === 5) p5Sold += sold;
+          });
+
+          if (totalEarnedUsdt > 0) {
+            setUserEarnings((prev) => {
+              const updated = {
+                ...prev,
+                availableUsdt: Math.max(prev.availableUsdt, totalEarnedUsdt - (prev.withdrawnUsdt || 0)),
+              };
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('nxbc_user_earnings', JSON.stringify(updated));
+              }
+              return updated;
+            });
+
+            setAllocation((prev) => {
+              const updated = {
+                ...prev,
+                p2Tokens: prev.p2Tokens ? { ...prev.p2Tokens, sold: p2Sold } : undefined,
+                p3Tokens: prev.p3Tokens ? { ...prev.p3Tokens, sold: p3Sold } : undefined,
+                p4Tokens: prev.p4Tokens ? { ...prev.p4Tokens, sold: p4Sold } : undefined,
+                p5Tokens: prev.p5Tokens ? { ...prev.p5Tokens, sold: p5Sold } : undefined,
+              };
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('nxbc_user_allocation', JSON.stringify(updated));
+              }
+              return updated;
+            });
+          }
         }}
         onResetToDefaults={handleResetToDefaults}
         onExitAdmin={() => {
