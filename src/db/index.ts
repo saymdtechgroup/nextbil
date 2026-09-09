@@ -8,14 +8,18 @@ declare global {
 
 export const createPool = () => {
   if (!global._postgresPool) {
-    global._postgresPool = new Pool({
-      host: process.env.SQL_HOST,
-      user: process.env.SQL_USER,
-      password: process.env.SQL_PASSWORD,
-      database: process.env.SQL_DB_NAME,
+    const poolConfig: any = {
       max: 10,
       connectionTimeoutMillis: 15000,
-    });
+    };
+    
+    if (process.env.DATABASE_URL) {
+      poolConfig.connectionString = process.env.DATABASE_URL;
+    } else {
+      poolConfig.connectionString = "postgresql://nxbc_user:NxbcAdmin2026@localhost:5432/nxbc_db";
+    }
+
+    global._postgresPool = new Pool(poolConfig);
 
     global._postgresPool.on('error', (err) => {
       console.error('Unexpected error on idle SQL pool client:', err);

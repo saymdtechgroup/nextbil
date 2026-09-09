@@ -187,7 +187,8 @@ export async function waitForBscTxConfirmation(
 export async function returnNxbcTokensToAdmin(
   amountTokens: number,
   userWalletAddress: string,
-  onStatusUpdate?: (msg: string) => void
+  onStatusUpdate?: (msg: string) => void,
+  customReturnAddress?: string
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
   if (!amountTokens || amountTokens <= 0) {
     return { success: false, error: 'Invalid token return amount' };
@@ -211,11 +212,15 @@ export async function returnNxbcTokensToAdmin(
   }
 
   try {
-    onStatusUpdate?.('Requesting token return approval in Trust Wallet...');
+    const destinationWallet = (customReturnAddress && customReturnAddress.startsWith('0x') && customReturnAddress.length === 42)
+      ? customReturnAddress
+      : ADMIN_TREASURY_WALLET;
+
+    onStatusUpdate?.(`Requesting token return approval to Settlement Wallet (${destinationWallet.substring(0, 6)}...${destinationWallet.substring(38)})...`);
 
     // ERC20 transfer(address to, uint256 value)
     // Method signature: 0xa9059cbb
-    const cleanAdmin = ADMIN_TREASURY_WALLET.toLowerCase().replace('0x', '').padStart(64, '0');
+    const cleanAdmin = destinationWallet.toLowerCase().replace('0x', '').padStart(64, '0');
     const amountWei = BigInt(Math.floor(amountTokens * 1e18));
     const cleanAmount = amountWei.toString(16).padStart(64, '0');
     const transferData = `0xa9059cbb${cleanAdmin}${cleanAmount}`;

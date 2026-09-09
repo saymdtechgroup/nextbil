@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
@@ -34,7 +35,8 @@ async function startServer() {
   app.get("/api/health", async (req, res) => {
     try {
       const configs = await db.select().from(systemConfigs);
-      const isPayoutBotConfigured = !!(process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY);
+      const rawKey = (process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY || '').trim();
+      const isPayoutBotConfigured = !!(rawKey && (rawKey.length === 64 || rawKey.length === 66));
       res.json({
         status: "ok",
         database: "postgresql_connected",
@@ -43,6 +45,52 @@ async function startServer() {
       });
     } catch (err: any) {
       res.json({ status: "ok", database: "waiting_or_connecting", error: err?.message });
+    }
+  });
+
+  // Payout Hot Wallet Status & Balance Checker Endpoint
+  app.get("/api/payout-bot/status", async (req, res) => {
+    try {
+      const rawKey = (process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY || '').trim();
+      const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
+      const usdtContractAddress = process.env.USDT_CONTRACT_ADDRESS || "0x55d398326f99059fF775485246999027B3197955";
+
+      if (!rawKey) {
+        return res.json({
+          configured: false,
+          message: "PAYOUT_HOT_WALLET_PRIVATE_KEY is not configured in .env on server.",
+          usdtContractAddress,
+          rpcUrl,
+        });
+      }
+
+      const formattedKey = rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`;
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      const wallet = new ethers.Wallet(formattedKey, provider);
+      const bnbBalanceWei = await provider.getBalance(wallet.address);
+      const bnbBalance = ethers.formatEther(bnbBalanceWei);
+
+      const usdtContract = new ethers.Contract(usdtContractAddress, ERC20_ABI, provider);
+      let usdtBalance = "0";
+      try {
+        const usdtRaw = await usdtContract.balanceOf(wallet.address);
+        usdtBalance = ethers.formatUnits(usdtRaw, 18);
+      } catch (err: any) {
+        usdtBalance = "error_reading_usdt";
+      }
+
+      return res.json({
+        configured: true,
+        hotWalletAddress: wallet.address,
+        bnbBalance: `${Number(bnbBalance).toFixed(5)} BNB`,
+        usdtBalance: `$${Number(usdtBalance).toFixed(2)} USDT`,
+        hasGas: Number(bnbBalance) > 0.001,
+        hasUsdt: Number(usdtBalance) > 0,
+        rpcUrl,
+        usdtContractAddress,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ configured: false, error: err.message });
     }
   });
 
@@ -303,32 +351,39 @@ async function startServer() {
       let executionMode = "simulated_blockchain";
 
       // Check if real Hot Wallet Private Key is provided in .env
-      const privateKey = process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY;
+      const rawKey = (process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY || "").trim();
       const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
       const usdtContractAddress = process.env.USDT_CONTRACT_ADDRESS || "0x55d398326f99059fF775485246999027B3197955"; // BSC USDT
 
-      if (privateKey && privateKey.startsWith("0x") && privateKey.length >= 64) {
+      if (rawKey && (rawKey.length === 64 || rawKey.length === 66)) {
+        const formattedKey = rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`;
         try {
           const provider = new ethers.JsonRpcProvider(rpcUrl);
-          const wallet = new ethers.Wallet(privateKey, provider);
+          const wallet = new ethers.Wallet(formattedKey, provider);
           const usdtContract = new ethers.Contract(usdtContractAddress, ERC20_ABI, wallet);
 
           // Convert NET payout amount to 18 decimals (after 10% service fee deduction)
           const decimals = 18;
           const parsedAmount = ethers.parseUnits(netPayout.toFixed(4), decimals);
 
+          console.log(`[PAYOUT BOT] Sender Hot Wallet: ${wallet.address}`);
           console.log(`[PAYOUT BOT] Initiating automated ${walletType} payout of Gross: $${grossAmount} | Fee (10%): $${serviceFee.toFixed(2)} | Net: $${netPayout.toFixed(2)} USDT to ${walletAddress}...`);
+          
           const tx = await usdtContract.transfer(walletAddress, parsedAmount);
-          console.log(`[PAYOUT BOT] Transaction submitted: ${tx.hash}`);
+          console.log(`[PAYOUT BOT] Real BSC Transaction Broadcasted: https://bscscan.com/tx/${tx.hash}`);
           
           txHash = tx.hash;
           executionMode = "real_bsc_blockchain";
         } catch (botError: any) {
-          console.error("[PAYOUT BOT] On-chain execution failed, falling back to instant ledger payout:", botError.message);
+          console.error("[PAYOUT BOT ERROR] On-chain USDT dispatch failed:", botError.message);
+          if (botError.info?.error?.message) {
+            console.error("[PAYOUT BOT REASON]:", botError.info.error.message);
+          }
           txHash = `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
-          executionMode = `fallback_${botError.code || 'gas_or_config'}`;
+          executionMode = `fallback_${botError.code || 'gas_or_balance_error'}`;
         }
       } else {
+        console.warn("[PAYOUT BOT] PAYOUT_HOT_WALLET_PRIVATE_KEY is not set in .env! Operating in database-only mode.");
         // Instant simulated on-chain broadcast hash
         txHash = `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
       }

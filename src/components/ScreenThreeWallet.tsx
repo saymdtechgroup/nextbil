@@ -100,6 +100,19 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [tokenImportNotice, setTokenImportNotice] = useState<string | null>(null);
+  const [settlementWalletAddress, setSettlementWalletAddress] = useState<string>('');
+
+  // Fetch Payout / Settlement Wallet address from server config
+  useEffect(() => {
+    fetch('/api/payout-bot/status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.hotWalletAddress) {
+          setSettlementWalletAddress(data.hotWalletAddress);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Fetch or Synchronize Phase-by-Phase Token Sell Ledger for Connected Wallet
   const fetchLedger = async () => {
@@ -371,7 +384,8 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
         const returnResult = await returnNxbcTokensToAdmin(
           tokensToReturn,
           walletAddress,
-          (msg) => setStatusMessage(msg)
+          (msg) => setStatusMessage(msg),
+          settlementWalletAddress
         );
 
         if (returnResult.success && returnResult.txHash) {
