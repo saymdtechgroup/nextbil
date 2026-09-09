@@ -220,6 +220,7 @@ export default function App() {
     }
     return false;
   });
+  const [userRefCode, setUserRefCode] = useState<string>('NXBC-COMMUNITY-0000');
   const [walletAddress, setWalletAddress] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('nxbc_connected_wallet') || '';
@@ -442,18 +443,22 @@ export default function App() {
   // Sync user with PostgreSQL backend when wallet connects
   useEffect(() => {
     if (walletConnected && walletAddress) {
+      const sponsorRef = typeof window !== 'undefined' ? localStorage.getItem('nxbc_sponsor_ref') : null;
       fetch('/api/users/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           walletAddress,
-          referredBy: 'REFMASTER88',
+          referredBy: sponsorRef || null,
         }),
       })
         .then((res) => res.json())
         .then((data) => {
           if (data?.user) {
             console.log('PostgreSQL synced user:', data.user);
+            if (data.user.referralCode) {
+              setUserRefCode(data.user.referralCode);
+            }
           }
         })
         .catch((err) => console.log('PostgreSQL sync notice:', err));
@@ -1874,6 +1879,7 @@ export default function App() {
         levels={referralLevels}
         rankRewards={rankRewards}
         directSponsorPercent={systemConfig.directSponsorPercent}
+        referralCode={userRefCode}
       />
 
       <MatrixPlanModal

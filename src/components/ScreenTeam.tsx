@@ -18,6 +18,7 @@ interface ScreenTeamProps {
   levels: ReferralLevel[];
   rankRewards?: RankReward[];
   directSponsorPercent?: number;
+  referralCode?: string;
   onOpenTeamModal: () => void;
   onOpenMatrixModal: () => void;
   levelIncomeUsd: number;
@@ -37,6 +38,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
   totalInvestedUsd = 0,
   minMlmQualifyUsd = 100,
   onOpenBuyModal,
+  referralCode = 'NXBC-COMMUNITY-0000',
 }) => {
   const [copied, setCopied] = useState<boolean>(false);
   const totalMembers = levels.reduce((acc, l) => acc + l.directMembers, 0);
@@ -48,7 +50,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
   const remainingToQualify = Math.max(0, minMlmQualifyUsd - totalInvestedUsd);
 
   const copyRef = () => {
-    navigator.clipboard.writeText('https://nxbc.network?ref=NXBC-COMMUNITY-0000');
+    navigator.clipboard.writeText(`https://nxbc.network?ref=${referralCode}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
