@@ -873,7 +873,23 @@ async function startServer() {
   // P2P Sell Order Queue (FIFO)
   app.get("/api/p2p/orders", async (req, res) => {
     try {
-      const orders = await db.select().from(sellOrders).where(eq(sellOrders.status, 'open')).orderBy(asc(sellOrders.createdAt));
+      const orders = await db.select({
+         id: sellOrders.id,
+         userId: sellOrders.userId,
+         walletAddress: users.walletAddress,
+         phaseNumber: sellOrders.phaseNumber,
+         amountTokens: sellOrders.amountTokens,
+         remainingTokens: sellOrders.remainingTokens,
+         tokenPrice: sellOrders.tokenPrice,
+         totalUsdtValue: sellOrders.totalUsdtValue,
+         status: sellOrders.status,
+         priority: sellOrders.priority,
+         createdAt: sellOrders.createdAt
+      })
+      .from(sellOrders)
+      .leftJoin(users, eq(sellOrders.userId, users.id))
+      .where(eq(sellOrders.status, 'open'))
+      .orderBy(desc(sellOrders.priority), asc(sellOrders.createdAt));
       res.json({ orders });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -933,8 +949,10 @@ async function startServer() {
       const price = Number(tokenPrice || 0.10);
       const totalUsdt = Number(amountTokens) * price;
 
+      const phaseNum = req.body.phaseNumber ? Number(req.body.phaseNumber) : 1;
       const [order] = await db.insert(sellOrders).values({
         userId: user.id,
+        phaseNumber: phaseNum,
         amountTokens: Number(amountTokens),
         remainingTokens: Number(amountTokens),
         tokenPrice: price,

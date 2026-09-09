@@ -191,15 +191,56 @@ export default function App() {
     return { availableUsdt: 0, withdrawnUsdt: 0 };
   });
 
-  const [sellQueue, setSellQueue] = useState<QueueEntry[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nxbc_sell_queue');
-      if (saved) {
-        try { return JSON.parse(saved); } catch(e) {}
+  const [sellQueue, setSellQueue] = useState<QueueEntry[]>([]);
+  
+  // Fetch Live P2P Sell Orders
+  const fetchSellOrders = async () => {
+    try {
+      const res = await fetch('/api/p2p/orders');
+      if (res.ok) {
+         const data = await res.json();
+         if (data.orders) {
+            const mappedQueue = data.orders.map((o: any) => ({
+               id: o.id.toString(),
+               userId: o.walletAddress || 'Unknown',
+               phaseNumber: o.phaseNumber,
+               tokensRequested: o.amountTokens,
+               tokensSold: o.amountTokens - o.remainingTokens
+            }));
+            setSellQueue(mappedQueue);
+         }
       }
+      
+      // Also sync user balances to reflect P2P fulfillment or rank rewards
+      if (walletConnected && walletAddress) {
+         const syncRes = await fetch('/api/users/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ walletAddress })
+         });
+         if (syncRes.ok) {
+            const syncData = await syncRes.json();
+            if (syncData.user) {
+               setUserEarnings({
+                  availableUsdt: syncData.user.availableUsdt || 0,
+                  withdrawnUsdt: syncData.user.totalWithdrawnUsdt || 0
+               });
+               if (syncData.user.referralCode) {
+                  setUserRefCode(syncData.user.referralCode);
+               }
+            }
+         }
+      }
+    } catch (e) {
+      console.error("Failed to fetch sell orders", e);
     }
-    return [];
-  });
+  };
+
+  useEffect(() => {
+    fetchSellOrders();
+    const interval = setInterval(fetchSellOrders, 10000); // refresh every 10s
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -207,11 +248,7 @@ export default function App() {
     }
   }, [userEarnings]);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('nxbc_sell_queue', JSON.stringify(sellQueue));
-    }
-  }, [sellQueue]);
+  // (Removed local storage effect for sellQueue)
 
   // Wallet & Income State (Loads persisted wallet if present, or checks injected web3)
   const [walletConnected, setWalletConnected] = useState<boolean>(() => {
@@ -813,15 +850,34 @@ export default function App() {
       lockedTimestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    // Add to global sell queue
-    const newQueueEntries = [];
+    // Add to global sell queue via Backend API
     const addressToUse = account || 'Unknown Wallet';
-    if (p2TokensAllocated > 0) newQueueEntries.push({ id: Math.random().toString(), userId: addressToUse, phaseNumber: 2, tokensRequested: p2TokensAllocated, tokensSold: 0 });
-    if (p3TokensAllocated > 0) newQueueEntries.push({ id: Math.random().toString(), userId: addressToUse, phaseNumber: 3, tokensRequested: p3TokensAllocated, tokensSold: 0 });
-    if (p4TokensAllocated > 0) newQueueEntries.push({ id: Math.random().toString(), userId: addressToUse, phaseNumber: 4, tokensRequested: p4TokensAllocated, tokensSold: 0 });
-    if (p5TokensAllocated > 0) newQueueEntries.push({ id: Math.random().toString(), userId: addressToUse, phaseNumber: 5, tokensRequested: p5TokensAllocated, tokensSold: 0 });
-
-    setSellQueue(prev => [...prev, ...newQueueEntries]);
+    const postOrders = async () => {
+       const ordersToPost = [];
+       if (p2TokensAllocated > 0) ordersToPost.push({ phaseNumber: 2, amountTokens: p2TokensAllocated, tokenPrice: 0.15 });
+       if (p3TokensAllocated > 0) ordersToPost.push({ phaseNumber: 3, amountTokens: p3TokensAllocated, tokenPrice: 0.20 });
+       if (p4TokensAllocated > 0) ordersToPost.push({ phaseNumber: 4, amountTokens: p4TokensAllocated, tokenPrice: 0.25 });
+       if (p5TokensAllocated > 0) ordersToPost.push({ phaseNumber: 5, amountTokens: p5TokensAllocated, tokenPrice: 0.30 });
+       
+       for (const order of ordersToPost) {
+          try {
+            await fetch('/api/p2p/sell', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                walletAddress: addressToUse,
+                amountTokens: order.amountTokens,
+                tokenPrice: order.tokenPrice,
+                phaseNumber: order.phaseNumber
+              })
+            });
+          } catch (e) {
+            console.error(e);
+          }
+       }
+       fetchSellOrders(); // refresh after posting
+    };
+    if (account) postOrders();
 
     setAllocation(updatedAlloc);
     if (typeof window !== 'undefined') {

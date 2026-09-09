@@ -660,6 +660,18 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
             <Database className="w-4 h-4 text-blue-400" />
             <span>9. Auto-Sell FIFO Queue</span>
           </button>
+          
+          <button
+            onClick={() => setActiveSection('users')}
+            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-bold font-rajdhani uppercase tracking-wider transition-all w-full text-left whitespace-nowrap ${
+              activeSection === 'users'
+                ? 'bg-gradient-to-r from-rose-500/20 to-purple-900/50 text-rose-300 border border-rose-400 shadow-md'
+                : 'text-purple-300 hover:text-slate-100 hover:bg-purple-950/40'
+            }`}
+          >
+            <Users className="w-4 h-4 text-rose-400" />
+            <span>10. User Management</span>
+          </button>
         </aside>
 
         {/* Right Dynamic Content Container */}
@@ -1737,6 +1749,31 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                               title="Make this order #1 in line"
                             >
                               ⬆ #1 Top Priority
+                            </button>
+
+                            {/* Instant Fulfill Order */}
+                            <button
+                              onClick={async () => {
+                                 if (!confirm('Instantly fulfill this specific order? The user will be paid out immediately.')) return;
+                                 try {
+                                    const res = await fetch('/api/admin/sellqueue/instant-fulfill', {
+                                       method: 'POST',
+                                       headers: { 'Content-Type': 'application/json' },
+                                       body: JSON.stringify({ orderId: entry.id })
+                                    });
+                                    if (res.ok) {
+                                       if (onUpdateSellQueue && sellQueue) {
+                                          const newQueue = [...sellQueue];
+                                          newQueue[idx].tokensSold = newQueue[idx].tokensRequested;
+                                          onUpdateSellQueue(newQueue);
+                                       }
+                                    }
+                                 } catch(e) {}
+                              }}
+                              className="px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/10 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 transition-all"
+                              title="Instantly fulfill and payout this user"
+                            >
+                              ⚡ Instant Fulfill
                             </button>
 
                             {/* Move Up 1 Step */}

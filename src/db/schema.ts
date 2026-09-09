@@ -66,11 +66,13 @@ export const transactions = pgTable('transactions', {
 export const sellOrders = pgTable('sell_orders', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id).notNull(),
+  phaseNumber: integer('phase_number').notNull().default(1),
   amountTokens: doublePrecision('amount_tokens').notNull(),
   remainingTokens: doublePrecision('remaining_tokens').notNull(),
   tokenPrice: doublePrecision('token_price').notNull().default(0.10),
   totalUsdtValue: doublePrecision('total_usdt_value').notNull(),
   status: text('status').notNull().default('open'), // 'open', 'partially_filled', 'completed', 'cancelled'
+  priority: integer('priority').notNull().default(0),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
