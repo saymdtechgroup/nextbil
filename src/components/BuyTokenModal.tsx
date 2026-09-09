@@ -446,32 +446,46 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     const dexPercent = tokenQuantity > 0 ? Math.round((dexTokens / tokenQuantity) * 100) : 0;
     const unallocatedPercent = Math.max(0, 100 - (p2Percent + p3Percent + p4Percent + p5Percent + dexPercent));
 
-    onConfirmPurchase(
-      tokenQuantity,
-      usdValue,
-      {
-        p2Percent,
-        p3Percent,
-        p4Percent,
-        p5Percent,
-        dexPercent,
-        unallocatedPercent,
-      },
-      currency
-    );
+    try {
+        // Execute the confirmation asynchronously without blocking the modal closing
+        await Promise.resolve(onConfirmPurchase(
+          tokenQuantity,
+          usdValue,
+          {
+            p2Percent,
+            p3Percent,
+            p4Percent,
+            p5Percent,
+            dexPercent,
+            unallocatedPercent,
+          },
+          currency
+        ));
+        
+        // Success Path
+        setIsProcessing(false);
+        setPaymentStatusText('');
+        setStep(1);
 
-    setIsProcessing(false);
-    setPaymentStatusText('');
-    setStep(1);
-
-    confetti({
-      particleCount: 120,
-      spread: 90,
-      origin: { y: 0.5 },
-      colors: ['#F59E0B', '#E879F9', '#10B981', '#38BDF8'],
-    });
-
-    onClose();
+        if (typeof confetti === 'function') {
+            confetti({
+              particleCount: 120,
+              spread: 90,
+              origin: { y: 0.5 },
+              colors: ['#F59E0B', '#E879F9', '#10B981', '#38BDF8'],
+            });
+        }
+        
+        if (typeof onClose === 'function') {
+            onClose();
+        }
+    } catch(e: any) {
+        console.error("Error finalizing purchase:", e);
+        setTxErrorMessage(e?.message || "Failed to finalize purchase. Please contact support.");
+        setIsProcessing(false);
+        setPaymentStatusText('');
+        return; // Abort closing the modal so user can read the error
+    }
   };
 
   // Projected Return Calculation based on exact token amounts

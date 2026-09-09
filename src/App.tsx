@@ -795,25 +795,22 @@ export default function App() {
       });
     // Check if presale is paused by Admin
     if (systemConfig.presalePaused) {
-      alert('Presale is currently paused by the System.');
-      return;
+      throw new Error('Presale is currently paused by the System.');
     }
 
     // Strict phase allotment boundary verification
     const activeIdx = phases.findIndex((p) => p.status === 'active');
     if (activeIdx === -1) {
-      alert('Presale has ended or no active phase available.');
-      return;
+      throw new Error('Presale has ended or no active phase available.');
     }
 
     const currentP = phases[activeIdx];
     const maxAvailable = currentP.totalSupply - currentP.tokensSold;
 
     if (tokenAmount > maxAvailable) {
-      alert(
+      throw new Error(
         `Strict Limit Exceeded: You cannot purchase more coins than the limit allocated by the System (${currentP.totalSupply.toLocaleString()} ${systemConfig.tokenSymbol}). Only ${maxAvailable.toLocaleString()} ${systemConfig.tokenSymbol} are remaining in this phase.`
       );
-      return;
     }
 
     
