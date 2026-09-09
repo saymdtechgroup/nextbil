@@ -13,6 +13,9 @@ export const users = pgTable('users', {
   totalInvestedUsdt: doublePrecision('total_invested_usdt').notNull().default(0),
   directCount: integer('direct_count').notNull().default(0),
   totalTeamCount: integer('total_team_count').notNull().default(0),
+  totalDirectVolume: doublePrecision('total_direct_volume').notNull().default(0),
+  totalTeamVolume: doublePrecision('total_team_volume').notNull().default(0),
+  highestRankAchieved: integer('highest_rank_achieved').notNull().default(0),
   totalPurchasedTokens: doublePrecision('total_purchased_tokens').notNull().default(0),
   totalEarnedUsdt: doublePrecision('total_earned_usdt').notNull().default(0),
   totalWithdrawnUsdt: doublePrecision('total_withdrawn_usdt').notNull().default(0),
@@ -71,6 +74,15 @@ export const sellOrders = pgTable('sell_orders', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Rank Achievements
+export const rankAchievements = pgTable('rank_achievements', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  rankLevel: integer('rank_level').notNull(),
+  rewardUsdt: doublePrecision('reward_usdt').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // System / Admin Dynamic Config
 export const systemConfigs = pgTable('system_configs', {
   id: serial('id').primaryKey(),
@@ -108,6 +120,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   transactions: many(transactions),
   sellOrders: many(sellOrders),
   tokenSellLedgers: many(tokenSellLedgers),
+  rankAchievements: many(rankAchievements),
 }));
 
 export const matrixNodesRelations = relations(matrixNodes, ({ one }) => ({
