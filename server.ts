@@ -534,6 +534,7 @@ async function startServer() {
         ? txHash
         : `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
 
+
       // Record transaction
       const [tx] = await db.insert(transactions).values({
         userId: user.id,
@@ -546,7 +547,38 @@ async function startServer() {
         txHash: confirmedTxHash,
       }).returning();
 
+      // --- SERVER-SIDE PHASE PROGRESSION ---
+      try {
+        const configRecord = await db.query.systemConfigs.findFirst({
+            where: eq(systemConfigs.key, 'phases')
+        });
+        if (configRecord && configRecord.value) {
+            const phases = JSON.parse(configRecord.value);
+            const activeIdx = phases.findIndex((p: any) => p.status === 'active');
+            if (activeIdx !== -1) {
+                const currentP = phases[activeIdx];
+                const newSold = currentP.tokensSold + Number(tokenAmount);
+                if (newSold >= currentP.totalSupply) {
+                    phases[activeIdx].tokensSold = currentP.totalSupply;
+                    phases[activeIdx].status = 'completed';
+                    if (activeIdx + 1 < phases.length) {
+                        phases[activeIdx + 1].status = 'active';
+                        phases[activeIdx + 1].tokensSold = 0;
+                    }
+                } else {
+                    phases[activeIdx].tokensSold = newSold;
+                }
+                await db.update(systemConfigs).set({ value: JSON.stringify(phases), updatedAt: new Date() }).where(eq(systemConfigs.key, 'phases'));
+                console.log(`[API] Phase progression updated safely in DB. Phase ${currentP.id} Sold: ${newSold}`);
+            }
+        }
+      } catch (phaseErr) {
+        console.error("Error updating phase progression in DB:", phaseErr);
+      }
+      // --- END PHASE PROGRESSION ---
+
       // Update user investment & qualification
+
       const prevInvested = Number(user.totalInvestedUsdt || 0);
       const purchaseUsdt = Number(amountUsdt);
       const newInvested = prevInvested + purchaseUsdt;
@@ -968,27 +1000,6 @@ async function startServer() {
 
   // System & Admin Configurations (Live Synchronization)
   let inMemoryAdminPin = "7788";
-  let inMemoryConfigs: {
-    phases?: any;
-    referralLevels?: any;
-    rankRewards?: any;
-    systemConfig?: any;
-    matrixConfig?: any;
-  } = {
-    systemConfig: {
-      tokenName: 'NXBC',
-      tokenSymbol: 'NXBC',
-      contractAddress: '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
-      receivingAddress: '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
-      minPurchaseUsd: 0.01,
-      maxPurchaseUsd: 50000,
-      minMlmQualifyUsd: 100,
-      presalePaused: false,
-      directSponsorPercent: 10,
-      withdrawalFeePercent: 2,
-    },
-  };
-
   // Verify PIN Endpoint (Strict & Secure - No password leakage)
   app.post("/api/admin/verify-pin", async (req, res) => {
     try {
@@ -1080,11 +1091,11 @@ async function startServer() {
 
       res.json({
         success: true,
-        phases: dbConfigs.phases || inMemoryConfigs.phases || null,
-        referralLevels: dbConfigs.referralLevels || inMemoryConfigs.referralLevels || null,
-        rankRewards: dbConfigs.rankRewards || inMemoryConfigs.rankRewards || null,
-        systemConfig: dbConfigs.systemConfig || inMemoryConfigs.systemConfig || null,
-        matrixConfig: dbConfigs.matrixConfig || inMemoryConfigs.matrixConfig || null,
+        phases: dbConfigs.phases || null,
+        referralLevels: dbConfigs.referralLevels || null,
+        rankRewards: dbConfigs.rankRewards || null,
+        systemConfig: dbConfigs.systemConfig || null,
+        matrixConfig: dbConfigs.matrixConfig || null,
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1095,12 +1106,6 @@ async function startServer() {
   app.post("/api/admin/configs", async (req, res) => {
     try {
       const { phases, referralLevels, rankRewards, systemConfig, matrixConfig } = req.body;
-
-      if (phases) inMemoryConfigs.phases = phases;
-      if (referralLevels) inMemoryConfigs.referralLevels = referralLevels;
-      if (rankRewards) inMemoryConfigs.rankRewards = rankRewards;
-      if (systemConfig) inMemoryConfigs.systemConfig = systemConfig;
-      if (matrixConfig) inMemoryConfigs.matrixConfig = matrixConfig;
 
       // Save to database
       const itemsToSave = [
@@ -1117,6 +1122,7 @@ async function startServer() {
           const existing = await db.query.systemConfigs.findFirst({
             where: eq(systemConfigs.key, item.key),
           });
+
           if (existing) {
             await db.update(systemConfigs).set({ value: item.value, updatedAt: new Date() }).where(eq(systemConfigs.key, item.key));
           } else {
@@ -1127,12 +1133,11 @@ async function startServer() {
         }
       }
 
-      console.log("[ADMIN SYNC] Live configurations updated and persisted to PostgreSQL & Memory.");
+      console.log("[ADMIN SYNC] Live configurations updated and persisted to PostgreSQL.");
 
       res.json({
         success: true,
         message: "Configurations updated successfully and applied to all users!",
-        configs: inMemoryConfigs,
       });
     } catch (error: any) {
       console.error("Error in /api/admin/configs POST:", error);
@@ -1144,9 +1149,9 @@ async function startServer() {
   app.get("/api/system/configs", async (req, res) => {
     try {
       const configs = await db.select().from(systemConfigs);
-      res.json({ configs, inMemoryConfigs });
+      res.json({ configs });
     } catch (error: any) {
-      res.status(500).json({ error: error.message, inMemoryConfigs });
+      res.status(500).json({ error: error.message });
     }
   });
 

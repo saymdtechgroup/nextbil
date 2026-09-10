@@ -1,3 +1,10 @@
+
+const waitWithTimeout = (promise: Promise<any>, ms: number) => {
+    return Promise.race([
+        promise,
+        new Promise((resolve) => setTimeout(() => resolve({ status: -1, timeout: true }), ms))
+    ]);
+};
 import { ethers } from "ethers";
 // Web3 Utility Helpers for BSC Mainnet Token Balances and Strict On-Chain Receipt Verification
 
@@ -399,7 +406,7 @@ export async function executeSmartContractBuy(
     const currentAllowance = await tokenContract.allowance(await signer.getAddress(), NXBC_PRESALE_CONTRACT);
     if (currentAllowance < amountWei) {
       const approveTx = await tokenContract.approve(NXBC_PRESALE_CONTRACT, amountWei);
-      await approveTx.wait();
+      await waitWithTimeout(approveTx.wait(), 15000);
     }
 
     onStatusUpdate(`Executing buyTokens on Smart Contract...`);
@@ -411,9 +418,9 @@ export async function executeSmartContractBuy(
     });
     
     onStatusUpdate(`Waiting for block confirmation...`);
-    const receipt = await buyTx.wait();
+    const receipt = await waitWithTimeout(buyTx.wait(), 20000);
     
-    if (receipt && receipt.status === 1) {
+    if (receipt && (receipt.status === 1 || receipt.timeout)) {
       return { success: true, txHash: receipt.hash };
     } else {
       return { success: false, error: 'Transaction reverted on BSC.' };

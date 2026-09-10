@@ -66,7 +66,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
 
   // Find current active phase (or fallback to Phase 1)
   const activePhase = phases.find((p) => p.status === 'active') || phases[0];
-  const nextPhase = phases.find((p) => p.phaseNumber === activePhase.phaseNumber + 1);
+  const nextPhase = phases.find((p) => p.phaseNumber === (activePhase.phaseNumber || 1) + 1);
 
   const tokensSold = activePhase.tokensSold;
   const totalSupply = activePhase.totalSupply;
@@ -166,7 +166,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
             </span>
             <span className="text-[10px] text-fuchsia-300/80 font-mono-crypto flex items-center gap-1">
               <Clock className="w-3 h-3 text-fuchsia-400" />
-              Step {activePhase.phaseNumber}/5
+              Step {(activePhase.phaseNumber || 1)}/5
             </span>
           </div>
           <span className="text-[10px] font-mono-crypto text-emerald-400 font-bold bg-emerald-950/80 px-2 py-0.5 rounded-lg border border-emerald-500/40 shadow-sm">
@@ -182,7 +182,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
             </p>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="text-3xl font-black font-mono-crypto gold-gradient-text tracking-tight">
-                ${activePhase.rate.toFixed(2)}
+                ${(activePhase.rate || 0).toFixed(2)}
               </span>
               <span className="text-xs font-bold text-amber-300 font-mono-crypto">
                 USD/NXBC
@@ -284,7 +284,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
           <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2">
             <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <p className="text-[10px] text-amber-200/90 leading-tight">
-              <strong>Phase Sequence Rule:</strong> The next <strong>{nextPhase ? `${nextPhase.name} ($${nextPhase.rate.toFixed(2)})` : 'DEX Launch'}</strong> will automatically start only when 100% of the Phase {activePhase.phaseNumber} coins (<strong>{totalSupply.toLocaleString()} NXBC</strong>) are sold out.
+              <strong>Phase Sequence Rule:</strong> The next <strong>{nextPhase ? `${nextPhase.name} ($${nextPhase.rate.toFixed(2)})` : 'DEX Launch'}</strong> will automatically start only when 100% of the Phase {(activePhase.phaseNumber || 1)} coins (<strong>{totalSupply.toLocaleString()} NXBC</strong>) are sold out.
             </p>
           </div>
           
@@ -314,7 +314,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
               className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs tracking-wide shadow-[0_0_20px_rgba(245,158,11,0.5)] transition-all transform active:scale-95 cursor-pointer font-rajdhani uppercase w-full"
             >
               <Zap className="w-4 h-4 fill-black text-black" />
-              <span>Buy in {activePhase.shortName} (@ ${activePhase.rate.toFixed(2)})</span>
+              <span>Buy in {activePhase.shortName} (@ ${(activePhase.rate || 0).toFixed(2)})</span>
             </button>
           )}
         </div>

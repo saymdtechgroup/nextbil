@@ -50,6 +50,16 @@ import {
   NXBC_CONTRACT,
 } from './utils/web3Helper';
 
+
+const INITIAL_PHASES: PhaseConfig[] = [
+  { id: 'p1', phaseNumber: 1, name: 'Phase 1', shortName: 'P1', rate: 0.10, rateLabel: '$0.10', totalSupply: 1000000, tokensSold: 0, status: 'active', multiplier: '10x Phase', unlockRequirement: 'Live Now' },
+  { id: 'p2', phaseNumber: 2, name: 'Phase 2', shortName: 'P2', rate: 0.15, rateLabel: '$0.15', totalSupply: 2000000, tokensSold: 0, status: 'upcoming', multiplier: '15x Phase', unlockRequirement: 'After P1' },
+  { id: 'p3', phaseNumber: 3, name: 'Phase 3', shortName: 'P3', rate: 0.20, rateLabel: '$0.20', totalSupply: 3000000, tokensSold: 0, status: 'upcoming', multiplier: '20x Phase', unlockRequirement: 'After P2' },
+  { id: 'p4', phaseNumber: 4, name: 'Phase 4', shortName: 'P4', rate: 0.25, rateLabel: '$0.25', totalSupply: 4000000, tokensSold: 0, status: 'upcoming', multiplier: '25x Phase', unlockRequirement: 'After P3' },
+  { id: 'p5', phaseNumber: 5, name: 'Phase 5', shortName: 'P5', rate: 0.30, rateLabel: '$0.30', totalSupply: 5000000, tokensSold: 0, status: 'upcoming', multiplier: '30x Phase', unlockRequirement: 'After P4' },
+  { id: 'dex', phaseNumber: 6, name: 'Phase 6 (DEX)', shortName: 'DEX', rate: 0.50, rateLabel: '$0.50', totalSupply: 10000000, tokensSold: 0, status: 'upcoming', multiplier: '50x Phase', unlockRequirement: 'After P5' },
+];
+
 export default function App() {
   // Default to 'single' full mobile screen mode
   const [isAppLaunched, setIsAppLaunched] = useState(false);
@@ -58,127 +68,17 @@ export default function App() {
   const [showSecretAdminPage, setShowSecretAdminPage] = useState<boolean>(false);
 
   // Core State: 6-Phase Sequential Roadmap & Live Status (Admin Managed & Persisted)
-  const [phases, setPhases] = useState<PhaseConfig[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nxbc_admin_phases');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          // If stored data contains the old demo 7,650,000 sold, reset to clean real state
-          if (parsed?.[0]?.tokensSold === 7650000) {
-            localStorage.removeItem('nxbc_admin_phases');
-          } else {
-            return parsed;
-          }
-        } catch (e) {}
-      }
-    }
-    return [
-      {
-        id: 'p1',
-        phaseNumber: 1,
-        name: 'Phase 1',
-        shortName: 'P1',
-        rate: 0.01,
-        rateLabel: '$0.01',
-        totalSupply: 1000000, // 10 Lakh (5 Lakh Sale, 5 Lakh Reserve)
-        tokensSold: 0,
-        status: 'active',
-        multiplier: 'Base Seed Rate',
-        unlockRequirement: 'Live Now (Stage 1)',
-        targetDate: 'Active Now',
-      },
-      {
-        id: 'p2',
-        phaseNumber: 2,
-        name: 'Phase 2',
-        shortName: 'P2',
-        rate: 0.10,
-        rateLabel: '$0.10',
-        totalSupply: 2500000, // 25 Lakh
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: '10x Growth',
-        unlockRequirement: 'Phase 1 must be 100% sold to unlock',
-      },
-      {
-        id: 'p3',
-        phaseNumber: 3,
-        name: 'Phase 3',
-        shortName: 'P3',
-        rate: 1.00,
-        rateLabel: '$1.00',
-        totalSupply: 7000000, // 70 Lakh
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: '100x Growth',
-        unlockRequirement: 'Phase 2 must be 100% sold to unlock',
-      },
-      {
-        id: 'p4',
-        phaseNumber: 4,
-        name: 'Phase 4',
-        shortName: 'P4',
-        rate: 10.00,
-        rateLabel: '$10.00',
-        totalSupply: 19500000, // 195 Lakh
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: '1000x Growth',
-        unlockRequirement: 'Phase 3 must be 100% sold to unlock',
-      },
-      {
-        id: 'p5',
-        phaseNumber: 5,
-        name: 'Phase 5',
-        shortName: 'P5',
-        rate: 100.00,
-        rateLabel: '$100.00',
-        totalSupply: 40000000, // 400 Lakh
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: '10000x Growth',
-        unlockRequirement: 'Phase 4 must be 100% sold to unlock',
-      },
-      {
-        id: 'dex',
-        phaseNumber: 6,
-        name: 'DEX Launch',
-        shortName: 'DEX',
-        rate: 100.00,
-        rateLabel: 'Market Rate',
-        totalSupply: 0,
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: 'Open Market Trading',
-        unlockRequirement: 'Phase 5 must be 100% sold to unlock',
-      },
-    ]});
+  const [phases, setPhases] = useState<PhaseConfig[]>(INITIAL_PHASES);
 
-  const activePhase = phases.find((p) => p.status === 'active') || phases[0];
+  const activePhase = phases.find((p) => p.status === 'active') || phases[0] || {
+    phaseNumber: 1,
+    name: 'Phase 1',
+    shortName: 'P1',
+    rate: 0.10,
+    totalSupply: 1000000,
+    tokensSold: 0
+  };
 
-  // Core State: Sell-Through Allocation (Clean Real State persisted in localStorage)
-  const [allocation, setAllocation] = useState<AllocationState>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nxbc_user_allocation');
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (e) {}
-      }
-    }
-    return {
-      p2Percent: 20,
-      p3Percent: 30,
-      p4Percent: 20,
-      p5Percent: 15,
-      dexPercent: 15,
-      unallocatedPercent: 0,
-      totalTokensPurchased: 0,
-      isLocked: false,
-      lockedTimestamp: '',
-    };
-  });
 
 
   const [userEarnings, setUserEarnings] = useState<UserEarnings>(() => {
@@ -388,50 +288,36 @@ export default function App() {
         const res = await fetch('/api/admin/configs');
         const data = await res.json();
         if (data?.success) {
+
           if (data.phases && Array.isArray(data.phases) && data.phases.length > 0) {
-            setPhases((prev) => {
-              if (JSON.stringify(prev) !== JSON.stringify(data.phases)) {
-                localStorage.setItem('nxbc_admin_phases', JSON.stringify(data.phases));
-                return data.phases;
-              }
-              return prev;
-            });
+            const mappedPhases = data.phases.map((p: any, idx: number) => ({
+              id: p.id ? String(p.id) : `p${idx+1}`,
+              phaseNumber: p.phaseNumber || (idx + 1),
+              name: p.name || `Phase ${idx+1}`,
+              shortName: p.shortName || (p.name ? p.name.substring(0,2).toUpperCase() : `P${idx+1}`),
+              rate: p.tokenPrice !== undefined ? Number(p.tokenPrice) : (p.rate || 0),
+              rateLabel: p.rateLabel || `$${(p.tokenPrice || p.rate || 0).toFixed(2)}`,
+              totalSupply: Number(p.totalSupply) || 0,
+              tokensSold: Number(p.tokensSold) || 0,
+              status: p.status || 'upcoming',
+              multiplier: p.multiplier || '',
+              unlockRequirement: p.unlockRequirement || '',
+              targetDate: p.targetDate || ''
+            }));
+            setPhases(mappedPhases);
           }
+
           if (data.referralLevels && Array.isArray(data.referralLevels) && data.referralLevels.length > 0) {
-            setReferralLevels((prev) => {
-              if (JSON.stringify(prev) !== JSON.stringify(data.referralLevels)) {
-                localStorage.setItem('nxbc_admin_levels', JSON.stringify(data.referralLevels));
-                return data.referralLevels;
-              }
-              return prev;
-            });
+            setReferralLevels(data.referralLevels);
           }
           if (data.rankRewards && Array.isArray(data.rankRewards) && data.rankRewards.length > 0) {
-            setRankRewards((prev) => {
-              if (JSON.stringify(prev) !== JSON.stringify(data.rankRewards)) {
-                localStorage.setItem('nxbc_admin_ranks', JSON.stringify(data.rankRewards));
-                return data.rankRewards;
-              }
-              return prev;
-            });
+            setRankRewards(data.rankRewards);
           }
           if (data.systemConfig && typeof data.systemConfig === 'object') {
-            setSystemConfig((prev) => {
-              if (JSON.stringify(prev) !== JSON.stringify(data.systemConfig)) {
-                localStorage.setItem('nxbc_admin_system', JSON.stringify(data.systemConfig));
-                return data.systemConfig;
-              }
-              return prev;
-            });
+            setSystemConfig(data.systemConfig);
           }
           if (data.matrixConfig && typeof data.matrixConfig === 'object') {
-            setMatrixConfig((prev) => {
-              if (JSON.stringify(prev) !== JSON.stringify(data.matrixConfig)) {
-                localStorage.setItem('nxbc_admin_matrix', JSON.stringify(data.matrixConfig));
-                return data.matrixConfig;
-              }
-              return prev;
-            });
+            setMatrixConfig(data.matrixConfig);
           }
         }
       } catch (err) {}
@@ -503,6 +389,28 @@ export default function App() {
   }, [walletConnected, walletAddress]);
 
   // Transactions History (Persisted in localStorage)
+  
+  const [allocation, setAllocation] = useState<AllocationState>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('nxbc_user_allocation');
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch (e) {}
+      }
+    }
+    return {
+      p2Percent: 0,
+      p3Percent: 0,
+      p4Percent: 0,
+      p5Percent: 0,
+      dexPercent: 0,
+      unallocatedPercent: 100,
+      totalTokensPurchased: 0,
+      isLocked: false,
+    };
+  });
+
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('nxbc_transactions');
@@ -660,45 +568,17 @@ export default function App() {
   });
 
   // General System & Global Parameters (Dynamic via Admin & Persisted)
-  const [systemConfig, setSystemConfig] = useState<AdminSystemConfig>(() => {
-    const defaultReceiving = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261';
-    const defaultContract = '0x85363386808d1f26BF3805Bb44a093a2Af9E8783';
-
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nxbc_admin_system');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed.directSponsorPercent === 5) {
-            parsed.directSponsorPercent = 10;
-          }
-          // Ensure receiving address is the smart contract for automated distribution
-          parsed.receivingAddress = defaultContract;
-          parsed.contractAddress = defaultContract;
-          parsed.minPurchaseUsd = 0.01;
-          localStorage.setItem('nxbc_admin_system', JSON.stringify(parsed));
-          return parsed;
-        } catch (e) {}
-      }
-    }
-    return {
-      tokenName: 'NXBC',
-      tokenSymbol: 'NXBC',
-      contractAddress: defaultContract,
-      receivingAddress: defaultReceiving,
-      minPurchaseUsd: 0.01,
-      maxPurchaseUsd: 50000,
-      minMlmQualifyUsd: 100,
-      presalePaused: false,
-      directSponsorPercent: 10,
-      withdrawalFeePercent: 2,
-      matrixConfig: {
-        placementIncomeUsd: 1.00,
-        uplineSharePercent: 10,
-        enabled: true,
-      },
-      royaltyPoolUsd: 0,
-    };
+  const [systemConfig, setSystemConfig] = useState<AdminSystemConfig>({
+    tokenName: 'NXBC',
+    tokenSymbol: 'NXBC',
+    contractAddress: '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
+    receivingAddress: '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
+    minPurchaseUsd: 0.01,
+    maxPurchaseUsd: 50000,
+    minMlmQualifyUsd: 100,
+    presalePaused: false,
+    directSponsorPercent: 10,
+    withdrawalFeePercent: 2,
   });
 
   // 2x2 Matrix Structure Nodes Data (Clean Real Tree)
@@ -772,7 +652,47 @@ export default function App() {
     };
   }, [walletAddress, walletConnected]);
 
-      // Purchase handler with sequential phase progression & immutable allocation lock
+    
+  // Sync User Stats from PostgreSQL Database
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      if (!walletAddress) return;
+      try {
+        const res = await fetch(`/api/users/${walletAddress}`);
+        const data = await res.json();
+        if (data && data.user) {
+          setTotalInvestedUsd(data.user.totalInvestedUsdt || 0);
+          setClaimableBalanceUsd(data.user.availableUsdt || 0);
+          
+          // Optionally calculate matrix specific income from earnings if needed, 
+          // For now we map totalEarned to a mix or keep them separate.
+          
+          if (data.transactions) {
+            const mappedTxs = data.transactions.map((t: any) => ({
+              id: `tx-${t.id}`,
+              type: t.type === 'buy_presale' ? 'buy' : 'income',
+              title: t.type === 'buy_presale' ? `Purchase (${t.tokenAmount} NXBC)` : 'Income',
+              amountTokens: t.tokenAmount,
+              amountUsd: t.amountUsdt,
+              timestamp: new Date(t.createdAt).toLocaleString(),
+              status: t.status,
+              txHash: t.txHash || '',
+              phase: `Phase ${t.phaseIndex}`
+            }));
+            setTransactions(mappedTxs);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to sync user stats from DB:", err);
+      }
+    };
+    
+    fetchUserStats();
+    const interval = setInterval(fetchUserStats, 5000);
+    return () => clearInterval(interval);
+  }, [walletAddress]);
+
+  // Purchase handler with sequential phase progression & immutable allocation lock
   const handleConfirmPurchase = (
     tokenAmount: number,
     usdAmount: number,
@@ -848,7 +768,7 @@ export default function App() {
     };
 
     // Add to global sell queue via Backend API
-    const addressToUse = account || 'Unknown Wallet';
+    const addressToUse = walletAddress || 'Unknown Wallet';
     const postOrders = async () => {
        const ordersToPost = [];
        if (p2TokensAllocated > 0) ordersToPost.push({ phaseNumber: 2, amountTokens: p2TokensAllocated, tokenPrice: 0.15 });
@@ -874,115 +794,19 @@ export default function App() {
        }
        fetchSellOrders(); // refresh after posting
     };
-    if (account) postOrders();
+    if (walletAddress) postOrders();
 
     setAllocation(updatedAlloc);
     if (typeof window !== 'undefined') {
       localStorage.setItem('nxbc_user_allocation', JSON.stringify(updatedAlloc));
     }
 
-    // Sequential Phase Progress & 100% Transition Logic
-    setPhases((prevPhases) => {
-      const idx = prevPhases.findIndex((p) => p.status === 'active');
-      if (idx === -1) return prevPhases;
-
-      const p = prevPhases[idx];
-      const newSold = p.tokensSold + tokenAmount;
-
-      let updatedPhases = prevPhases;
-      // If current phase hits exactly 100% (totalSupply), advance to next in sequence!
-      if (newSold >= p.totalSupply) {
-        const nextIdx = idx + 1;
-        updatedPhases = prevPhases.map((phase, pIndex) => {
-          if (pIndex === idx) {
-            return { ...phase, tokensSold: phase.totalSupply, status: 'completed' as const };
-          }
-          if (pIndex === nextIdx) {
-            return {
-              ...phase,
-              tokensSold: 0,
-              status: 'active' as const,
-            };
-          }
-          return phase;
-        });
-      } else {
-        updatedPhases = prevPhases.map((phase, pIndex) =>
-          pIndex === idx ? { ...phase, tokensSold: newSold } : phase
-        );
-      }
-
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('nxbc_admin_phases', JSON.stringify(updatedPhases));
-      }
-      syncConfigsToServer({ phases: updatedPhases });
-      return updatedPhases;
-    });
-
-    // Update cumulative investment
-    const newTotalInvested = totalInvestedUsd + usdAmount;
-    setTotalInvestedUsd(newTotalInvested);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('nxbc_total_invested', newTotalInvested.toString());
-    }
-
-    // UNIVERSAL MLM Qualification Logic (Default $100 limit applies to Level, Direct, Matrix, Ranks)
+// UNIVERSAL MLM Qualification Logic (Default $100 limit applies to Level, Direct, Matrix, Ranks)
     const minQualify = systemConfig.minMlmQualifyUsd || 100;
+    const newTotalInvested = totalInvestedUsd + usdAmount;
     const wasQualified = totalInvestedUsd >= minQualify;
     const isNowQualified = newTotalInvested >= minQualify;
     
-    let distributeAmount = 0;
-    let earnedLevelBonus = 0;
-    let earnedMatrixBonus = 0;
-
-    if (!wasQualified && isNowQualified) {
-      // User just crossed the qualification threshold (e.g. $100).
-      distributeAmount = newTotalInvested;
-      
-      // Matrix Placement happens ONLY ONCE when they fully qualify
-      if (systemConfig.matrixConfig?.enabled) {
-         earnedMatrixBonus = systemConfig.matrixConfig.placementIncomeUsd || 1.00;
-         console.log('User placed in Team Matrix! Earned Matrix Bonus:', earnedMatrixBonus);
-      }
-    } else if (wasQualified) {
-      // User was already qualified. Distribute on the new top-up amount.
-      distributeAmount = usdAmount;
-    }
-
-    // Distribute Direct & Level Bonuses
-    if (distributeAmount > 0) {
-      const directBonus = (distributeAmount * systemConfig.directSponsorPercent) / 100;
-      const l1Bonus = (distributeAmount * (referralLevels[0]?.commissionPercent || 10)) / 100;
-      earnedLevelBonus = directBonus + l1Bonus;
-    }
-
-    // Apply accumulated bonuses safely using state updater functions
-    if (earnedLevelBonus > 0 || earnedMatrixBonus > 0) {
-      const totalEarned = earnedLevelBonus + earnedMatrixBonus;
-      
-      setClaimableBalanceUsd(prev => {
-         const next = prev + totalEarned;
-         if (typeof window !== 'undefined') localStorage.setItem('nxbc_claimable_usd', next.toString());
-         return next;
-      });
-      
-      if (earnedLevelBonus > 0) {
-         setLevelIncomeUsd(prev => {
-            const next = prev + earnedLevelBonus;
-            if (typeof window !== 'undefined') localStorage.setItem('nxbc_level_income', next.toString());
-            return next;
-         });
-      }
-      
-      if (earnedMatrixBonus > 0) {
-         setMatrixIncomeUsd(prev => {
-            const next = prev + earnedMatrixBonus;
-            if (typeof window !== 'undefined') localStorage.setItem('nxbc_matrix_income', next.toString());
-            return next;
-         });
-      }
-    }
-
     // Record Transaction in PostgreSQL Backend
     fetch('/api/presale/buy', {
       method: 'POST',
@@ -999,23 +823,7 @@ export default function App() {
       .then((res) => console.log('PostgreSQL Presale Purchase recorded:', res))
       .catch((err) => console.log('PostgreSQL purchase notice:', err));
 
-    // Record Transaction History
-    const newTx: Transaction = {
-      id: `tx-${Date.now()}`,
-      type: 'buy',
-      title: `${activePhase.name} Purchase (${tokenAmount.toLocaleString()} ${systemConfig.tokenSymbol})`,
-      amountTokens: tokenAmount,
-      amountUsd: usdAmount,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      status: 'completed',
-      txHash: `0x${Array.from({length: 8}, () => Math.floor(Math.random()*16).toString(16)).join('')}...${Array.from({length: 4}, () => Math.floor(Math.random()*16).toString(16)).join('')}`,
-      phase: `${activePhase.name} ($${activePhase.rate.toFixed(2)})`,
-    };
-    const updatedTxs = [newTx, ...transactions];
-    setTransactions(updatedTxs);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('nxbc_transactions', JSON.stringify(updatedTxs));
-    }
+    // (Transactions are now synced from server)
   };
 
   // Helper to reset all data back to clean state
@@ -1518,7 +1326,7 @@ export default function App() {
           });
 
           // Sync fulfillment to PostgreSQL DB for the connected user
-          if (account) {
+          if (walletAddress) {
             for (let i = 0; i < newQueue.length; i++) {
               const oldEntry = sellQueue[i];
               const newEntry = newQueue[i];
@@ -1531,7 +1339,7 @@ export default function App() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      walletAddress: account,
+                      walletAddress: walletAddress,
                       phaseIndex: newEntry.phaseNumber,
                       phaseName: `Phase ${newEntry.phaseNumber}`,
                       tokenPrice: phasePrice,

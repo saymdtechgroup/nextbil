@@ -7,7 +7,7 @@ export interface PhaseConfig {
   rateLabel: string;
   totalSupply: number;
   tokensSold: number;
-  status: 'active' | 'completed' | 'locked';
+  status: 'active' | 'completed' | 'locked' | 'upcoming';
   multiplier: string;
   unlockRequirement: string;
   targetDate?: string;
