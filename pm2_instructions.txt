@@ -1,0 +1,7 @@
+Bhai aap VPS pe yahi commands chalao:
+pm2 kill
+cd /root/app
+git pull origin main
+npm install
+npm run build
+pm2 start dist/server.cjs --name "nxbc-app" --update-env
