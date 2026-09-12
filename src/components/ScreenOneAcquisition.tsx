@@ -169,9 +169,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
               Step {(activePhase.phaseNumber || 1)}/5
             </span>
           </div>
-          <span className="text-[10px] font-mono-crypto text-emerald-400 font-bold bg-emerald-950/80 px-2 py-0.5 rounded-lg border border-emerald-500/40 shadow-sm">
-            {activePhase.multiplier}
-          </span>
+          
         </div>
 
         {/* Main Price & Target Display */}
@@ -198,11 +196,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
               <span className="text-sm font-black text-fuchsia-300 font-mono-crypto">
                 {nextPhase ? (nextPhase.rateLabel || `$${nextPhase.rate.toFixed(2)}`) : '$1,500 – $3,000'}
               </span>
-              {nextPhase?.multiplier && (
-                <span className="text-[9px] text-emerald-400 font-bold font-mono-crypto bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-500/40">
-                  {nextPhase.multiplier}
-                </span>
-              )}
+              
             </div>
             <span className="text-[8px] text-purple-300/70 font-mono-crypto block mt-0.5">
               Automated Next Stage Unlock
@@ -437,9 +431,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
                       {phase.rateLabel || `$${phase.rate.toFixed(2)}`}
                       {!phase.rateLabel && <span className="text-[9px] font-normal text-purple-300/70 ml-1">USD</span>}
                     </span>
-                    <span className="text-[9px] font-mono-crypto text-fuchsia-300 font-semibold block whitespace-nowrap">
-                      {phase.multiplier}
-                    </span>
+                    
                   </div>
                 </div>
 

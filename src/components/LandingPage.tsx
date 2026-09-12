@@ -88,7 +88,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
             {[
               { title: "Tokens Minted", value: "100%", desc: "Directly to your Wallet", icon: ShieldCheck },
               { title: "Smart Contract", value: "Audited", desc: "Atomic FIFO Swaps", icon: Lock },
-              { title: "Target Price", value: "$0.01 ➔ $100", desc: "5 Multiplier Phases", icon: BarChart3 }
+              { title: "Target Price", value: "$0.01 ➔ $100", desc: "5 Presale Phases", icon: BarChart3 }
             ].map((metric, i) => (
               <div key={i} className={`p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md text-left transition-all duration-1000 delay-${(i+1)*200} transform ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-fuchsia-500/20 flex items-center justify-center mb-4 border border-white/5">

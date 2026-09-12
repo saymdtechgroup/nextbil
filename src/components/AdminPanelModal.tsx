@@ -860,20 +860,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                               className="w-full bg-[#06020c] border border-purple-500/40 focus:border-amber-400 rounded-xl py-1.5 px-2.5 text-xs font-bold font-mono-crypto text-fuchsia-300 focus:outline-none"
                             />
                           </div>
-
-                          {/* Multiplier / Label tag */}
-                          <div>
-                            <label className="text-[9px] uppercase text-purple-300/80 font-rajdhani font-semibold block mb-1">
-                              Multiplier / Tag Text
-                            </label>
-                            <input
-                              type="text"
-                              value={phase.multiplier}
-                              onChange={(e) => handlePhaseChange(idx, 'multiplier', e.target.value)}
-                              className="w-full bg-[#06020c] border border-purple-500/40 focus:border-amber-400 rounded-xl py-1.5 px-2.5 text-xs font-mono-crypto text-purple-200 focus:outline-none"
-                              placeholder="e.g. 10x Growth"
-                            />
-                          </div>
                         </div>
 
                         {/* Valuation Target Footnote */}

@@ -913,19 +913,6 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                           </div>
                         </div>
 
-                        {/* Multiplier */}
-                        <div>
-                          <label className="text-[9px] uppercase text-purple-300 font-rajdhani font-bold block mb-1">
-                            Multiplier / Gain
-                          </label>
-                          <input
-                            type="text"
-                            value={phase.multiplier}
-                            onChange={(e) => handlePhaseChange(idx, 'multiplier', e.target.value)}
-                            className="w-full bg-[#06020c] border border-purple-500/50 rounded-xl py-1.5 px-2.5 text-xs font-bold font-mono-crypto text-slate-100 focus:outline-none"
-                          />
-                        </div>
-
                         {/* Total Supply for Phase */}
                         <div>
                           <label className="text-[9px] uppercase text-purple-300 font-rajdhani font-bold block mb-1">
