@@ -1,8 +1,11 @@
-import { db } from "./src/db/index.ts";
-import { systemConfigs } from "./src/db/schema.ts";
+import { db } from "./src/db";
+import { systemConfigs } from "./src/db/schema";
+import { eq } from "drizzle-orm";
+
 async function main() {
-    const data = await db.select().from(systemConfigs);
-    console.log(JSON.stringify(data, null, 2));
-    process.exit(0);
+    const rows = await db.select().from(systemConfigs).where(eq(systemConfigs.key, 'phases'));
+    if (rows.length > 0) {
+        console.log(rows[0].value);
+    }
 }
-main();
+main().catch(console.error);

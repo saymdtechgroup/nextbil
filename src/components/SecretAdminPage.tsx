@@ -226,6 +226,8 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
     if (field === 'rate') {
       const numRate = typeof value === 'number' ? value : parseFloat(value as string) || 0;
       updated[index].rateLabel = `$${numRate.toFixed(2)}`;
+      updated[index].rate = numRate;
+      (updated[index] as any).tokenPrice = numRate;
     }
     setLocalPhases(updated);
     if (typeof window !== 'undefined') {
