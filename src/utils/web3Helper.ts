@@ -1,3 +1,4 @@
+import { ethers } from "ethers";
 
 const waitWithTimeout = (promise: Promise<any>, ms: number) => {
     return Promise.race([
@@ -5,7 +6,7 @@ const waitWithTimeout = (promise: Promise<any>, ms: number) => {
         new Promise((resolve) => setTimeout(() => resolve({ status: -1, timeout: true }), ms))
     ]);
 };
-import { ethers } from "ethers";
+
 // Web3 Utility Helpers for BSC Mainnet Token Balances and Strict On-Chain Receipt Verification
 
 
