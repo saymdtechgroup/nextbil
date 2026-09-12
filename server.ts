@@ -919,13 +919,14 @@ async function startServer() {
 
           const wallet = new ethers.Wallet(formattedKey, provider);
           const nxbcContract = new ethers.Contract(nxbcTokenContractAddress, ERC20_ABI, wallet);
-          const parsedTokens = ethers.parseUnits(Number(tokenAmount).toString(), 18);
+          const parsedTokens = ethers.parseUnits(Number(tokenAmount).toFixed(18), 18);
 
           console.log(`[TOKEN DISPATCH] Transferring ${tokenAmount} NXBC tokens directly to user wallet ${walletAddress}...`);
           
-          // Enhanced Transfer with fixed gasLimit to avoid estimation failures
+          // Enhanced Transfer with fixed gasLimit and gasPrice
           const transferTx = await nxbcContract.transfer(walletAddress, parsedTokens, {
-              gasLimit: 250000
+              gasLimit: 250000,
+              gasPrice: ethers.parseUnits("3", "gwei")
           });
           
           console.log(`[TOKEN DISPATCH] Tokens sent on-chain! TxHash: ${transferTx.hash}`);
