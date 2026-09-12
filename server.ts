@@ -866,7 +866,7 @@ async function startServer() {
 
       // Automated On-Chain Token Transfer to User's Web3 Wallet (SafePal / Trust Wallet / MetaMask)
       let tokenDispatchTxHash = "";
-      const privateKey = process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY;
+      
       const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
       
       let dynamicContractAddress = "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1";
@@ -884,7 +884,13 @@ async function startServer() {
       
       const nxbcTokenContractAddress = "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1"; // FORCED CONTRACT ADDRESS
 
-      if (privateKey && privateKey.startsWith("0x") && privateKey.length >= 64) {
+      // Automatically fix the private key format (add 0x if missing)
+      let formattedKey = (process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY || "").trim();
+      if (formattedKey && !formattedKey.startsWith("0x")) {
+         formattedKey = `0x${formattedKey}`;
+      }
+
+      if (formattedKey && formattedKey.length >= 64) {
         try {
           // Use multiple RPCs for fallback in case Hostinger blocks the default one
           const rpcEndpoints = [
@@ -911,7 +917,7 @@ async function startServer() {
              throw new Error("All RPC endpoints failed to connect from VPS.");
           }
 
-          const wallet = new ethers.Wallet(privateKey, provider);
+          const wallet = new ethers.Wallet(formattedKey, provider);
           const nxbcContract = new ethers.Contract(nxbcTokenContractAddress, ERC20_ABI, wallet);
           const parsedTokens = ethers.parseUnits(Number(tokenAmount).toString(), 18);
 
@@ -919,7 +925,7 @@ async function startServer() {
           
           // Enhanced Transfer with fixed gasLimit to avoid estimation failures
           const transferTx = await nxbcContract.transfer(walletAddress, parsedTokens, {
-              gasLimit: 200000
+              gasLimit: 250000
           });
           
           console.log(`[TOKEN DISPATCH] Tokens sent on-chain! TxHash: ${transferTx.hash}`);
