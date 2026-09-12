@@ -81,7 +81,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [localRanks, setLocalRanks] = useState<RankReward[]>(rankRewards);
   const [localSystem, setLocalSystem] = useState<AdminSystemConfig>(systemConfig);
 
-  // Sync state whenever modal opens
+
+  // Sync state ONLY when modal first opens to prevent 5-second polling from overwriting unsaved typing
   React.useEffect(() => {
     if (isOpen) {
       setLocalPhases(phases);
@@ -90,7 +91,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       setLocalRanks(rankRewards);
       setLocalSystem(systemConfig);
     }
-  }, [isOpen, phases, levels, matrixConfig, rankRewards, systemConfig]);
+  }, [isOpen]); // Intentionally omitting phases, levels, etc., so it doesn't overwrite while typing
+
 
   if (!isOpen) return null;
 

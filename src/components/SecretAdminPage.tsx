@@ -107,41 +107,18 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string>('');
 
   // Editable local state copies initialized from persistent storage
-  const [localPhases, setLocalPhases] = useState<PhaseConfig[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nxbc_admin_phases');
-      if (saved) try { return JSON.parse(saved); } catch (e) {}
-    }
-    return phases;
-  });
-  const [localLevels, setLocalLevels] = useState<ReferralLevel[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nxbc_admin_levels');
-      if (saved) try { return JSON.parse(saved); } catch (e) {}
-    }
-    return referralLevels;
-  });
-  const [localRanks, setLocalRanks] = useState<RankReward[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nxbc_admin_ranks');
-      if (saved) try { return JSON.parse(saved); } catch (e) {}
-    }
-    return rankRewards;
-  });
-  const [localSystem, setLocalSystem] = useState<AdminSystemConfig>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nxbc_admin_system');
-      if (saved) try { return JSON.parse(saved); } catch (e) {}
-    }
-    return systemConfig;
-  });
-  const [localMatrix, setLocalMatrix] = useState<MatrixConfig>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nxbc_admin_matrix');
-      if (saved) try { return JSON.parse(saved); } catch (e) {}
-    }
-    return matrixConfig;
-  });
+  const [localPhases, setLocalPhases] = useState<PhaseConfig[]>(phases);
+  const [localLevels, setLocalLevels] = useState<ReferralLevel[]>(referralLevels);
+  const [localRanks, setLocalRanks] = useState<RankReward[]>(rankRewards);
+  const [localSystem, setLocalSystem] = useState<AdminSystemConfig>(systemConfig);
+  
+  const [localMatrix, setLocalMatrix] = useState<MatrixConfig>(matrixConfig);
+  
+  
+
+
+
+
 
   // Simulation test amount
   const [simBuyAmount, setSimBuyAmount] = useState<number>(500);

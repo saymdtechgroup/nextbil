@@ -69,6 +69,7 @@ export default function App() {
 
   // Core State: 6-Phase Sequential Roadmap & Live Status (Admin Managed & Persisted)
   const [phases, setPhases] = useState<PhaseConfig[]>(INITIAL_PHASES);
+  const [isConfigLoaded, setIsConfigLoaded] = useState(false);
 
   const activePhase = phases.find((p) => p.status === 'active') || phases[0] || {
     phaseNumber: 1,
@@ -275,14 +276,7 @@ export default function App() {
   useEffect(() => {
     const fetchLatestServerConfigs = async () => {
       // If currently on admin page, do not overwrite what the admin is viewing/editing
-      if (
-        typeof window !== 'undefined' &&
-        (window.location.hash.toLowerCase().includes('admin') ||
-          window.location.pathname.toLowerCase().includes('admin') ||
-          window.location.search.toLowerCase().includes('admin'))
-      ) {
-        return;
-      }
+      
 
       try {
         const res = await fetch('/api/admin/configs');
@@ -319,8 +313,9 @@ export default function App() {
           if (data.matrixConfig && typeof data.matrixConfig === 'object') {
             setMatrixConfig(data.matrixConfig);
           }
+          setIsConfigLoaded(true);
         }
-      } catch (err) {}
+      } catch (err) { setIsConfigLoaded(true); }
     };
 
     fetchLatestServerConfigs();
@@ -330,28 +325,22 @@ export default function App() {
     // Cross-tab storage listener for immediate instant sync across browser tabs
     const handleStorageEvent = (e: StorageEvent) => {
       // Ignore storage sync events if currently on admin page
-      if (
-        typeof window !== 'undefined' &&
-        (window.location.hash.toLowerCase().includes('admin') ||
-          window.location.pathname.toLowerCase().includes('admin'))
-      ) {
-        return;
-      }
+      
 
       if (e.key === 'nxbc_admin_phases' && e.newValue) {
-        try { setPhases(JSON.parse(e.newValue)); } catch (err) {}
+        try { setPhases(JSON.parse(e.newValue)); } catch (err) { setIsConfigLoaded(true); }
       }
       if (e.key === 'nxbc_admin_levels' && e.newValue) {
-        try { setReferralLevels(JSON.parse(e.newValue)); } catch (err) {}
+        try { setReferralLevels(JSON.parse(e.newValue)); } catch (err) { setIsConfigLoaded(true); }
       }
       if (e.key === 'nxbc_admin_ranks' && e.newValue) {
-        try { setRankRewards(JSON.parse(e.newValue)); } catch (err) {}
+        try { setRankRewards(JSON.parse(e.newValue)); } catch (err) { setIsConfigLoaded(true); }
       }
       if (e.key === 'nxbc_admin_system' && e.newValue) {
-        try { setSystemConfig(JSON.parse(e.newValue)); } catch (err) {}
+        try { setSystemConfig(JSON.parse(e.newValue)); } catch (err) { setIsConfigLoaded(true); }
       }
       if (e.key === 'nxbc_admin_matrix' && e.newValue) {
-        try { setMatrixConfig(JSON.parse(e.newValue)); } catch (err) {}
+        try { setMatrixConfig(JSON.parse(e.newValue)); } catch (err) { setIsConfigLoaded(true); }
       }
     };
 
@@ -1298,9 +1287,14 @@ export default function App() {
   };
 
   // If Secret Admin Page is activated, render full-screen master portal
+  
   if (showSecretAdminPage || activeSingleScreen === 'admin') {
+    if (!isConfigLoaded) {
+      return <div className="min-h-screen bg-[#06020c] flex items-center justify-center text-amber-500 font-mono-crypto">LOADING SECURE PORTAL...</div>;
+    }
     return (
       <SecretAdminPage
+
         phases={phases}
         referralLevels={referralLevels}
         rankRewards={rankRewards}
