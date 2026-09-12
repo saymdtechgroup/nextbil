@@ -69,7 +69,6 @@ export default function App() {
 
   // Core State: 6-Phase Sequential Roadmap & Live Status (Admin Managed & Persisted)
   const [phases, setPhases] = useState<PhaseConfig[]>(INITIAL_PHASES);
-  const [isConfigLoaded, setIsConfigLoaded] = useState(false);
 
   const activePhase = phases.find((p) => p.status === 'active') || phases[0] || {
     phaseNumber: 1,
@@ -97,7 +96,7 @@ export default function App() {
   // Fetch Live P2P Sell Orders
   const fetchSellOrders = async () => {
     try {
-      const res = await fetch(`/api/p2p/orders?t=${new Date().getTime()}`);
+      const res = await fetch('/api/p2p/orders');
       if (res.ok) {
          const data = await res.json();
          if (data.orders) {
@@ -276,10 +275,17 @@ export default function App() {
   useEffect(() => {
     const fetchLatestServerConfigs = async () => {
       // If currently on admin page, do not overwrite what the admin is viewing/editing
-      
+      if (
+        typeof window !== 'undefined' &&
+        (window.location.hash.toLowerCase().includes('admin') ||
+          window.location.pathname.toLowerCase().includes('admin') ||
+          window.location.search.toLowerCase().includes('admin'))
+      ) {
+        return;
+      }
 
       try {
-        const res = await fetch(`/api/admin/configs?t=${new Date().getTime()}`);
+        const res = await fetch('/api/admin/configs');
         const data = await res.json();
         if (data?.success) {
 
@@ -289,9 +295,8 @@ export default function App() {
               phaseNumber: p.phaseNumber || (idx + 1),
               name: p.name || `Phase ${idx+1}`,
               shortName: p.shortName || (p.name ? p.name.substring(0,2).toUpperCase() : `P${idx+1}`),
-              rate: p.rate !== undefined ? Number(p.rate) : (p.tokenPrice || 0),
-              tokenPrice: p.rate !== undefined ? Number(p.rate) : (p.tokenPrice || 0),
-              rateLabel: p.rateLabel || `$${(p.rate || p.tokenPrice || 0).toFixed(2)}`,
+              rate: p.tokenPrice !== undefined ? Number(p.tokenPrice) : (p.rate || 0),
+              rateLabel: p.rateLabel || `$${(p.tokenPrice || p.rate || 0).toFixed(2)}`,
               totalSupply: Number(p.totalSupply) || 0,
               tokensSold: Number(p.tokensSold) || 0,
               status: p.status || 'upcoming',
@@ -314,9 +319,8 @@ export default function App() {
           if (data.matrixConfig && typeof data.matrixConfig === 'object') {
             setMatrixConfig(data.matrixConfig);
           }
-          setIsConfigLoaded(true);
         }
-      } catch (err) { setIsConfigLoaded(true); }
+      } catch (err) {}
     };
 
     fetchLatestServerConfigs();
@@ -326,22 +330,28 @@ export default function App() {
     // Cross-tab storage listener for immediate instant sync across browser tabs
     const handleStorageEvent = (e: StorageEvent) => {
       // Ignore storage sync events if currently on admin page
-      
+      if (
+        typeof window !== 'undefined' &&
+        (window.location.hash.toLowerCase().includes('admin') ||
+          window.location.pathname.toLowerCase().includes('admin'))
+      ) {
+        return;
+      }
 
       if (e.key === 'nxbc_admin_phases' && e.newValue) {
-        try { setPhases(JSON.parse(e.newValue)); } catch (err) { setIsConfigLoaded(true); }
+        try { setPhases(JSON.parse(e.newValue)); } catch (err) {}
       }
       if (e.key === 'nxbc_admin_levels' && e.newValue) {
-        try { setReferralLevels(JSON.parse(e.newValue)); } catch (err) { setIsConfigLoaded(true); }
+        try { setReferralLevels(JSON.parse(e.newValue)); } catch (err) {}
       }
       if (e.key === 'nxbc_admin_ranks' && e.newValue) {
-        try { setRankRewards(JSON.parse(e.newValue)); } catch (err) { setIsConfigLoaded(true); }
+        try { setRankRewards(JSON.parse(e.newValue)); } catch (err) {}
       }
       if (e.key === 'nxbc_admin_system' && e.newValue) {
-        try { setSystemConfig(JSON.parse(e.newValue)); } catch (err) { setIsConfigLoaded(true); }
+        try { setSystemConfig(JSON.parse(e.newValue)); } catch (err) {}
       }
       if (e.key === 'nxbc_admin_matrix' && e.newValue) {
-        try { setMatrixConfig(JSON.parse(e.newValue)); } catch (err) { setIsConfigLoaded(true); }
+        try { setMatrixConfig(JSON.parse(e.newValue)); } catch (err) {}
       }
     };
 
@@ -648,7 +658,7 @@ export default function App() {
     const fetchUserStats = async () => {
       if (!walletAddress) return;
       try {
-        const res = await fetch(`/api/users/${walletAddress}?t=${new Date().getTime()}`);
+        const res = await fetch(`/api/users/${walletAddress}`);
         const data = await res.json();
         if (data && data.user) {
           setTotalInvestedUsd(data.user.totalInvestedUsdt || 0);
@@ -1194,7 +1204,7 @@ export default function App() {
     const defaultSystem: AdminSystemConfig = {
       tokenName: 'NXBC',
       tokenSymbol: 'NXBC',
-      contractAddress: '0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1',
+      contractAddress: '0x85363386808d1f26BF3805Bb44a093a2Af9E8783',
       receivingAddress: '0x85363386808d1f26BF3805Bb44a093a2Af9E8783',
       minPurchaseUsd: 1,
       maxPurchaseUsd: 50000,
@@ -1288,14 +1298,9 @@ export default function App() {
   };
 
   // If Secret Admin Page is activated, render full-screen master portal
-  
   if (showSecretAdminPage || activeSingleScreen === 'admin') {
-    if (!isConfigLoaded) {
-      return <div className="min-h-screen bg-[#06020c] flex items-center justify-center text-amber-500 font-mono-crypto">LOADING SECURE PORTAL...</div>;
-    }
     return (
       <SecretAdminPage
-
         phases={phases}
         referralLevels={referralLevels}
         rankRewards={rankRewards}
