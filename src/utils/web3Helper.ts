@@ -343,7 +343,7 @@ export async function executeSmartContractBuy(
   }
 
   try {
-    const provider = new ethers.BrowserProvider(ethProvider);
+    const provider = new ethers.BrowserProvider(ethProvider, 'any');
     const signer = await provider.getSigner();
     
     // Strict network check - Force user to switch to BSC
