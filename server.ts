@@ -869,7 +869,7 @@ async function startServer() {
       const privateKey = process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY;
       const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
       
-      let dynamicContractAddress = "0x8eF229597756a7bfb7Da80c0d86596D7bD366007";
+      let dynamicContractAddress = "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1";
       try {
         const sysConfigRecord = await db.query.systemConfigs.findFirst({
            where: eq(systemConfigs.key, 'systemConfig')
@@ -882,7 +882,7 @@ async function startServer() {
         }
       } catch (err) {}
       
-      const nxbcTokenContractAddress = process.env.NXBC_TOKEN_ADDRESS || dynamicContractAddress;
+      const nxbcTokenContractAddress = dynamicContractAddress || process.env.NXBC_TOKEN_ADDRESS || "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1";
 
       if (privateKey && privateKey.startsWith("0x") && privateKey.length >= 64) {
         try {

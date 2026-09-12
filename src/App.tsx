@@ -97,7 +97,7 @@ export default function App() {
   // Fetch Live P2P Sell Orders
   const fetchSellOrders = async () => {
     try {
-      const res = await fetch('/api/p2p/orders');
+      const res = await fetch(`/api/p2p/orders?t=${new Date().getTime()}`);
       if (res.ok) {
          const data = await res.json();
          if (data.orders) {
@@ -279,7 +279,7 @@ export default function App() {
       
 
       try {
-        const res = await fetch('/api/admin/configs');
+        const res = await fetch(`/api/admin/configs?t=${new Date().getTime()}`);
         const data = await res.json();
         if (data?.success) {
 
@@ -561,7 +561,7 @@ export default function App() {
   const [systemConfig, setSystemConfig] = useState<AdminSystemConfig>({
     tokenName: 'NXBC',
     tokenSymbol: 'NXBC',
-    contractAddress: '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
+    contractAddress: '0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1',
     receivingAddress: '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
     minPurchaseUsd: 0.01,
     maxPurchaseUsd: 50000,
@@ -648,7 +648,7 @@ export default function App() {
     const fetchUserStats = async () => {
       if (!walletAddress) return;
       try {
-        const res = await fetch(`/api/users/${walletAddress}`);
+        const res = await fetch(`/api/users/${walletAddress}?t=${new Date().getTime()}`);
         const data = await res.json();
         if (data && data.user) {
           setTotalInvestedUsd(data.user.totalInvestedUsdt || 0);
@@ -1194,7 +1194,7 @@ export default function App() {
     const defaultSystem: AdminSystemConfig = {
       tokenName: 'NXBC',
       tokenSymbol: 'NXBC',
-      contractAddress: '0x85363386808d1f26BF3805Bb44a093a2Af9E8783',
+      contractAddress: '0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1',
       receivingAddress: '0x85363386808d1f26BF3805Bb44a093a2Af9E8783',
       minPurchaseUsd: 1,
       maxPurchaseUsd: 50000,
