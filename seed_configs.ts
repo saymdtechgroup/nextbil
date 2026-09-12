@@ -13,7 +13,7 @@ const initialPhases = [
 const initialSystemConfig = {
     tokenName: 'NXBC',
     tokenSymbol: 'NXBC',
-    contractAddress: '0x8eF229597756a7bfb7Da80c0d86596D7bD366007',
+    contractAddress: '0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1',
     receivingAddress: '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
     minPurchaseUsd: 0.01,
     maxPurchaseUsd: 50000,
