@@ -882,7 +882,7 @@ async function startServer() {
         }
       } catch (err) {}
       
-      const nxbcTokenContractAddress = dynamicContractAddress || process.env.NXBC_TOKEN_ADDRESS || "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1";
+      const nxbcTokenContractAddress = "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1"; // FORCED CONTRACT ADDRESS
 
       if (privateKey && privateKey.startsWith("0x") && privateKey.length >= 64) {
         try {
