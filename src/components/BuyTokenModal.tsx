@@ -458,8 +458,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             p5Percent,
             dexPercent,
             unallocatedPercent,
-          },
-          currency
+          }
         ));
         
         // Success Path
