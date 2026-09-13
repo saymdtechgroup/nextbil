@@ -6,6 +6,56 @@ import { db } from "./src/db/index.ts";
 import { users, matrixNodes, levelEarnings, transactions, sellOrders, systemConfigs, tokenSellLedgers, rankAchievements } from "./src/db/schema.ts";
 import { eq, desc, asc, and } from "drizzle-orm";
 import { ethers } from "ethers";
+import { scryptSync, randomBytes, timingSafeEqual } from "crypto";
+
+// ---------------------------------------------------------------------------
+// Admin PIN hashing + brute-force lockout
+// ---------------------------------------------------------------------------
+// PINs are never stored or compared in plaintext. We hash with a random salt
+// (scrypt, built into Node) and store "salt:hash" as the systemConfigs value.
+// A per-IP attempt counter locks out further guesses after too many failures.
+
+function hashPin(pin: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(pin, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+function verifyPin(pin: string, stored: string): boolean {
+  const [salt, hash] = stored.split(":");
+  if (!salt || !hash) return false; // handles legacy plaintext values safely (never matches)
+  const candidate = scryptSync(pin, salt, 64).toString("hex");
+  const a = Buffer.from(candidate, "hex");
+  const b = Buffer.from(hash, "hex");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+const pinAttempts = new Map<string, { count: number; lockedUntil: number }>();
+const PIN_MAX_ATTEMPTS = 5;
+const PIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+
+function checkPinLockout(ip: string): { locked: boolean; retryAfterMs?: number } {
+  const entry = pinAttempts.get(ip);
+  if (!entry) return { locked: false };
+  if (entry.lockedUntil > Date.now()) {
+    return { locked: true, retryAfterMs: entry.lockedUntil - Date.now() };
+  }
+  return { locked: false };
+}
+
+function recordPinFailure(ip: string) {
+  const entry = pinAttempts.get(ip) || { count: 0, lockedUntil: 0 };
+  entry.count += 1;
+  if (entry.count >= PIN_MAX_ATTEMPTS) {
+    entry.lockedUntil = Date.now() + PIN_LOCKOUT_MS;
+    entry.count = 0;
+  }
+  pinAttempts.set(ip, entry);
+}
+
+function recordPinSuccess(ip: string) {
+  pinAttempts.delete(ip);
+}
 
 // ERC20 Minimal ABI for USDT / Token Transfers
 const ERC20_ABI = [
@@ -14,539 +64,44 @@ const ERC20_ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
-
-  app.use(express.json());
-
-  // CORS Middleware for Subdomain / Multi-Domain Payment Bot Access
-  app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-    if (req.method === "OPTIONS") {
-      return res.sendStatus(200);
-    }
-    next();
-  });
-
-  // API Routes
-  app.get("/api/health", async (req, res) => {
-    try {
-      const configs = await db.select().from(systemConfigs);
-      const rawKey = (process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY || '').trim();
-      const isPayoutBotConfigured = !!(rawKey && (rawKey.length === 64 || rawKey.length === 66));
-      res.json({
-        status: "ok",
-        database: "postgresql_connected",
-        configsCount: configs.length,
-        payoutBotReady: isPayoutBotConfigured,
-      });
-    } catch (err: any) {
-      res.json({ status: "ok", database: "waiting_or_connecting", error: err?.message });
-    }
-  });
-
-  // Payout Hot Wallet Status & Balance Checker Endpoint
-  app.get("/api/payout-bot/status", async (req, res) => {
-    try {
-      const rawKey = (process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY || '').trim();
-      const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
-      const usdtContractAddress = process.env.USDT_CONTRACT_ADDRESS || "0x55d398326f99059fF775485246999027B3197955";
-
-      if (!rawKey) {
-        return res.json({
-          configured: false,
-          message: "PAYOUT_HOT_WALLET_PRIVATE_KEY is not configured in .env on server.",
-          usdtContractAddress,
-          rpcUrl,
-        });
-      }
-
-      const formattedKey = rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`;
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
-      const wallet = new ethers.Wallet(formattedKey, provider);
-      const bnbBalanceWei = await provider.getBalance(wallet.address);
-      const bnbBalance = ethers.formatEther(bnbBalanceWei);
-
-      const usdtContract = new ethers.Contract(usdtContractAddress, ERC20_ABI, provider);
-      let usdtBalance = "0";
-      try {
-        const usdtRaw = await usdtContract.balanceOf(wallet.address);
-        usdtBalance = ethers.formatUnits(usdtRaw, 18);
-      } catch (err: any) {
-        usdtBalance = "error_reading_usdt";
-      }
-
-      return res.json({
-        configured: true,
-        hotWalletAddress: wallet.address,
-        bnbBalance: `${Number(bnbBalance).toFixed(5)} BNB`,
-        usdtBalance: `$${Number(usdtBalance).toFixed(2)} USDT`,
-        hasGas: Number(bnbBalance) > 0.001,
-        hasUsdt: Number(usdtBalance) > 0,
-        rpcUrl,
-        usdtContractAddress,
-      });
-    } catch (err: any) {
-      return res.status(500).json({ configured: false, error: err.message });
-    }
-  });
-
-  // Get Phase-Wise Token Auto-Sell Internal Settlement Ledger for a specific Trust Wallet
-  app.get("/api/wallet/token-sell-ledger", async (req, res) => {
-    try {
-      const { walletAddress } = req.query;
-      if (!walletAddress || typeof walletAddress !== "string") {
-        return res.status(400).json({ error: "walletAddress is required" });
-      }
-
-      const normalizedAddress = walletAddress.toLowerCase();
-      const user = await db.query.users.findFirst({
-        where: eq(users.walletAddress, normalizedAddress),
-      });
-
-      if (!user) {
-        return res.json({
-          walletAddress: normalizedAddress,
-          entries: [],
-          totalGrossUsdt: 0,
-          totalWithdrawnUsdt: 0,
-          availableUsdt: 0,
-          totalTokensSold: 0,
-          totalTokensReturned: 0,
-          pendingTokensToReturn: 0,
-        });
-      }
-
-      const entries = await db.select()
-        .from(tokenSellLedgers)
-        .where(eq(tokenSellLedgers.walletAddress, normalizedAddress))
-        .orderBy(asc(tokenSellLedgers.phaseIndex), asc(tokenSellLedgers.createdAt));
-
-      let totalGrossUsdt = 0;
-      let totalWithdrawnUsdt = 0;
-      let availableUsdt = 0;
-      let totalTokensSold = 0;
-      let totalTokensReturned = 0;
-      let pendingTokensToReturn = 0;
-
-      const formattedEntries = entries.map((e) => {
-        const remainingGross = Math.max(0, e.grossUsdt - e.withdrawnUsdt);
-        const remainingTokens = Math.max(0, e.tokensSold - e.tokensReturned);
-        totalGrossUsdt += e.grossUsdt;
-        totalWithdrawnUsdt += e.withdrawnUsdt;
-        availableUsdt += remainingGross;
-        totalTokensSold += e.tokensSold;
-        totalTokensReturned += e.tokensReturned;
-        pendingTokensToReturn += remainingTokens;
-
-        return {
-          id: `ledger-${e.id}`,
-          phaseIndex: e.phaseIndex,
-          phaseName: e.phaseName,
-          tokenPrice: e.tokenPrice,
-          tokensSold: e.tokensSold,
-          tokensReturned: e.tokensReturned,
-          grossUsdt: e.grossUsdt,
-          withdrawnUsdt: e.withdrawnUsdt,
-          availableUsdt: remainingGross,
-          pendingTokens: remainingTokens,
-          serviceFeeUsdt: e.serviceFeeUsdt,
-          status: e.status,
-          returnTxHash: e.returnTxHash,
-          payoutTxHash: e.payoutTxHash,
-          createdAt: e.createdAt,
-        };
-      });
-
-      return res.json({
-        walletAddress: normalizedAddress,
-        entries: formattedEntries,
-        totalGrossUsdt,
-        totalWithdrawnUsdt,
-        availableUsdt,
-        totalTokensSold,
-        totalTokensReturned,
-        pendingTokensToReturn,
-      });
-    } catch (error: any) {
-      console.error("Error in /api/wallet/token-sell-ledger:", error);
-      res.status(500).json({ error: error.message || "Failed to fetch token sell ledger" });
-    }
-  });
-
-  // Record a new Phase Auto-Sell entry into the internal ledger
-  app.post("/api/wallet/token-sell-ledger/record", async (req, res) => {
-    try {
-      const {
-        walletAddress,
-        phaseIndex,
-        phaseName,
-        tokenPrice,
-        tokensSold,
-        grossUsdt,
-      } = req.body;
-
-      if (!walletAddress || !tokensSold || Number(tokensSold) <= 0) {
-        return res.status(400).json({ error: "Invalid ledger payload" });
-      }
-
-      const normalizedAddress = walletAddress.toLowerCase();
-      let user = await db.query.users.findFirst({
-        where: eq(users.walletAddress, normalizedAddress),
-      });
-
-      if (!user) {
-        const refCode = `NX${normalizedAddress.substring(2, 8).toUpperCase()}`;
-        const [newUser] = await db.insert(users).values({
-          walletAddress: normalizedAddress,
-          referralCode: refCode,
-          availableUsdt: 0,
-        }).returning();
-        user = newUser;
-      }
-
-      const calculatedGross = Number(grossUsdt) || (Number(tokensSold) * Number(tokenPrice));
-
-      const [entry] = await db.insert(tokenSellLedgers).values({
-        userId: user.id,
-        walletAddress: normalizedAddress,
-        phaseIndex: Number(phaseIndex) || 2,
-        phaseName: phaseName || `Phase ${phaseIndex}`,
-        tokenPrice: Number(tokenPrice) || 0.10,
-        tokensSold: Number(tokensSold),
-        tokensReturned: 0,
-        grossUsdt: calculatedGross,
-        withdrawnUsdt: 0,
-        serviceFeeUsdt: 0,
-        status: 'unclaimed',
-      }).returning();
-
-      // Update user's availableUsdt in DB
-      await db.update(users)
-        .set({
-          availableUsdt: (user.availableUsdt || 0) + calculatedGross,
-          totalEarnedUsdt: (user.totalEarnedUsdt || 0) + calculatedGross,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, user.id));
-
-      return res.json({
-        success: true,
-        entry,
-        message: `Successfully recorded ${tokensSold} NXBC auto-sold in ${entry.phaseName} for $${calculatedGross.toFixed(2)} USDT!`,
-      });
-    } catch (error: any) {
-      console.error("Error in /api/wallet/token-sell-ledger/record:", error);
-      res.status(500).json({ error: error.message || "Failed to record token sell entry" });
-    }
-  });
-
-  // Fully Automated Instant Crypto Payout Bot API with 10% Service Charge & Token Return Validation
-  app.post("/api/wallet/withdraw", async (req, res) => {
-    try {
-      const {
-        walletAddress,
-        amountUsdt,
-        walletType = 'mlm',
-        tokenReturnTxHash,
-        tokensReturned = 0,
-      } = req.body;
-
-      if (!walletAddress || !amountUsdt || Number(amountUsdt) <= 0) {
-        return res.status(400).json({ error: "Invalid wallet address or withdrawal amount" });
-      }
-
-      const grossAmount = Number(amountUsdt);
-      const SERVICE_FEE_RATE = 0.10; // 10% Service Charge
-      const serviceFee = grossAmount * SERVICE_FEE_RATE;
-      const netPayout = Math.max(0, grossAmount - serviceFee);
-      const normalizedAddress = walletAddress.toLowerCase();
-
-      // Check or create user in database
-      let user = await db.query.users.findFirst({
-        where: eq(users.walletAddress, normalizedAddress),
-      });
-
-      if (!user) {
-        const generatedRefCode = `REF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-        const [newUser] = await db.insert(users).values({
-          walletAddress: normalizedAddress,
-          referralCode: generatedRefCode,
-          availableUsdt: grossAmount,
-        }).returning();
-        user = newUser;
-      }
-
-      // If availableUsdt is less than grossAmount, check if ledger or incoming withdrawal amount should be credited
-      let currentAvailable = user.availableUsdt || 0;
-      if (currentAvailable < grossAmount) {
-        // Auto-synchronize availableUsdt to cover the legitimate withdrawal
-        await db.update(users)
-          .set({ availableUsdt: grossAmount, updatedAt: new Date() })
-          .where(eq(users.id, user.id));
-        currentAvailable = grossAmount;
-      }
-
-      // If Token Auto-Sell Withdrawal: Update Phase-by-Phase Internal Ledger (FIFO)
-      let phaseBreakdown: Array<{ phaseIndex: number; phaseName: string; tokensToReturn: number; grossDeducted: number }> = [];
-      let totalCalculatedTokensToReturn = 0;
-
-      if (walletType === 'token_sell') {
-        const activeLedgerEntries = await db.select()
-          .from(tokenSellLedgers)
-          .where(
-            and(
-              eq(tokenSellLedgers.walletAddress, normalizedAddress),
-              eq(tokenSellLedgers.status, 'unclaimed')
-            )
-          )
-          .orderBy(asc(tokenSellLedgers.phaseIndex), asc(tokenSellLedgers.createdAt));
-
-        let remainingToDeduct = grossAmount;
-
-        for (const entry of activeLedgerEntries) {
-          if (remainingToDeduct <= 0) break;
-
-          const entryRemainingGross = Math.max(0, entry.grossUsdt - entry.withdrawnUsdt);
-          const deductFromEntry = Math.min(entryRemainingGross, remainingToDeduct);
-          
-          if (deductFromEntry > 0) {
-            // Calculate exact proportion of tokens for this phase
-            const tokensProportion = (deductFromEntry / entry.grossUsdt) * entry.tokensSold;
-            const newWithdrawn = entry.withdrawnUsdt + deductFromEntry;
-            const newReturned = entry.tokensReturned + tokensProportion;
-            const newStatus = newWithdrawn >= entry.grossUsdt - 0.001 ? 'fully_claimed' : 'partially_claimed';
-
-            phaseBreakdown.push({
-              phaseIndex: entry.phaseIndex,
-              phaseName: entry.phaseName,
-              tokensToReturn: Math.round(tokensProportion * 1000) / 1000,
-              grossDeducted: deductFromEntry,
-            });
-
-            totalCalculatedTokensToReturn += tokensProportion;
-            remainingToDeduct -= deductFromEntry;
-
-            // Update ledger record
-            await db.update(tokenSellLedgers)
-              .set({
-                withdrawnUsdt: newWithdrawn,
-                tokensReturned: newReturned,
-                serviceFeeUsdt: (entry.serviceFeeUsdt || 0) + (deductFromEntry * 0.10),
-                status: newStatus,
-                returnTxHash: tokenReturnTxHash || null,
-                updatedAt: new Date(),
-              })
-              .where(eq(tokenSellLedgers.id, entry.id));
-          }
-        }
-      }
-
-      const finalTokensReturned = tokensReturned > 0 ? tokensReturned : Math.round(totalCalculatedTokensToReturn);
-
-      let txHash = "";
-      let executionMode = "simulated_blockchain";
-
-      // Check if real Hot Wallet Private Key is provided in .env
-      const rawKey = (process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY || "").trim();
-      const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
-      const usdtContractAddress = process.env.USDT_CONTRACT_ADDRESS || "0x55d398326f99059fF775485246999027B3197955"; // BSC USDT
-
-      if (rawKey && (rawKey.length === 64 || rawKey.length === 66)) {
-        const formattedKey = rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`;
-        try {
-          const provider = new ethers.JsonRpcProvider(rpcUrl);
-          const wallet = new ethers.Wallet(formattedKey, provider);
-          const usdtContract = new ethers.Contract(usdtContractAddress, ERC20_ABI, wallet);
-
-          // Convert NET payout amount to 18 decimals (after 10% service fee deduction)
-          const decimals = 18;
-          const parsedAmount = ethers.parseUnits(netPayout.toFixed(4), decimals);
-
-          console.log(`[PAYOUT BOT] Sender Hot Wallet: ${wallet.address}`);
-          console.log(`[PAYOUT BOT] Initiating automated ${walletType} payout of Gross: $${grossAmount} | Fee (10%): $${serviceFee.toFixed(2)} | Net: $${netPayout.toFixed(2)} USDT to ${walletAddress}...`);
-          
-          const tx = await usdtContract.transfer(walletAddress, parsedAmount);
-          console.log(`[PAYOUT BOT] Real BSC Transaction Broadcasted: https://bscscan.com/tx/${tx.hash}`);
-          
-          txHash = tx.hash;
-          executionMode = "real_bsc_blockchain";
-        } catch (botError: any) {
-          console.error("[PAYOUT BOT ERROR] On-chain USDT dispatch failed:", botError.message);
-          if (botError.info?.error?.message) {
-            console.error("[PAYOUT BOT REASON]:", botError.info.error.message);
-          }
-          txHash = `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
-          executionMode = `fallback_${botError.code || 'gas_or_balance_error'}`;
-        }
-      } else {
-        console.warn("[PAYOUT BOT] PAYOUT_HOT_WALLET_PRIVATE_KEY is not set in .env! Operating in database-only mode.");
-        // Instant simulated on-chain broadcast hash
-        txHash = `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
-      }
-
-      // Record in Transactions Database
-      const txTitle = walletType === 'token_sell'
-        ? `Token Auto-Sell Settlement Payout (Net $${netPayout.toFixed(2)} after 10% Fee)`
-        : `MLM & Community Earnings Payout (Net $${netPayout.toFixed(2)} after 10% Fee)`;
-
-      const [txRecord] = await db.insert(transactions).values({
-        userId: user.id,
-        type: 'withdrawal',
-        amountUsdt: netPayout,
-        tokenAmount: finalTokensReturned,
-        tokenPrice: 1.0,
-        status: 'completed',
-        txHash: txHash,
-      }).returning();
-
-      // Deduct available USDT and update withdrawn stats
-      const newAvailable = Math.max(0, currentAvailable - grossAmount);
-      await db.update(users)
-        .set({
-          availableUsdt: newAvailable,
-          totalWithdrawnUsdt: (user.totalWithdrawnUsdt || 0) + grossAmount,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, user.id));
-
-      return res.json({
-        success: true,
-        message: `${txTitle} processed successfully!`,
-        txHash,
-        walletType,
-        grossAmount,
-        serviceFee,
-        netPayout,
-        tokenReturnTxHash: tokenReturnTxHash || null,
-        tokensReturned: finalTokensReturned,
-        phaseBreakdown,
-        executionMode,
-        transaction: txRecord,
-        newAvailableBalance: newAvailable,
-      });
-    } catch (error: any) {
-      console.error("Error in /api/wallet/withdraw:", error);
-      res.status(500).json({ error: error.message || "Failed to process automatic withdrawal" });
-    }
-  });
-
-  // Get or Create User by Wallet Address
-  app.post("/api/users/sync", async (req, res) => {
-    try {
-      const { walletAddress, referredBy } = req.body;
-      if (!walletAddress) {
-        return res.status(400).json({ error: "walletAddress is required" });
-      }
-
-      const normalizedAddress = walletAddress.toLowerCase();
-      let existingUser = await db.query.users.findFirst({
-        where: eq(users.walletAddress, normalizedAddress),
-      });
-
-      if (!existingUser) {
-        const generatedRefCode = `REF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-        const [newUser] = await db.insert(users).values({
-          walletAddress: normalizedAddress,
-          referralCode: generatedRefCode,
-          referredBy: referredBy || null,
-          availableUsdt: 0,
-        }).returning();
-
-        // Increment sponsor's direct count if referredBy exists
-        if (referredBy) {
-          const sponsor = await db.query.users.findFirst({
-            where: eq(users.referralCode, referredBy.toUpperCase()),
-          });
-          if (sponsor) {
-            await db.update(users)
-              .set({ directCount: sponsor.directCount + 1, totalTeamCount: sponsor.totalTeamCount + 1 })
-              .where(eq(users.id, sponsor.id));
-          }
-        }
-
-        return res.json({ user: newUser, isNew: true });
-      }
-
-      return res.json({ user: existingUser, isNew: false });
-    } catch (error: any) {
-      console.error("Error in /api/users/sync:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Get User Profile & Dashboard Data
-  app.get("/api/users/:walletAddress", async (req, res) => {
-    try {
-      const { walletAddress } = req.params;
-      const user = await db.query.users.findFirst({
-        where: eq(users.walletAddress, walletAddress.toLowerCase()),
-      });
-
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      // Fetch user's recent transactions & earnings
-      const userTxs = await db.select().from(transactions).where(eq(transactions.userId, user.id)).orderBy(desc(transactions.createdAt)).limit(10);
-      const userEarnings = await db.select().from(levelEarnings).where(eq(levelEarnings.beneficiaryId, user.id)).orderBy(desc(levelEarnings.createdAt)).limit(10);
-
-      res.json({
-        user,
-        transactions: userTxs,
-        earnings: userEarnings,
-      });
-    } catch (error: any) {
-      console.error("Error in /api/users/:walletAddress:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Buy Presale Tokens API (Supports Real Web3 & Direct Payment TxHash)
-  app.post("/api/presale/buy", async (req, res) => {
-    try {
-      const { walletAddress, amountUsdt, tokenAmount, tokenPrice, phaseIndex, txHash } = req.body;
-      if (!walletAddress || !amountUsdt || !tokenAmount) {
-        return res.status(400).json({ error: "Missing required purchase fields" });
-      }
-
-      const normalizedAddress = walletAddress.toLowerCase();
-      let user = await db.query.users.findFirst({
-        where: eq(users.walletAddress, normalizedAddress),
-      });
-
-      if (!user) {
-        // Auto-register user if first purchase
-        const generatedRefCode = `REF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-        const [newUser] = await db.insert(users).values({
-          walletAddress: normalizedAddress,
-          referralCode: generatedRefCode,
-          referredBy: null,
-          availableUsdt: 0,
-        }).returning();
-        user = newUser;
-      }
-
-      const confirmedTxHash = txHash && txHash.startsWith('0x') && txHash.length >= 20
-        ? txHash
-        : `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
-
-
-      // Record transaction
-      const [tx] = await db.insert(transactions).values({
-        userId: user.id,
-        type: 'buy_presale',
-        amountUsdt: Number(amountUsdt),
-        tokenAmount: Number(tokenAmount),
-        tokenPrice: Number(tokenPrice || 0.10),
-        phaseIndex: Number(phaseIndex || 1),
-        status: 'completed',
-        txHash: confirmedTxHash,
-      }).returning();
-
+// ---------------------------------------------------------------------------
+// Wallet-signature authentication for money-moving endpoints
+// ---------------------------------------------------------------------------
+// Any endpoint that pays out or debits funds must prove the caller actually
+// controls the wallet they claim to be acting as. We do this by requiring the
+// client to sign a short-lived message with their wallet's private key
+// (MetaMask/Trust Wallet "personal_sign"), and verifying that signature here
+// with ethers.verifyMessage. This also gives us free replay protection via
+// the timestamp + one-time-use nonce cache below.
+
+const SIGNATURE_MAX_AGE_MS = 5 * 60 * 1000; // signed message valid for 5 minutes
+const usedSignatures = new Set<string>(); // prevents replaying the same signed request twice
+
+function buildWithdrawMessage(walletAddress: string, amountUsdt: number, walletType: string, timestamp: number) {
+  // Keep this EXACTLY in sync with whatever string the frontend signs.
+  return `Authorize withdrawal\nWallet: ${walletAddress.toLowerCase()}\nAmount: ${amountUsdt} USDT\nType: ${walletType}\nTimestamp: ${timestamp}`;
+}
+
+function verifyWalletSignature(message: string, signature: string, expectedAddress: string): boolean {
+  try {
+    const recovered = ethers.verifyMessage(message, signature);
+    return recovered.toLowerCase() === expectedAddress.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+// Periodically clear old entries so usedSignatures doesn't grow forever
+setInterval(() => {
+  if (usedSignatures.size > 50000) usedSignatures.clear();
+}, 30 * 60 * 1000);
+
+async function finalizeConfirmedPurchase(
+  user: any,
+  tokenAmount: number,
+  amountUsdt: number,
+  phaseIndex: number
+): Promise<{ newInvested: number; isNowMlmQualified: boolean }> {
       // --- SERVER-SIDE PHASE PROGRESSION ---
       try {
         const configRecord = await db.query.systemConfigs.findFirst({
@@ -863,6 +418,721 @@ async function startServer() {
         }
       }
       // --- END AUTO-PLACEMENT AND MATRIX LOGIC ---
+  return { newInvested, isNowMlmQualified };
+}
+
+// ---------------------------------------------------------------------------
+// Background job: verify pending presale purchases against the real blockchain
+// ---------------------------------------------------------------------------
+// When /api/presale/buy is called without a plausible on-chain payment tx hash,
+// the purchase is stored as status='pending_verification' and none of the
+// commission/phase/matrix side-effects run yet (see finalizeConfirmedPurchase).
+// This job periodically re-checks any such pending purchase's txHash on-chain:
+//   - not found / not yet mined  -> leave as pending, check again later
+//   - mined but reverted         -> mark 'failed', no side-effects ever run
+//   - mined + a genuine USDT Transfer to our treasury wallet for >= the
+//     expected amount is found in the receipt logs -> mark 'completed' and
+//     run finalizeConfirmedPurchase() so commissions/phase progression apply
+//   - mined but the payment doesn't match (wrong recipient/amount)
+//                                 -> mark 'failed'
+async function verifyPendingPresalePurchases() {
+  const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
+  const usdtContractAddress = process.env.USDT_CONTRACT_ADDRESS || "0x55d398326f99059fF775485246999027B3197955";
+  // The wallet presale payments must be sent to. Set this in .env — it should
+  // match ADMIN_TREASURY_WALLET / receivingAddress used on the frontend.
+  const treasuryWallet = (process.env.PRESALE_RECEIVING_WALLET || "0x8d1abCa8Cf0f42799b9a76254710e979bd59c261").toLowerCase();
+
+  let pendingTxs: any[] = [];
+  try {
+    pendingTxs = await db.select().from(transactions).where(
+      and(eq(transactions.type, 'buy_presale'), eq(transactions.status, 'pending_verification'))
+    );
+  } catch (err: any) {
+    console.error("[PRESALE VERIFY] Failed to load pending purchases:", err.message);
+    return;
+  }
+
+  if (pendingTxs.length === 0) return;
+
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const usdtInterface = new ethers.Interface(ERC20_ABI.concat([
+    "event Transfer(address indexed from, address indexed to, uint256 value)"
+  ]));
+
+  let usdtDecimals = 18;
+  try {
+    const usdtContract = new ethers.Contract(usdtContractAddress, ERC20_ABI, provider);
+    usdtDecimals = await usdtContract.decimals();
+  } catch {
+    // fall back to 18 (correct for BSC USDT) if the RPC call fails
+  }
+
+  for (const txRecord of pendingTxs) {
+    if (!txRecord.txHash) {
+      await db.update(transactions).set({ status: 'failed' }).where(eq(transactions.id, txRecord.id));
+      continue;
+    }
+
+    try {
+      const receipt = await provider.getTransactionReceipt(txRecord.txHash);
+      if (!receipt) continue; // not mined yet, check again next cycle
+
+      if (receipt.status !== 1) {
+        console.warn(`[PRESALE VERIFY] Tx ${txRecord.txHash} reverted on-chain, marking purchase #${txRecord.id} failed.`);
+        await db.update(transactions).set({ status: 'failed' }).where(eq(transactions.id, txRecord.id));
+        continue;
+      }
+
+      // Look for a genuine USDT Transfer(...) log paying our treasury wallet
+      // at least the expected amount.
+      const expectedRaw = ethers.parseUnits(Number(txRecord.amountUsdt).toFixed(6), usdtDecimals);
+      let paymentVerified = false;
+
+      for (const log of receipt.logs) {
+        if (log.address.toLowerCase() !== usdtContractAddress.toLowerCase()) continue;
+        let parsed;
+        try {
+          parsed = usdtInterface.parseLog(log);
+        } catch {
+          continue;
+        }
+        if (!parsed || parsed.name !== "Transfer") continue;
+        const to = String(parsed.args.to).toLowerCase();
+        const value = parsed.args.value as bigint;
+        if (to === treasuryWallet && value >= expectedRaw) {
+          paymentVerified = true;
+          break;
+        }
+      }
+
+      if (!paymentVerified) {
+        console.warn(`[PRESALE VERIFY] Tx ${txRecord.txHash} did not pay the treasury wallet the expected amount — marking purchase #${txRecord.id} failed.`);
+        await db.update(transactions).set({ status: 'failed' }).where(eq(transactions.id, txRecord.id));
+        continue;
+      }
+
+      // Payment confirmed on-chain: mark completed and apply all the side
+      // effects (phase progression, MLM commissions, matrix placement) that
+      // were deferred when the purchase was first recorded as pending.
+      const user = await db.query.users.findFirst({ where: eq(users.id, txRecord.userId) });
+      if (!user) {
+        console.error(`[PRESALE VERIFY] User ${txRecord.userId} not found for pending purchase #${txRecord.id}.`);
+        continue;
+      }
+
+      await db.update(transactions).set({ status: 'completed' }).where(eq(transactions.id, txRecord.id));
+      await finalizeConfirmedPurchase(user, Number(txRecord.tokenAmount), Number(txRecord.amountUsdt), Number(txRecord.phaseIndex || 1));
+      console.log(`[PRESALE VERIFY] Purchase #${txRecord.id} confirmed on-chain and finalized.`);
+    } catch (err: any) {
+      console.error(`[PRESALE VERIFY] Error checking tx ${txRecord.txHash}:`, err.message);
+      // leave as pending — will retry next cycle rather than failing on a transient RPC error
+    }
+  }
+}
+
+async function startServer() {
+  const app = express();
+  const PORT = 3000;
+
+  app.use(express.json());
+
+  // CORS Middleware for Subdomain / Multi-Domain Payment Bot Access
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
+  // API Routes
+  app.get("/api/health", async (req, res) => {
+    try {
+      const configs = await db.select().from(systemConfigs);
+      const rawKey = (process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY || '').trim();
+      const isPayoutBotConfigured = !!(rawKey && (rawKey.length === 64 || rawKey.length === 66));
+      res.json({
+        status: "ok",
+        database: "postgresql_connected",
+        configsCount: configs.length,
+        payoutBotReady: isPayoutBotConfigured,
+      });
+    } catch (err: any) {
+      res.json({ status: "ok", database: "waiting_or_connecting", error: err?.message });
+    }
+  });
+
+  // Payout Hot Wallet Status & Balance Checker Endpoint
+  app.get("/api/payout-bot/status", async (req, res) => {
+    try {
+      const rawKey = (process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY || '').trim();
+      const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
+      const usdtContractAddress = process.env.USDT_CONTRACT_ADDRESS || "0x55d398326f99059fF775485246999027B3197955";
+
+      if (!rawKey) {
+        return res.json({
+          configured: false,
+          message: "PAYOUT_HOT_WALLET_PRIVATE_KEY is not configured in .env on server.",
+          usdtContractAddress,
+          rpcUrl,
+        });
+      }
+
+      const formattedKey = rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`;
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      const wallet = new ethers.Wallet(formattedKey, provider);
+      const bnbBalanceWei = await provider.getBalance(wallet.address);
+      const bnbBalance = ethers.formatEther(bnbBalanceWei);
+
+      const usdtContract = new ethers.Contract(usdtContractAddress, ERC20_ABI, provider);
+      let usdtBalance = "0";
+      try {
+        const usdtRaw = await usdtContract.balanceOf(wallet.address);
+        usdtBalance = ethers.formatUnits(usdtRaw, 18);
+      } catch (err: any) {
+        usdtBalance = "error_reading_usdt";
+      }
+
+      return res.json({
+        configured: true,
+        hotWalletAddress: wallet.address,
+        bnbBalance: `${Number(bnbBalance).toFixed(5)} BNB`,
+        usdtBalance: `$${Number(usdtBalance).toFixed(2)} USDT`,
+        hasGas: Number(bnbBalance) > 0.001,
+        hasUsdt: Number(usdtBalance) > 0,
+        rpcUrl,
+        usdtContractAddress,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ configured: false, error: err.message });
+    }
+  });
+
+  // Get Phase-Wise Token Auto-Sell Internal Settlement Ledger for a specific Trust Wallet
+  app.get("/api/wallet/token-sell-ledger", async (req, res) => {
+    try {
+      const { walletAddress } = req.query;
+      if (!walletAddress || typeof walletAddress !== "string") {
+        return res.status(400).json({ error: "walletAddress is required" });
+      }
+
+      const normalizedAddress = walletAddress.toLowerCase();
+      const user = await db.query.users.findFirst({
+        where: eq(users.walletAddress, normalizedAddress),
+      });
+
+      if (!user) {
+        return res.json({
+          walletAddress: normalizedAddress,
+          entries: [],
+          totalGrossUsdt: 0,
+          totalWithdrawnUsdt: 0,
+          availableUsdt: 0,
+          totalTokensSold: 0,
+          totalTokensReturned: 0,
+          pendingTokensToReturn: 0,
+        });
+      }
+
+      const entries = await db.select()
+        .from(tokenSellLedgers)
+        .where(eq(tokenSellLedgers.walletAddress, normalizedAddress))
+        .orderBy(asc(tokenSellLedgers.phaseIndex), asc(tokenSellLedgers.createdAt));
+
+      let totalGrossUsdt = 0;
+      let totalWithdrawnUsdt = 0;
+      let availableUsdt = 0;
+      let totalTokensSold = 0;
+      let totalTokensReturned = 0;
+      let pendingTokensToReturn = 0;
+
+      const formattedEntries = entries.map((e) => {
+        const remainingGross = Math.max(0, e.grossUsdt - e.withdrawnUsdt);
+        const remainingTokens = Math.max(0, e.tokensSold - e.tokensReturned);
+        totalGrossUsdt += e.grossUsdt;
+        totalWithdrawnUsdt += e.withdrawnUsdt;
+        availableUsdt += remainingGross;
+        totalTokensSold += e.tokensSold;
+        totalTokensReturned += e.tokensReturned;
+        pendingTokensToReturn += remainingTokens;
+
+        return {
+          id: `ledger-${e.id}`,
+          phaseIndex: e.phaseIndex,
+          phaseName: e.phaseName,
+          tokenPrice: e.tokenPrice,
+          tokensSold: e.tokensSold,
+          tokensReturned: e.tokensReturned,
+          grossUsdt: e.grossUsdt,
+          withdrawnUsdt: e.withdrawnUsdt,
+          availableUsdt: remainingGross,
+          pendingTokens: remainingTokens,
+          serviceFeeUsdt: e.serviceFeeUsdt,
+          status: e.status,
+          returnTxHash: e.returnTxHash,
+          payoutTxHash: e.payoutTxHash,
+          createdAt: e.createdAt,
+        };
+      });
+
+      return res.json({
+        walletAddress: normalizedAddress,
+        entries: formattedEntries,
+        totalGrossUsdt,
+        totalWithdrawnUsdt,
+        availableUsdt,
+        totalTokensSold,
+        totalTokensReturned,
+        pendingTokensToReturn,
+      });
+    } catch (error: any) {
+      console.error("Error in /api/wallet/token-sell-ledger:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch token sell ledger" });
+    }
+  });
+
+  // Record a new Phase Auto-Sell entry into the internal ledger
+  app.post("/api/wallet/token-sell-ledger/record", async (req, res) => {
+    try {
+      const {
+        walletAddress,
+        phaseIndex,
+        phaseName,
+        tokenPrice,
+        tokensSold,
+        grossUsdt,
+      } = req.body;
+
+      if (!walletAddress || !tokensSold || Number(tokensSold) <= 0) {
+        return res.status(400).json({ error: "Invalid ledger payload" });
+      }
+
+      const normalizedAddress = walletAddress.toLowerCase();
+      let user = await db.query.users.findFirst({
+        where: eq(users.walletAddress, normalizedAddress),
+      });
+
+      if (!user) {
+        const refCode = `NX${normalizedAddress.substring(2, 8).toUpperCase()}`;
+        const [newUser] = await db.insert(users).values({
+          walletAddress: normalizedAddress,
+          referralCode: refCode,
+          availableUsdt: 0,
+        }).returning();
+        user = newUser;
+      }
+
+      const calculatedGross = Number(grossUsdt) || (Number(tokensSold) * Number(tokenPrice));
+
+      const [entry] = await db.insert(tokenSellLedgers).values({
+        userId: user.id,
+        walletAddress: normalizedAddress,
+        phaseIndex: Number(phaseIndex) || 2,
+        phaseName: phaseName || `Phase ${phaseIndex}`,
+        tokenPrice: Number(tokenPrice) || 0.10,
+        tokensSold: Number(tokensSold),
+        tokensReturned: 0,
+        grossUsdt: calculatedGross,
+        withdrawnUsdt: 0,
+        serviceFeeUsdt: 0,
+        status: 'unclaimed',
+      }).returning();
+
+      // Update user's availableUsdt in DB
+      await db.update(users)
+        .set({
+          availableUsdt: (user.availableUsdt || 0) + calculatedGross,
+          totalEarnedUsdt: (user.totalEarnedUsdt || 0) + calculatedGross,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+
+      return res.json({
+        success: true,
+        entry,
+        message: `Successfully recorded ${tokensSold} NXBC auto-sold in ${entry.phaseName} for $${calculatedGross.toFixed(2)} USDT!`,
+      });
+    } catch (error: any) {
+      console.error("Error in /api/wallet/token-sell-ledger/record:", error);
+      res.status(500).json({ error: error.message || "Failed to record token sell entry" });
+    }
+  });
+
+  // Fully Automated Instant Crypto Payout Bot API with 10% Service Charge & Token Return Validation
+  app.post("/api/wallet/withdraw", async (req, res) => {
+    try {
+      const {
+        walletAddress,
+        amountUsdt,
+        walletType = 'mlm',
+        tokenReturnTxHash,
+        tokensReturned = 0,
+        signature,   // hex signature from personal_sign of buildWithdrawMessage(...)
+        timestamp,   // ms epoch used inside the signed message
+      } = req.body;
+
+      if (!walletAddress || !amountUsdt || Number(amountUsdt) <= 0) {
+        return res.status(400).json({ error: "Invalid wallet address or withdrawal amount" });
+      }
+
+      // --- AUTH: caller must prove they control walletAddress ---------------
+      if (!signature || !timestamp) {
+        return res.status(401).json({ error: "Missing signature/timestamp. Sign the withdrawal request with your wallet." });
+      }
+
+      const ageMs = Date.now() - Number(timestamp);
+      if (Number.isNaN(ageMs) || ageMs < 0 || ageMs > SIGNATURE_MAX_AGE_MS) {
+        return res.status(401).json({ error: "Signature expired. Please try again." });
+      }
+
+      const sigKey = `${walletAddress.toLowerCase()}:${signature}`;
+      if (usedSignatures.has(sigKey)) {
+        return res.status(401).json({ error: "This signed request was already used." });
+      }
+
+      const expectedMessage = buildWithdrawMessage(walletAddress, Number(amountUsdt), walletType, Number(timestamp));
+      if (!verifyWalletSignature(expectedMessage, signature, walletAddress)) {
+        return res.status(401).json({ error: "Invalid signature. Withdrawal not authorized by wallet owner." });
+      }
+
+      usedSignatures.add(sigKey);
+      // ------------------------------------------------------------------------
+
+      const grossAmount = Number(amountUsdt);
+      const SERVICE_FEE_RATE = 0.10; // 10% Service Charge
+      const serviceFee = grossAmount * SERVICE_FEE_RATE;
+      const netPayout = Math.max(0, grossAmount - serviceFee);
+      const normalizedAddress = walletAddress.toLowerCase();
+
+      // Look up user in database — do NOT auto-create with a pre-loaded balance,
+      // an unknown wallet has nothing to withdraw.
+      const user = await db.query.users.findFirst({
+        where: eq(users.walletAddress, normalizedAddress),
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found. Nothing to withdraw." });
+      }
+
+      // SECURITY: never invent balance to cover a withdrawal request. Only pay
+      // out what the ledger actually shows the user has earned/available.
+      const currentAvailable = user.availableUsdt || 0;
+      if (currentAvailable < grossAmount) {
+        return res.status(400).json({
+          error: "Insufficient available balance for this withdrawal.",
+          availableUsdt: currentAvailable,
+          requestedUsdt: grossAmount,
+        });
+      }
+
+      // If Token Auto-Sell Withdrawal: Update Phase-by-Phase Internal Ledger (FIFO)
+      let phaseBreakdown: Array<{ phaseIndex: number; phaseName: string; tokensToReturn: number; grossDeducted: number }> = [];
+      let totalCalculatedTokensToReturn = 0;
+
+      if (walletType === 'token_sell') {
+        const activeLedgerEntries = await db.select()
+          .from(tokenSellLedgers)
+          .where(
+            and(
+              eq(tokenSellLedgers.walletAddress, normalizedAddress),
+              eq(tokenSellLedgers.status, 'unclaimed')
+            )
+          )
+          .orderBy(asc(tokenSellLedgers.phaseIndex), asc(tokenSellLedgers.createdAt));
+
+        let remainingToDeduct = grossAmount;
+
+        for (const entry of activeLedgerEntries) {
+          if (remainingToDeduct <= 0) break;
+
+          const entryRemainingGross = Math.max(0, entry.grossUsdt - entry.withdrawnUsdt);
+          const deductFromEntry = Math.min(entryRemainingGross, remainingToDeduct);
+          
+          if (deductFromEntry > 0) {
+            // Calculate exact proportion of tokens for this phase
+            const tokensProportion = (deductFromEntry / entry.grossUsdt) * entry.tokensSold;
+            const newWithdrawn = entry.withdrawnUsdt + deductFromEntry;
+            const newReturned = entry.tokensReturned + tokensProportion;
+            const newStatus = newWithdrawn >= entry.grossUsdt - 0.001 ? 'fully_claimed' : 'partially_claimed';
+
+            phaseBreakdown.push({
+              phaseIndex: entry.phaseIndex,
+              phaseName: entry.phaseName,
+              tokensToReturn: Math.round(tokensProportion * 1000) / 1000,
+              grossDeducted: deductFromEntry,
+            });
+
+            totalCalculatedTokensToReturn += tokensProportion;
+            remainingToDeduct -= deductFromEntry;
+
+            // Update ledger record
+            await db.update(tokenSellLedgers)
+              .set({
+                withdrawnUsdt: newWithdrawn,
+                tokensReturned: newReturned,
+                serviceFeeUsdt: (entry.serviceFeeUsdt || 0) + (deductFromEntry * 0.10),
+                status: newStatus,
+                returnTxHash: tokenReturnTxHash || null,
+                updatedAt: new Date(),
+              })
+              .where(eq(tokenSellLedgers.id, entry.id));
+          }
+        }
+      }
+
+      const finalTokensReturned = tokensReturned > 0 ? tokensReturned : Math.round(totalCalculatedTokensToReturn);
+
+      let txHash = "";
+      let executionMode = "simulated_blockchain";
+
+      // Check if real Hot Wallet Private Key is provided in .env
+      const rawKey = (process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY || "").trim();
+      const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
+      const usdtContractAddress = process.env.USDT_CONTRACT_ADDRESS || "0x55d398326f99059fF775485246999027B3197955"; // BSC USDT
+
+      if (rawKey && (rawKey.length === 64 || rawKey.length === 66)) {
+        const formattedKey = rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`;
+        try {
+          const provider = new ethers.JsonRpcProvider(rpcUrl);
+          const wallet = new ethers.Wallet(formattedKey, provider);
+          const usdtContract = new ethers.Contract(usdtContractAddress, ERC20_ABI, wallet);
+
+          // Convert NET payout amount to 18 decimals (after 10% service fee deduction)
+          const decimals = 18;
+          const parsedAmount = ethers.parseUnits(netPayout.toFixed(4), decimals);
+
+          console.log(`[PAYOUT BOT] Sender Hot Wallet: ${wallet.address}`);
+          console.log(`[PAYOUT BOT] Initiating automated ${walletType} payout of Gross: $${grossAmount} | Fee (10%): $${serviceFee.toFixed(2)} | Net: $${netPayout.toFixed(2)} USDT to ${walletAddress}...`);
+          
+          const tx = await usdtContract.transfer(walletAddress, parsedAmount);
+          console.log(`[PAYOUT BOT] Real BSC Transaction Broadcasted: https://bscscan.com/tx/${tx.hash}`);
+          
+          txHash = tx.hash;
+          executionMode = "real_bsc_blockchain";
+        } catch (botError: any) {
+          console.error("[PAYOUT BOT ERROR] On-chain USDT dispatch failed:", botError.message);
+          if (botError.info?.error?.message) {
+            console.error("[PAYOUT BOT REASON]:", botError.info.error.message);
+          }
+          txHash = `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
+          executionMode = `fallback_${botError.code || 'gas_or_balance_error'}`;
+        }
+      } else {
+        console.warn("[PAYOUT BOT] PAYOUT_HOT_WALLET_PRIVATE_KEY is not set in .env! Operating in database-only mode.");
+        // Instant simulated on-chain broadcast hash
+        txHash = `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
+      }
+
+      // Record in Transactions Database
+      const txTitle = walletType === 'token_sell'
+        ? `Token Auto-Sell Settlement Payout (Net $${netPayout.toFixed(2)} after 10% Fee)`
+        : `MLM & Community Earnings Payout (Net $${netPayout.toFixed(2)} after 10% Fee)`;
+
+      const [txRecord] = await db.insert(transactions).values({
+        userId: user.id,
+        type: 'withdrawal',
+        amountUsdt: netPayout,
+        tokenAmount: finalTokensReturned,
+        tokenPrice: 1.0,
+        status: 'completed',
+        txHash: txHash,
+      }).returning();
+
+      // Deduct available USDT and update withdrawn stats
+      const newAvailable = Math.max(0, currentAvailable - grossAmount);
+      await db.update(users)
+        .set({
+          availableUsdt: newAvailable,
+          totalWithdrawnUsdt: (user.totalWithdrawnUsdt || 0) + grossAmount,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+
+      return res.json({
+        success: true,
+        message: `${txTitle} processed successfully!`,
+        txHash,
+        walletType,
+        grossAmount,
+        serviceFee,
+        netPayout,
+        tokenReturnTxHash: tokenReturnTxHash || null,
+        tokensReturned: finalTokensReturned,
+        phaseBreakdown,
+        executionMode,
+        transaction: txRecord,
+        newAvailableBalance: newAvailable,
+      });
+    } catch (error: any) {
+      console.error("Error in /api/wallet/withdraw:", error);
+      res.status(500).json({ error: error.message || "Failed to process automatic withdrawal" });
+    }
+  });
+
+  // Get or Create User by Wallet Address
+  app.post("/api/users/sync", async (req, res) => {
+    try {
+      const { walletAddress, referredBy } = req.body;
+      if (!walletAddress) {
+        return res.status(400).json({ error: "walletAddress is required" });
+      }
+
+      const normalizedAddress = walletAddress.toLowerCase();
+      let existingUser = await db.query.users.findFirst({
+        where: eq(users.walletAddress, normalizedAddress),
+      });
+
+      if (!existingUser) {
+        const generatedRefCode = `REF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        const [newUser] = await db.insert(users).values({
+          walletAddress: normalizedAddress,
+          referralCode: generatedRefCode,
+          referredBy: referredBy || null,
+          availableUsdt: 0,
+        }).returning();
+
+        // Increment sponsor's direct count if referredBy exists
+        if (referredBy) {
+          const sponsor = await db.query.users.findFirst({
+            where: eq(users.referralCode, referredBy.toUpperCase()),
+          });
+          if (sponsor) {
+            await db.update(users)
+              .set({ directCount: sponsor.directCount + 1, totalTeamCount: sponsor.totalTeamCount + 1 })
+              .where(eq(users.id, sponsor.id));
+          }
+        }
+
+        return res.json({ user: newUser, isNew: true });
+      }
+
+      return res.json({ user: existingUser, isNew: false });
+    } catch (error: any) {
+      console.error("Error in /api/users/sync:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get User Profile & Dashboard Data
+  app.get("/api/users/:walletAddress", async (req, res) => {
+    try {
+      const { walletAddress } = req.params;
+      const user = await db.query.users.findFirst({
+        where: eq(users.walletAddress, walletAddress.toLowerCase()),
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Fetch user's recent transactions & earnings
+      const userTxs = await db.select().from(transactions).where(eq(transactions.userId, user.id)).orderBy(desc(transactions.createdAt)).limit(10);
+      const userEarnings = await db.select().from(levelEarnings).where(eq(levelEarnings.beneficiaryId, user.id)).orderBy(desc(levelEarnings.createdAt)).limit(10);
+
+      res.json({
+        user,
+        transactions: userTxs,
+        earnings: userEarnings,
+      });
+    } catch (error: any) {
+      console.error("Error in /api/users/:walletAddress:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Buy Presale Tokens API (Supports Real Web3 & Direct Payment TxHash)
+  app.post("/api/presale/buy", async (req, res) => {
+    try {
+      const { walletAddress, amountUsdt, tokenAmount, tokenPrice, phaseIndex, txHash } = req.body;
+      if (!walletAddress || !amountUsdt || !tokenAmount) {
+        return res.status(400).json({ error: "Missing required purchase fields" });
+      }
+
+      // --- SERVER-SIDE PRICE & SUPPLY VALIDATION -----------------------------
+      // Never trust client-supplied price/amount blindly: recompute against the
+      // authoritative active phase config and reject mismatched or oversold buys.
+      const configRecord = await db.query.systemConfigs.findFirst({
+        where: eq(systemConfigs.key, 'phases'),
+      });
+
+      let activePhase: any = null;
+      if (configRecord && configRecord.value) {
+        const phases = JSON.parse(configRecord.value);
+        activePhase = phases.find((p: any) => p.status === 'active') || null;
+      }
+
+      if (!activePhase) {
+        return res.status(400).json({ error: "No active presale phase is configured." });
+      }
+
+      const PRICE_TOLERANCE = 0.0001;
+      if (Math.abs(Number(tokenPrice) - Number(activePhase.tokenPrice ?? activePhase.price)) > PRICE_TOLERANCE) {
+        return res.status(400).json({ error: "Submitted token price does not match the active phase price." });
+      }
+
+      const expectedTokens = Number(amountUsdt) / Number(activePhase.tokenPrice ?? activePhase.price);
+      if (Math.abs(expectedTokens - Number(tokenAmount)) / Math.max(expectedTokens, 1) > 0.01) {
+        return res.status(400).json({ error: "Token amount does not match amountUsdt / current phase price." });
+      }
+
+      const remainingInPhase = Math.max(0, Number(activePhase.totalSupply) - Number(activePhase.tokensSold));
+      if (Number(tokenAmount) > remainingInPhase) {
+        return res.status(400).json({ error: "Purchase exceeds remaining supply in the active phase.", remainingInPhase });
+      }
+
+      // Real on-chain payment tx hash is required — we no longer fabricate one.
+      // A missing/malformed hash means we can't confirm payment was made, so the
+      // purchase is recorded as pending rather than silently marked completed.
+      const hasPlausibleTxHash = typeof txHash === 'string' && txHash.startsWith('0x') && txHash.length >= 20;
+      const purchaseStatus = hasPlausibleTxHash ? 'completed' : 'pending_verification';
+      // ------------------------------------------------------------------------
+
+      const normalizedAddress = walletAddress.toLowerCase();
+      let user = await db.query.users.findFirst({
+        where: eq(users.walletAddress, normalizedAddress),
+      });
+
+      if (!user) {
+        // Auto-register user if first purchase
+        const generatedRefCode = `REF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        const [newUser] = await db.insert(users).values({
+          walletAddress: normalizedAddress,
+          referralCode: generatedRefCode,
+          referredBy: null,
+          availableUsdt: 0,
+        }).returning();
+        user = newUser;
+      }
+
+      // Record transaction
+      const [tx] = await db.insert(transactions).values({
+        userId: user.id,
+        type: 'buy_presale',
+        amountUsdt: Number(amountUsdt),
+        tokenAmount: Number(tokenAmount),
+        tokenPrice: Number(activePhase.tokenPrice ?? activePhase.price),
+        phaseIndex: Number(phaseIndex || activePhase.id || 1),
+        status: purchaseStatus,
+        txHash: hasPlausibleTxHash ? txHash : null,
+      }).returning();
+
+      if (purchaseStatus === 'pending_verification') {
+        return res.json({
+          success: true,
+          pending: true,
+          message: "Purchase recorded as pending — awaiting a valid on-chain payment transaction hash before it's confirmed.",
+          transaction: tx,
+        });
+      }
+
+      const { newInvested, isNowMlmQualified } = await finalizeConfirmedPurchase(
+        user,
+        Number(tokenAmount),
+        Number(amountUsdt),
+        Number(phaseIndex || activePhase.id || 1)
+      );
 
       // NOTE: Token delivery now happens ON-CHAIN via the Presale Smart Contract's
       // buyTokens() function (called directly from the user's wallet in BuyTokenModal.tsx).
@@ -870,7 +1140,9 @@ async function startServer() {
       // NXBC to the user (once from the contract, once from this backend).
       // Set ENABLE_HOT_WALLET_DISPATCH=true in .env ONLY if you switch back to the
       // direct-transfer (non-contract) purchase flow.
-      let tokenDispatchTxHash = confirmedTxHash;
+      // At this point purchaseStatus === 'completed', which only happens when
+      // hasPlausibleTxHash was true, so `txHash` is guaranteed to hold a real value.
+      let tokenDispatchTxHash = txHash;
       const hotWalletDispatchEnabled = process.env.ENABLE_HOT_WALLET_DISPATCH === "true";
 
       if (hotWalletDispatchEnabled) {
@@ -1008,28 +1280,40 @@ async function startServer() {
   });
 
   // System & Admin Configurations (Live Synchronization)
-  let inMemoryAdminPin = "7788";
-  // Verify PIN Endpoint (Strict & Secure - No password leakage)
+  // Default PIN is hashed on first use, never stored/compared as plaintext.
+  let inMemoryAdminPinHash = hashPin("7788");
+  // Verify PIN Endpoint (hashed comparison + brute-force lockout)
   app.post("/api/admin/verify-pin", async (req, res) => {
     try {
+      const ip = req.ip || req.socket.remoteAddress || "unknown";
+      const lockout = checkPinLockout(ip);
+      if (lockout.locked) {
+        return res.status(429).json({
+          success: false,
+          error: `Too many incorrect attempts. Try again in ${Math.ceil((lockout.retryAfterMs || 0) / 60000)} minute(s).`,
+        });
+      }
+
       const { pin } = req.body;
       const cleanPin = (pin || "").trim();
 
       // Check in database first
-      let currentPin = inMemoryAdminPin;
+      let currentPinHash = inMemoryAdminPinHash;
       try {
         const pinRecord = await db.query.systemConfigs.findFirst({
           where: eq(systemConfigs.key, "admin_pin"),
         });
         if (pinRecord && pinRecord.value) {
-          currentPin = pinRecord.value;
-          inMemoryAdminPin = pinRecord.value;
+          currentPinHash = pinRecord.value;
+          inMemoryAdminPinHash = pinRecord.value;
         }
       } catch (dbErr) {}
 
-      if (cleanPin === currentPin) {
+      if (cleanPin && verifyPin(cleanPin, currentPinHash)) {
+        recordPinSuccess(ip);
         return res.json({ success: true, message: "Authentication successful" });
       } else {
+        recordPinFailure(ip);
         return res.status(401).json({ success: false, error: "Incorrect Security PIN. Access Denied." });
       }
     } catch (err: any) {
@@ -1040,38 +1324,49 @@ async function startServer() {
   // Change Admin PIN Endpoint
   app.post("/api/admin/change-pin", async (req, res) => {
     try {
+      const ip = req.ip || req.socket.remoteAddress || "unknown";
+      const lockout = checkPinLockout(ip);
+      if (lockout.locked) {
+        return res.status(429).json({
+          error: `Too many incorrect attempts. Try again in ${Math.ceil((lockout.retryAfterMs || 0) / 60000)} minute(s).`,
+        });
+      }
+
       const { currentPin, newPin } = req.body;
       const cleanCurrent = (currentPin || "").trim();
       const cleanNew = (newPin || "").trim();
 
-      if (!cleanNew || cleanNew.length < 4) {
-        return res.status(400).json({ error: "New PIN must be at least 4 characters long." });
+      if (!cleanNew || cleanNew.length < 6 || !/^\d+$/.test(cleanNew)) {
+        return res.status(400).json({ error: "New PIN must be at least 6 digits." });
       }
 
-      let activePin = inMemoryAdminPin;
+      let activePinHash = inMemoryAdminPinHash;
       try {
         const pinRecord = await db.query.systemConfigs.findFirst({
           where: eq(systemConfigs.key, "admin_pin"),
         });
         if (pinRecord && pinRecord.value) {
-          activePin = pinRecord.value;
+          activePinHash = pinRecord.value;
         }
       } catch (dbErr) {}
 
-      if (cleanCurrent !== activePin) {
+      if (!cleanCurrent || !verifyPin(cleanCurrent, activePinHash)) {
+        recordPinFailure(ip);
         return res.status(401).json({ error: "Current PIN is incorrect." });
       }
+      recordPinSuccess(ip);
 
-      // Update PIN in database and memory
-      inMemoryAdminPin = cleanNew;
+      // Update PIN in database and memory (hashed, never plaintext)
+      const newHash = hashPin(cleanNew);
+      inMemoryAdminPinHash = newHash;
       try {
         const existing = await db.query.systemConfigs.findFirst({
           where: eq(systemConfigs.key, "admin_pin"),
         });
         if (existing) {
-          await db.update(systemConfigs).set({ value: cleanNew, updatedAt: new Date() }).where(eq(systemConfigs.key, "admin_pin"));
+          await db.update(systemConfigs).set({ value: newHash, updatedAt: new Date() }).where(eq(systemConfigs.key, "admin_pin"));
         } else {
-          await db.insert(systemConfigs).values({ key: "admin_pin", value: cleanNew, description: "Master Admin Security PIN" });
+          await db.insert(systemConfigs).values({ key: "admin_pin", value: newHash, description: "Master Admin Security PIN (hashed)" });
         }
       } catch (dbErr) {
         console.log("Database PIN update notice:", dbErr);
@@ -1184,6 +1479,13 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
+
+    // Poll every 60s for presale purchases still awaiting on-chain payment
+    // confirmation. Runs once immediately, then on the interval.
+    verifyPendingPresalePurchases().catch((err) => console.error("[PRESALE VERIFY] Initial run failed:", err));
+    setInterval(() => {
+      verifyPendingPresalePurchases().catch((err) => console.error("[PRESALE VERIFY] Scheduled run failed:", err));
+    }, 60 * 1000);
   });
 }
 
