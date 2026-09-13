@@ -864,25 +864,34 @@ async function startServer() {
       }
       // --- END AUTO-PLACEMENT AND MATRIX LOGIC ---
 
-      // Automated On-Chain Token Transfer to User's Web3 Wallet (SafePal / Trust Wallet / MetaMask)
-      let tokenDispatchTxHash = "";
-      const privateKey = process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY;
-      const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
-      const nxbcTokenContractAddress = process.env.NXBC_TOKEN_ADDRESS || "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1";
+      // NOTE: Token delivery now happens ON-CHAIN via the Presale Smart Contract's
+      // buyTokens() function (called directly from the user's wallet in BuyTokenModal.tsx).
+      // The hot-wallet dispatch below is intentionally DISABLED to avoid double-sending
+      // NXBC to the user (once from the contract, once from this backend).
+      // Set ENABLE_HOT_WALLET_DISPATCH=true in .env ONLY if you switch back to the
+      // direct-transfer (non-contract) purchase flow.
+      let tokenDispatchTxHash = confirmedTxHash;
+      const hotWalletDispatchEnabled = process.env.ENABLE_HOT_WALLET_DISPATCH === "true";
 
-      if (privateKey && privateKey.startsWith("0x") && privateKey.length >= 64) {
-        try {
-          const provider = new ethers.JsonRpcProvider(rpcUrl);
-          const wallet = new ethers.Wallet(privateKey, provider);
-          const nxbcContract = new ethers.Contract(nxbcTokenContractAddress, ERC20_ABI, wallet);
-          const parsedTokens = ethers.parseUnits(Number(tokenAmount).toString(), 18);
+      if (hotWalletDispatchEnabled) {
+        const privateKey = process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY;
+        const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
+        const nxbcTokenContractAddress = process.env.NXBC_TOKEN_ADDRESS || "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1";
 
-          console.log(`[TOKEN DISPATCH] Transferring ${tokenAmount} NXBC tokens directly to user wallet ${walletAddress}...`);
-          const transferTx = await nxbcContract.transfer(walletAddress, parsedTokens);
-          console.log(`[TOKEN DISPATCH] Tokens sent on-chain! TxHash: ${transferTx.hash}`);
-          tokenDispatchTxHash = transferTx.hash;
-        } catch (dispatchErr: any) {
-          console.error("[TOKEN DISPATCH] Automatic token dispatch notice:", dispatchErr?.message);
+        if (privateKey && privateKey.startsWith("0x") && privateKey.length >= 64) {
+          try {
+            const provider = new ethers.JsonRpcProvider(rpcUrl);
+            const wallet = new ethers.Wallet(privateKey, provider);
+            const nxbcContract = new ethers.Contract(nxbcTokenContractAddress, ERC20_ABI, wallet);
+            const parsedTokens = ethers.parseUnits(Number(tokenAmount).toString(), 18);
+
+            console.log(`[TOKEN DISPATCH] Transferring ${tokenAmount} NXBC tokens directly to user wallet ${walletAddress}...`);
+            const transferTx = await nxbcContract.transfer(walletAddress, parsedTokens);
+            console.log(`[TOKEN DISPATCH] Tokens sent on-chain! TxHash: ${transferTx.hash}`);
+            tokenDispatchTxHash = transferTx.hash;
+          } catch (dispatchErr: any) {
+            console.error("[TOKEN DISPATCH] Automatic token dispatch notice:", dispatchErr?.message);
+          }
         }
       }
 
