@@ -31,6 +31,30 @@ function verifyPin(pin: string, stored: string): boolean {
 }
 
 const pinAttempts = new Map<string, { count: number; lockedUntil: number }>();
+const adminSessions = new Map<string, number>();
+const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+
+function issueAdminSession(): string {
+  const token = randomBytes(32).toString("hex");
+  adminSessions.set(token, Date.now() + ADMIN_SESSION_TTL_MS);
+  return token;
+}
+
+function requireAdmin(req: express.Request, res: express.Response): boolean {
+  const token = String(req.headers["x-admin-token"] || "");
+  const expires = adminSessions.get(token);
+  if (!token || !expires || expires <= Date.now()) {
+    if (token) adminSessions.delete(token);
+    res.status(401).json({ success: false, error: "Admin authentication required." });
+    return false;
+  }
+  return true;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, expires] of adminSessions) if (expires <= now) adminSessions.delete(token);
+}, 15 * 60 * 1000);
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -132,13 +156,21 @@ async function finalizeConfirmedPurchase(
       }
       // --- END PHASE PROGRESSION ---
 
-      // Update user investment & qualification
+      // Update user investment & qualification from live admin config.
+      let liveQualificationUsd = 100;
+      try {
+        const sys = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'systemConfig') });
+        if (sys?.value) {
+          const parsed = JSON.parse(sys.value);
+          liveQualificationUsd = Math.max(0, Number(parsed.minMlmQualifyUsd ?? 100));
+        }
+      } catch {}
 
       const prevInvested = Number(user.totalInvestedUsdt || 0);
       const purchaseUsdt = Number(amountUsdt);
       const newInvested = prevInvested + purchaseUsdt;
-      const wasMlmQualified = user.isMlmQualified || (prevInvested >= 100);
-      const isNowMlmQualified = newInvested >= 100;
+      const wasMlmQualified = user.isMlmQualified || (prevInvested >= liveQualificationUsd);
+      const isNowMlmQualified = newInvested >= liveQualificationUsd;
 
       // Update user purchased token totals and MLM qualification status
       await db.update(users)
@@ -239,8 +271,20 @@ async function finalizeConfirmedPurchase(
       if (isNowMlmQualified) {
         // If user just crossed the $100 threshold (e.g., 50 + 50 = 100), commission is distributed on the eligible amount
         const commissionBaseAmount = wasMlmQualified ? purchaseUsdt : newInvested;
-        const directSponsorRate = 0.10; // 10% Direct Sponsor Income
-        const levelPercentages = [0.03, 0.02, 0.01, 0.01, 0.005, 0.005, 0.005, 0.005, 0.005, 0.005]; // L1: 3%, L2: 2%, L3: 1%, L4: 1%, L5-10: 0.5%
+        let liveSystemConfig: any = {};
+        let liveReferralLevels: any[] = [];
+        try {
+          const rows = await db.select().from(systemConfigs);
+          const byKey: Record<string, any> = {};
+          for (const row of rows) { try { byKey[row.key] = JSON.parse(row.value); } catch { byKey[row.key] = row.value; } }
+          liveSystemConfig = byKey.systemConfig || {};
+          liveReferralLevels = Array.isArray(byKey.referralLevels) ? byKey.referralLevels : [];
+        } catch {}
+        const directSponsorRate = Math.max(0, Number(liveSystemConfig.directSponsorPercent ?? 10)) / 100;
+        const levelPercentages = Array.from({ length: 10 }, (_, i) => {
+          const configured = liveReferralLevels.find((l: any) => Number(l.level) === i + 1);
+          return Math.max(0, Number(configured?.commissionPercent ?? 0)) / 100;
+        });
         let currentSponsorCode = user.referredBy;
 
         // 1. Direct Sponsor Bonus (10%)
@@ -250,7 +294,7 @@ async function finalizeConfirmedPurchase(
           });
 
           if (directSponsor) {
-            const isDirectQualified = directSponsor.isMlmQualified || ((directSponsor.totalInvestedUsdt || 0) >= 100);
+            const isDirectQualified = directSponsor.isMlmQualified || ((directSponsor.totalInvestedUsdt || 0) >= liveQualificationUsd);
             if (isDirectQualified) {
               const sponsorBonusAmount = commissionBaseAmount * directSponsorRate;
               if (sponsorBonusAmount > 0) {
@@ -284,7 +328,7 @@ async function finalizeConfirmedPurchase(
           if (!uplineUser) break;
 
           // Upline only receives MLM benefits if upline has also invested >= $100 (isMlmQualified)
-          const isUplineQualified = uplineUser.isMlmQualified || ((uplineUser.totalInvestedUsdt || 0) >= 100);
+          const isUplineQualified = uplineUser.isMlmQualified || ((uplineUser.totalInvestedUsdt || 0) >= liveQualificationUsd);
 
           if (isUplineQualified) {
             const commissionAmount = commissionBaseAmount * levelPercentages[lvl];
@@ -383,11 +427,19 @@ async function finalizeConfirmedPurchase(
 
         await db.update(users).set({ isMatrixActive: true, matrixLevel: 1 }).where(eq(users.id, user.id));
 
-        // 3. Matrix Placement Income Distribution Upward (e.g. $1 per level up to 10 levels)
-        let mIncomeUsd = 1.00;
+        // 3. Matrix Placement Income Distribution Upward - fully admin controlled
+        let matrixConfig: any = { placementIncomeUsd: 1, uplineSharePercent: 100, enabled: true };
+        try {
+          const matrixRow = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'matrixConfig') });
+          if (matrixRow?.value) matrixConfig = { ...matrixConfig, ...JSON.parse(matrixRow.value) };
+        } catch {}
+        const matrixEnabled = matrixConfig.enabled !== false;
+        const baseMatrixIncome = Math.max(0, Number(matrixConfig.placementIncomeUsd || 0));
+        const matrixShare = Math.max(0, Number(matrixConfig.uplineSharePercent ?? 100)) / 100;
+        const mIncomeUsd = baseMatrixIncome * matrixShare;
         let currentMatrixParentId = placementParentId;
         let matrixLvl = 1;
-        while (currentMatrixParentId && matrixLvl <= 10) {
+        while (matrixEnabled && currentMatrixParentId && matrixLvl <= 10 && mIncomeUsd > 0) {
            const parentMatrixNode = await db.query.matrixNodes.findFirst({ where: eq(matrixNodes.id, currentMatrixParentId) });
            if (!parentMatrixNode) break;
            
@@ -1063,16 +1115,25 @@ async function startServer() {
         activePhase = phases.find((p: any) => p.status === 'active') || null;
       }
 
+      let liveSystem: any = {};
+      try {
+        const systemRow = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'systemConfig') });
+        if (systemRow?.value) liveSystem = JSON.parse(systemRow.value);
+      } catch {}
+      if (liveSystem.presalePaused === true) return res.status(403).json({ error: 'Presale is currently paused by administrator.' });
+
       if (!activePhase) {
         return res.status(400).json({ error: "No active presale phase is configured." });
       }
 
+      const activePhasePrice = Number(activePhase.rate ?? activePhase.tokenPrice ?? activePhase.price);
+      if (!Number.isFinite(activePhasePrice) || activePhasePrice <= 0) return res.status(500).json({ error: 'Active phase has an invalid token price configuration.' });
       const PRICE_TOLERANCE = 0.0001;
-      if (Math.abs(Number(tokenPrice) - Number(activePhase.tokenPrice ?? activePhase.price)) > PRICE_TOLERANCE) {
+      if (Math.abs(Number(tokenPrice) - activePhasePrice) > PRICE_TOLERANCE) {
         return res.status(400).json({ error: "Submitted token price does not match the active phase price." });
       }
 
-      const expectedTokens = Number(amountUsdt) / Number(activePhase.tokenPrice ?? activePhase.price);
+      const expectedTokens = Number(amountUsdt) / activePhasePrice;
       if (Math.abs(expectedTokens - Number(tokenAmount)) / Math.max(expectedTokens, 1) > 0.01) {
         return res.status(400).json({ error: "Token amount does not match amountUsdt / current phase price." });
       }
@@ -1112,8 +1173,8 @@ async function startServer() {
         type: 'buy_presale',
         amountUsdt: Number(amountUsdt),
         tokenAmount: Number(tokenAmount),
-        tokenPrice: Number(activePhase.tokenPrice ?? activePhase.price),
-        phaseIndex: Number(phaseIndex || activePhase.id || 1),
+        tokenPrice: activePhasePrice,
+        phaseIndex: Number(activePhase.phaseNumber || phaseIndex || 1),
         status: purchaseStatus,
         txHash: hasPlausibleTxHash ? txHash : null,
       }).returning();
@@ -1131,7 +1192,7 @@ async function startServer() {
         user,
         Number(tokenAmount),
         Number(amountUsdt),
-        Number(phaseIndex || activePhase.id || 1)
+        Number(activePhase.phaseNumber || phaseIndex || 1)
       );
 
       // NOTE: Token delivery now happens ON-CHAIN via the Presale Smart Contract's
@@ -1259,10 +1320,19 @@ async function startServer() {
         return res.status(404).json({ error: "User not found" });
       }
 
-      const price = Number(tokenPrice || 0.10);
-      const totalUsdt = Number(amountTokens) * price;
-
       const phaseNum = req.body.phaseNumber ? Number(req.body.phaseNumber) : 1;
+      let phasePrice = 0;
+      try {
+        const phaseRow = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'phases') });
+        const configuredPhases = phaseRow?.value ? JSON.parse(phaseRow.value) : [];
+        const matchedPhase = configuredPhases.find((p: any) => Number(p.phaseNumber) === phaseNum);
+        phasePrice = Number(matchedPhase?.rate ?? matchedPhase?.tokenPrice ?? 0);
+      } catch {}
+      const price = Number(tokenPrice ?? phasePrice);
+      if (!Number.isFinite(price) || price <= 0) return res.status(400).json({ error: 'Invalid token price/phase price.' });
+      const totalUsdt = Number(amountTokens) * price;
+      const maxPriorityRow = await db.select({ priority: sellOrders.priority }).from(sellOrders).orderBy(desc(sellOrders.priority)).limit(1);
+      const nextPriority = Number(maxPriorityRow[0]?.priority ?? 0) + 1;
       const [order] = await db.insert(sellOrders).values({
         userId: user.id,
         phaseNumber: phaseNum,
@@ -1271,12 +1341,57 @@ async function startServer() {
         tokenPrice: price,
         totalUsdtValue: totalUsdt,
         status: 'open',
+        priority: nextPriority,
       }).returning();
 
       res.json({ success: true, order });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // Admin FIFO controls - persisted in PostgreSQL, not browser/localStorage.
+  // -------------------------------------------------------------------------
+  app.post("/api/admin/sellqueue/reorder", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const orderIds = Array.isArray(req.body?.orderIds) ? req.body.orderIds.map(Number).filter(Number.isFinite) : [];
+      if (!orderIds.length) return res.status(400).json({ error: "orderIds is required." });
+      for (let i = 0; i < orderIds.length; i++) {
+        await db.update(sellOrders).set({ priority: orderIds.length - i }).where(eq(sellOrders.id, orderIds[i]));
+      }
+      res.json({ success: true });
+    } catch (error: any) { res.status(500).json({ error: error.message }); }
+  });
+
+  app.post("/api/admin/sellqueue/instant-fulfill", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const orderId = Number(req.body?.orderId);
+      if (!Number.isFinite(orderId)) return res.status(400).json({ error: "Valid orderId is required." });
+      const order = await db.query.sellOrders.findFirst({ where: eq(sellOrders.id, orderId) });
+      if (!order) return res.status(404).json({ error: "Sell order not found." });
+      const remaining = Math.max(0, Number(order.remainingTokens));
+      if (remaining <= 0 || order.status === 'completed') return res.json({ success: true, order });
+      const gross = remaining * Number(order.tokenPrice);
+      await db.update(sellOrders).set({ remainingTokens: 0, status: 'completed' }).where(eq(sellOrders.id, order.id));
+      const user = await db.query.users.findFirst({ where: eq(users.id, order.userId) });
+      if (user) {
+        await db.update(users).set({
+          totalEarnedUsdt: Number(user.totalEarnedUsdt || 0) + gross,
+          availableUsdt: Number(user.availableUsdt || 0) + gross,
+          updatedAt: new Date(),
+        }).where(eq(users.id, user.id));
+        await db.insert(tokenSellLedgers).values({
+          userId: user.id, walletAddress: user.walletAddress, phaseIndex: order.phaseNumber,
+          phaseName: `Phase ${order.phaseNumber}`, tokenPrice: Number(order.tokenPrice),
+          tokensSold: remaining, tokensReturned: 0, grossUsdt: gross, withdrawnUsdt: 0,
+          serviceFeeUsdt: 0, status: 'unclaimed'
+        });
+      }
+      res.json({ success: true, orderId: order.id, tokensSold: remaining, grossUsdt: gross });
+    } catch (error: any) { res.status(500).json({ error: error.message }); }
   });
 
   // System & Admin Configurations (Live Synchronization)
@@ -1311,7 +1426,8 @@ async function startServer() {
 
       if (cleanPin && verifyPin(cleanPin, currentPinHash)) {
         recordPinSuccess(ip);
-        return res.json({ success: true, message: "Authentication successful" });
+        const adminToken = issueAdminSession();
+        return res.json({ success: true, message: "Authentication successful", adminToken });
       } else {
         recordPinFailure(ip);
         return res.status(401).json({ success: false, error: "Incorrect Security PIN. Access Denied." });
@@ -1323,6 +1439,7 @@ async function startServer() {
 
   // Change Admin PIN Endpoint
   app.post("/api/admin/change-pin", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
     try {
       const ip = req.ip || req.socket.remoteAddress || "unknown";
       const lockout = checkPinLockout(ip);
@@ -1408,6 +1525,7 @@ async function startServer() {
 
   // Save Live System & Admin Configs
   app.post("/api/admin/configs", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
     try {
       const { phases, referralLevels, rankRewards, systemConfig, matrixConfig } = req.body;
 
