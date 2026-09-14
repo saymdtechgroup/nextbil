@@ -9,8 +9,8 @@ import { ethers } from "ethers";
 // Web3 Utility Helpers for BSC Mainnet Token Balances and Strict On-Chain Receipt Verification
 
 
-export const NXBC_TOKEN_CONTRACT = '0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7';
-export const NXBC_PRESALE_CONTRACT = '0x85363386808d1f26BF3805Bb44a093a2Af9E8783'; // UPDATED CONTRACT
+export const NXBC_TOKEN_CONTRACT = '0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1'; // UPDATED TOKEN
+export const NXBC_PRESALE_CONTRACT = '0x4Bc1a2f057FF9a036b8C27a90f7C7F403dC85cae'; // UPDATED CONTRACT
 export const NXBC_CONTRACT = NXBC_TOKEN_CONTRACT; // Standard token import points to the actual BEP-20 token
 export const USDT_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
 export const ADMIN_TREASURY_WALLET = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261';
