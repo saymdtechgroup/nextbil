@@ -52,7 +52,7 @@ import {
 
 
 const INITIAL_PHASES: PhaseConfig[] = [
-  { id: 'p1', phaseNumber: 1, name: 'Phase 1', shortName: 'P1', rate: 0.10, rateLabel: '$0.10', totalSupply: 1000000, tokensSold: 0, status: 'active', multiplier: '10x Phase', unlockRequirement: 'Live Now' },
+  { id: 'p1', phaseNumber: 1, name: 'Phase 1', shortName: 'P1', rate: 0.01, rateLabel: '$0.01', totalSupply: 1000000, tokensSold: 0, status: 'active', multiplier: '10x Phase', unlockRequirement: 'Live Now' },
   { id: 'p2', phaseNumber: 2, name: 'Phase 2', shortName: 'P2', rate: 0.15, rateLabel: '$0.15', totalSupply: 2000000, tokensSold: 0, status: 'upcoming', multiplier: '15x Phase', unlockRequirement: 'After P1' },
   { id: 'p3', phaseNumber: 3, name: 'Phase 3', shortName: 'P3', rate: 0.20, rateLabel: '$0.20', totalSupply: 3000000, tokensSold: 0, status: 'upcoming', multiplier: '20x Phase', unlockRequirement: 'After P2' },
   { id: 'p4', phaseNumber: 4, name: 'Phase 4', shortName: 'P4', rate: 0.25, rateLabel: '$0.25', totalSupply: 4000000, tokensSold: 0, status: 'upcoming', multiplier: '25x Phase', unlockRequirement: 'After P3' },
@@ -74,7 +74,7 @@ export default function App() {
     phaseNumber: 1,
     name: 'Phase 1',
     shortName: 'P1',
-    rate: 0.10,
+    rate: 0.01,
     totalSupply: 1000000,
     tokensSold: 0
   };
@@ -579,6 +579,9 @@ export default function App() {
     presalePaused: false,
     directSponsorPercent: 10,
     withdrawalFeePercent: 2,
+    matrixConfig: { placementIncomeUsd: 1, uplineSharePercent: 100, enabled: true },
+    royaltyPoolUsd: 25000,
+    sellQueueSharePercent: 20,
   });
 
   // 2x2 Matrix Structure Nodes Data (Clean Real Tree)
@@ -704,6 +707,7 @@ export default function App() {
       dexPercent: number;
       unallocatedPercent: number;
     },
+    txHash?: string,
     currency: 'USDT' = 'USDT'
   ) => {
     // Deduct local balance
@@ -771,10 +775,11 @@ export default function App() {
     const addressToUse = walletAddress || 'Unknown Wallet';
     const postOrders = async () => {
        const ordersToPost = [];
-       if (p2TokensAllocated > 0) ordersToPost.push({ phaseNumber: 2, amountTokens: p2TokensAllocated, tokenPrice: 0.15 });
-       if (p3TokensAllocated > 0) ordersToPost.push({ phaseNumber: 3, amountTokens: p3TokensAllocated, tokenPrice: 0.20 });
-       if (p4TokensAllocated > 0) ordersToPost.push({ phaseNumber: 4, amountTokens: p4TokensAllocated, tokenPrice: 0.25 });
-       if (p5TokensAllocated > 0) ordersToPost.push({ phaseNumber: 5, amountTokens: p5TokensAllocated, tokenPrice: 0.30 });
+       const phaseRate = (n: number) => Number(phases.find((p) => p.phaseNumber === n)?.rate || 0);
+       if (p2TokensAllocated > 0) ordersToPost.push({ phaseNumber: 2, amountTokens: p2TokensAllocated, tokenPrice: phaseRate(2) });
+       if (p3TokensAllocated > 0) ordersToPost.push({ phaseNumber: 3, amountTokens: p3TokensAllocated, tokenPrice: phaseRate(3) });
+       if (p4TokensAllocated > 0) ordersToPost.push({ phaseNumber: 4, amountTokens: p4TokensAllocated, tokenPrice: phaseRate(4) });
+       if (p5TokensAllocated > 0) ordersToPost.push({ phaseNumber: 5, amountTokens: p5TokensAllocated, tokenPrice: phaseRate(5) });
        
        for (const order of ordersToPost) {
           try {
@@ -817,6 +822,7 @@ export default function App() {
         tokenAmount,
         tokenPrice: activePhase.rate,
         phaseIndex: activePhase.phaseNumber,
+        txHash: txHash || undefined,
       }),
     })
       .then((res) => res.json())
@@ -864,7 +870,7 @@ export default function App() {
   }) => {
     fetch('/api/admin/configs', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(typeof window !== 'undefined' && localStorage.getItem('nxbc_admin_token') ? { 'x-admin-token': localStorage.getItem('nxbc_admin_token') as string } : {}) },
       body: JSON.stringify(partial),
     }).catch((err) => console.log('Admin API sync notice:', err));
   };
@@ -1354,6 +1360,18 @@ export default function App() {
             }
           }
 
+          try {
+            if (typeof window !== 'undefined') {
+              const adminToken = localStorage.getItem('nxbc_admin_token');
+              if (adminToken) {
+                await fetch('/api/admin/sellqueue/reorder', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+                  body: JSON.stringify({ orderIds: newQueue.map((q) => Number(q.id)) })
+                });
+              }
+            }
+          } catch (e) { console.error('Queue reorder persistence error:', e); }
           setSellQueue(newQueue);
           if (typeof window !== 'undefined') localStorage.setItem('nxbc_sell_queue', JSON.stringify(newQueue));
 
