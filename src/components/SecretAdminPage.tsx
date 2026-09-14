@@ -128,15 +128,8 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanPin = enteredPin.trim();
-    const activeStoredPin = (typeof window !== 'undefined' ? localStorage.getItem('nxbc_admin_custom_pin') : null) || currentMasterPin || '7788';
-
-    if (cleanPin === activeStoredPin) {
-      setIsAuthenticated(true);
-      setPinError('');
-      return;
-    }
-
-    // Also check server-side verification
+    // Authentication is server-side only. The browser must never be trusted
+    // as the source of truth for the admin PIN.
     try {
       const res = await fetch('/api/admin/verify-pin', {
         method: 'POST',
@@ -146,6 +139,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
       const data = await res.json();
       if (data.success) {
         setIsAuthenticated(true);
+        if (data.adminToken && typeof window !== 'undefined') localStorage.setItem('nxbc_admin_token', data.adminToken);
         setPinError('');
         return;
       }
@@ -165,14 +159,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
     const cleanNew = newPinInput.trim();
     const cleanConfirm = confirmPinInput.trim();
 
-    const activeStoredPin = (typeof window !== 'undefined' ? localStorage.getItem('nxbc_admin_custom_pin') : null) || currentMasterPin || '7788';
-
-    if (cleanCurrent !== activeStoredPin) {
-      setPinChangeError('Current PIN is incorrect.');
-      return;
-    }
-
-    if (!cleanNew || cleanNew.length < 4) {
+    if (!cleanNew || cleanNew.length < 6 || !/^\d+$/.test(cleanNew)) {
       setPinChangeError('New PIN must be at least 4 characters long.');
       return;
     }
@@ -183,23 +170,21 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
     }
 
     setIsChangingPin(true);
-    setCurrentMasterPin(cleanNew);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('nxbc_admin_custom_pin', cleanNew);
-    }
 
     // Call server to persist PIN change across all sessions
     try {
       const res = await fetch('/api/admin/change-pin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(typeof window !== 'undefined' && localStorage.getItem('nxbc_admin_token') ? { 'x-admin-token': localStorage.getItem('nxbc_admin_token') as string } : {}) },
         body: JSON.stringify({ currentPin: cleanCurrent, newPin: cleanNew }),
       });
       const data = await res.json();
       if (data.success) {
+        setCurrentMasterPin(cleanNew);
+        if (typeof window !== 'undefined') localStorage.setItem('nxbc_admin_custom_pin', cleanNew);
         setPinChangeSuccess('Master Admin PIN successfully updated and secured!');
       } else {
-        setPinChangeSuccess('PIN updated locally.');
+        setPinChangeError(data.error || 'Unable to update PIN.');
       }
     } catch (err) {
       setPinChangeSuccess('PIN updated successfully.');
@@ -1724,15 +1709,16 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                                  try {
                                     const res = await fetch('/api/admin/sellqueue/instant-fulfill', {
                                        method: 'POST',
-                                       headers: { 'Content-Type': 'application/json' },
+                                       headers: { 'Content-Type': 'application/json', ...(typeof window !== 'undefined' && localStorage.getItem('nxbc_admin_token') ? { 'x-admin-token': localStorage.getItem('nxbc_admin_token') as string } : {}) },
                                        body: JSON.stringify({ orderId: entry.id })
                                     });
                                     if (res.ok) {
-                                       if (onUpdateSellQueue && sellQueue) {
-                                          const newQueue = [...sellQueue];
-                                          newQueue[idx].tokensSold = newQueue[idx].tokensRequested;
-                                          onUpdateSellQueue(newQueue);
-                                       }
+                                       // Server has already settled the order and credited the user.
+                                       // Reload so the queue and balances come from PostgreSQL.
+                                       window.location.reload();
+                                    } else {
+                                       const data = await res.json().catch(() => ({}));
+                                       alert(data.error || 'Instant fulfillment failed.');
                                     }
                                  } catch(e) {}
                               }}

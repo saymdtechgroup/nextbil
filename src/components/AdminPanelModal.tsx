@@ -1116,8 +1116,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     <input
                       type="number"
                       disabled
-                      value={20}
-                      className="w-full bg-[#150a2e] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-fuchsia-300 font-bold opacity-80 cursor-not-allowed"
+                      value={localSystem.sellQueueSharePercent ?? 20}
+                      onChange={(e) => setLocalSystem({ ...localSystem, sellQueueSharePercent: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })}
+                      className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-fuchsia-300 font-bold"
                     />
                   </div>
                   <div>
@@ -1127,8 +1128,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     <input
                       type="number"
                       disabled
-                      value={80}
-                      className="w-full bg-[#150a2e] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 font-bold opacity-80 cursor-not-allowed"
+                      value={100 - (localSystem.sellQueueSharePercent ?? 20)}
+                      readOnly
+                      className="w-full bg-[#150a2e] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 font-bold opacity-80"
                     />
                   </div>
                 </div>

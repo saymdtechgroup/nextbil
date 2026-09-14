@@ -41,7 +41,7 @@ interface BuyTokenModalProps {
       dexPercent: number;
       unallocatedPercent: number;
     },
-    
+    txHash?: string
   ) => void;
   currentRate: number;
   walletConnected?: boolean;
@@ -458,7 +458,8 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             p5Percent,
             dexPercent,
             unallocatedPercent,
-          }
+          },
+          recordedTxHash || undefined
         ));
         
         // Success Path
