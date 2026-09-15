@@ -1509,7 +1509,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                   <input
                     type="number"
                     min="0"
-                    max="20"
+                    max="100"
                     step="0.5"
                     value={localSystem.withdrawalFeePercent}
                     onChange={(e) => handleUpdateSystem({ withdrawalFeePercent: parseFloat(e.target.value) || 0 })}

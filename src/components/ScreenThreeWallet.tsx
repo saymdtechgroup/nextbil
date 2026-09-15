@@ -32,6 +32,7 @@ import {
   ADMIN_TREASURY_WALLET,
   addTokenToWallet,
   returnNxbcTokensToAdmin,
+  signWithdrawRequest,
 } from '../utils/web3Helper';
 import confetti from 'canvas-confetti';
 
@@ -51,6 +52,7 @@ interface ScreenThreeWalletProps {
   
   
   usdtBalance?: number;
+  withdrawalFeePercent?: number;
 }
 
 export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
@@ -68,6 +70,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
   
   
   usdtBalance = 0,
+  withdrawalFeePercent = 0,
 }) => {
   // Active Wallet Tab: 'token_sell' or 'mlm'
   const [activeTab, setActiveTab] = useState<'token_sell' | 'mlm'>('token_sell');
@@ -100,19 +103,6 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [tokenImportNotice, setTokenImportNotice] = useState<string | null>(null);
-  const [settlementWalletAddress, setSettlementWalletAddress] = useState<string>('');
-
-  // Fetch Payout / Settlement Wallet address from server config
-  useEffect(() => {
-    fetch('/api/payout-bot/status')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.hotWalletAddress) {
-          setSettlementWalletAddress(data.hotWalletAddress);
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   // Fetch or Synchronize Phase-by-Phase Token Sell Ledger for Connected Wallet
   const fetchLedger = async () => {
@@ -243,7 +233,9 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
     .filter((e) => e.status !== 'fully_claimed')
     .reduce((acc, curr) => acc + (curr.availableUsdt || (curr.grossUsdt - curr.withdrawnUsdt)), 0);
 
-  const effectiveTokenSellBalance = Math.max(tokenSellBalanceUsd, ledgerTotalAvailableGross);
+  // Security: token-sell withdrawals are backed only by the phase ledger. Do not
+  // let a cached/global balance bypass the exact token-return calculation.
+  const effectiveTokenSellBalance = ledgerTotalAvailableGross;
 
   useEffect(() => {
     if (effectiveTokenSellBalance > 0) {
@@ -284,7 +276,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
     }> = [];
     let totalTokensToReturn = 0;
 
-    const activeEntries = ledgerEntries.filter((e) => e.status !== 'fully_claimed');
+    const activeEntries = ledgerEntries.filter((e) => e.status === 'unclaimed' || e.status === 'partially_claimed');
 
     if (activeEntries.length > 0) {
       for (const entry of activeEntries) {
@@ -304,34 +296,25 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
           remainingToDeduct -= deduct;
         }
       }
-    } else {
-      // Fallback calculation: $0.10 baseline average
-      totalTokensToReturn = amountToWithdraw > 0 ? Math.round(amountToWithdraw / 0.10) : 0;
-      breakdown.push({
-        phaseIndex: 2,
-        phaseName: 'Phase Auto-Sell Pool',
-        tokensToReturn: totalTokensToReturn,
-        grossDeducted: amountToWithdraw,
-        tokenPrice: 0.10,
-      });
     }
 
     return {
       breakdown,
-      totalTokensToReturn: Math.round(totalTokensToReturn * 100) / 100,
+      totalTokensToReturn: Math.round(totalTokensToReturn * 1e18) / 1e18,
     };
   };
 
   const calculatedSettlement = calculatePhaseSettlementBreakdown(grossSellAmount);
   const exactTokensToReturn = calculatedSettlement.totalTokensToReturn;
 
-  // Live 10% Fee calculations for Token Sell
-  const sellFee = grossSellAmount * 0.10;
+  // Live admin-configured withdrawal fee (never hardcoded in the UI)
+  const safeFeePercent = Math.max(0, Math.min(100, Number(withdrawalFeePercent) || 0));
+  const sellFee = grossSellAmount * (safeFeePercent / 100);
   const sellNet = Math.max(0, grossSellAmount - sellFee);
 
-  // Live 10% Fee calculations for MLM
+  // Live admin-configured withdrawal fee for MLM
   const grossMlmAmount = parseFloat(mlmWithdrawAmount) || 0;
-  const mlmFee = grossMlmAmount * 0.10;
+  const mlmFee = grossMlmAmount * (safeFeePercent / 100);
   const mlmNet = Math.max(0, grossMlmAmount - mlmFee);
 
   // Handle Token Sell Withdrawal with Exact On-Chain Token Return to Admin Treasury
@@ -364,7 +347,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
     }
 
     setIsProcessing(true);
-    setStatusMessage(`Step 1/2: Authorizing return of ${exactTokensToReturn.toLocaleString()} NXBC to Admin Wallet...`);
+    setStatusMessage(`Step 1/3: Returning exactly ${exactTokensToReturn.toLocaleString()} NXBC to the verified Admin Wallet...`);
 
     try {
       let tokenReturnTxHash = '';
@@ -377,25 +360,28 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
           (window as any).ethereum ||
           (window as any).binancew3w?.ethereum);
 
-      if (hasWeb3 && tokensToReturn > 0) {
-        setStatusMessage(
-          `Step 1/2: Confirming transfer of ${tokensToReturn.toLocaleString()} NXBC Tokens to Admin Treasury...`
-        );
-        const returnResult = await returnNxbcTokensToAdmin(
-          tokensToReturn,
-          walletAddress,
-          (msg) => setStatusMessage(msg),
-          settlementWalletAddress
-        );
-
-        if (returnResult.success && returnResult.txHash) {
-          tokenReturnTxHash = returnResult.txHash;
-        } else {
-          console.warn('Token return on-chain notice:', returnResult.error);
-        }
+      if (!hasWeb3 || tokensToReturn <= 0) {
+        throw new Error('A connected BSC wallet is required. The withdrawal cannot continue without a real NXBC return transaction.');
       }
 
-      setStatusMessage('Step 2/2: Deducting 10% Service Fee & Dispatching Net USDT Payout...');
+      setStatusMessage(
+        `Step 1/3: Confirming transfer of exactly ${tokensToReturn.toLocaleString()} NXBC to Admin Treasury...`
+      );
+      const returnResult = await returnNxbcTokensToAdmin(
+        tokensToReturn,
+        walletAddress,
+        (msg) => setStatusMessage(msg),
+        ADMIN_TREASURY_WALLET
+      );
+
+      if (!returnResult.success || !returnResult.txHash) {
+        throw new Error(returnResult.error || 'NXBC return was not confirmed on-chain. No USDT will be released.');
+      }
+      tokenReturnTxHash = returnResult.txHash;
+
+      setStatusMessage('Step 2/3: Server is verifying the exact NXBC Transfer event on BSC...');
+      const auth = await signWithdrawRequest(walletAddress, parsedAmount, 'token_sell');
+      setStatusMessage(`Step 3/3: Applying ${safeFeePercent}% admin fee and dispatching verified USDT payout...`);
 
       const res = await fetch('/api/wallet/withdraw', {
         method: 'POST',
@@ -404,8 +390,10 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
           walletAddress,
           amountUsdt: parsedAmount,
           walletType: 'token_sell',
-          tokenReturnTxHash: tokenReturnTxHash || `0xreturn_${Date.now().toString(16)}`,
+          tokenReturnTxHash,
           tokensReturned: tokensToReturn,
+          signature: auth.signature,
+          timestamp: auth.timestamp,
         }),
       });
 
@@ -414,17 +402,16 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
         throw new Error(data.error || 'Token Sell withdrawal rejected by system.');
       }
 
-      const confirmedHash =
-        data.txHash ||
-        `0x${Math.random().toString(16).substring(2, 10)}...${Math.random().toString(16).substring(2, 6)}`;
+      if (!data.txHash) throw new Error('Payout server did not return a real BSC transaction hash.');
+      const confirmedHash = data.txHash;
 
       onWithdraw(parsedAmount, 'token_sell', confirmedHash);
       setIsProcessing(false);
       setStatusMessage('');
       setSuccessDetails({
         gross: parsedAmount,
-        fee: data.serviceFee || parsedAmount * 0.10,
-        net: data.netPayout || parsedAmount * 0.90,
+        fee: data.serviceFee || parsedAmount * (safeFeePercent / 100),
+        net: data.netPayout || parsedAmount * (1 - safeFeePercent / 100),
         txHash: confirmedHash,
         tokensReturned: tokensToReturn,
         walletType: 'Token Auto-Sell Settlement',
@@ -448,7 +435,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
     }
   };
 
-  // Handle MLM Earnings Withdrawal with 10% Service Charge
+  // Handle MLM Earnings Withdrawal with the live Admin-configured service fee
   const handleWithdrawMlm = async () => {
     setErrorMessage(null);
     const parsedAmount = parseFloat(mlmWithdrawAmount) || 0;
@@ -478,9 +465,10 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
     }
 
     setIsProcessing(true);
-    setStatusMessage('Deducting 10% Service Fee & Dispatching Net USDT Payout to Trust Wallet...');
+    setStatusMessage(`Authorizing withdrawal and applying ${safeFeePercent}% Service Fee...`);
 
     try {
+      const auth = await signWithdrawRequest(walletAddress, parsedAmount, 'mlm');
       const res = await fetch('/api/wallet/withdraw', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -488,6 +476,8 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
           walletAddress,
           amountUsdt: parsedAmount,
           walletType: 'mlm',
+          signature: auth.signature,
+          timestamp: auth.timestamp,
         }),
       });
 
@@ -496,17 +486,16 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
         throw new Error(data.error || 'MLM withdrawal rejected by system.');
       }
 
-      const confirmedHash =
-        data.txHash ||
-        `0x${Math.random().toString(16).substring(2, 10)}...${Math.random().toString(16).substring(2, 6)}`;
+      if (!data.txHash) throw new Error('Payout server did not return a real BSC transaction hash.');
+      const confirmedHash = data.txHash;
 
       onWithdraw(parsedAmount, 'mlm', confirmedHash);
       setIsProcessing(false);
       setStatusMessage('');
       setSuccessDetails({
         gross: parsedAmount,
-        fee: data.serviceFee || parsedAmount * 0.10,
-        net: data.netPayout || parsedAmount * 0.90,
+        fee: data.serviceFee || parsedAmount * (safeFeePercent / 100),
+        net: data.netPayout || parsedAmount * (1 - safeFeePercent / 100),
         txHash: confirmedHash,
         walletType: 'MLM Affiliate & Community Earnings',
       });
@@ -553,7 +542,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
               Multi-Wallet Settlement & Withdrawal
             </h1>
             <p className="text-[9px] text-purple-300/70 font-mono-crypto">
-              10% Service Fee • Phase-by-Phase Return Ledger
+              {safeFeePercent}% Service Fee • Phase-by-Phase Return Ledger
             </p>
           </div>
         </div>
@@ -602,18 +591,18 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
         </div>
       )}
 
-      {/* Global 10% Service Fee Policy Banner */}
+      {/* Global Dynamic Service Fee Policy Banner */}
       <div className="rounded-xl bg-purple-950/40 border border-purple-500/30 p-2.5 flex items-center justify-between text-[9.5px]">
         <div className="flex items-center gap-2">
           <div className="p-1 rounded-md bg-amber-500/20 text-amber-300 font-bold font-mono-crypto text-xs">
-            10%
+            {safeFeePercent}%
           </div>
           <div>
             <span className="font-bold text-slate-100 font-rajdhani uppercase block">
               Universal Platform Service Charge
             </span>
             <span className="text-purple-300/80 font-mono-crypto text-[8.5px]">
-              A standard 10% deduction applies to all withdrawals (Smart Contract Gas & Network Liquidity).
+              The current withdrawal fee is controlled live by the Admin Panel and applied to the gross withdrawal amount.
             </span>
           </div>
         </div>
@@ -721,7 +710,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* WALLET 1: TOKEN AUTO-SELL SETTLEMENT GATEWAY (WITH PHASE LEDGER & 10% FEE) */}
+      {/* WALLET 1: TOKEN AUTO-SELL SETTLEMENT GATEWAY (WITH PHASE LEDGER & DYNAMIC FEE) */}
       {/* ========================================================================= */}
       {activeTab === 'token_sell' && (
         <div className="rounded-2xl bg-gradient-to-b from-[#1b0c34] to-[#0f051e] border-2 border-amber-400/70 p-3.5 space-y-3 shadow-[0_0_25px_rgba(245,158,11,0.15)] relative">
@@ -735,7 +724,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                   TOKEN AUTO-SELL SETTLEMENT WALLET
                 </h2>
                 <p className="text-[8.5px] text-purple-300/80 font-mono-crypto">
-                  Phase Auto-Sell Proceeds • 10% Service Fee • Phase-by-Phase Return
+                  Phase Auto-Sell Proceeds • {safeFeePercent}% Service Fee • Phase-by-Phase Return
                 </p>
               </div>
             </div>
@@ -910,7 +899,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                 <span className="text-slate-100 font-bold">${grossSellAmount.toFixed(2)} USDT</span>
               </div>
               <div className="flex justify-between text-rose-300">
-                <span>Platform Service Charge (10%):</span>
+                <span>Platform Service Charge ({safeFeePercent}%):</span>
                 <span>-${sellFee.toFixed(2)} USDT</span>
               </div>
               <div className="flex justify-between text-amber-300">
@@ -966,7 +955,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* WALLET 2: MLM & COMMUNITY EARNINGS GATEWAY (WITH 10% FEE)                 */}
+      {/* WALLET 2: MLM & COMMUNITY EARNINGS GATEWAY (WITH DYNAMIC FEE)                 */}
       {/* ========================================================================= */}
       {activeTab === 'mlm' && (
         <div className="rounded-2xl bg-gradient-to-b from-[#200936] to-[#0f041d] border-2 border-fuchsia-400/70 p-3.5 space-y-3 shadow-[0_0_25px_rgba(217,70,239,0.15)] relative">
@@ -980,7 +969,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                   MLM & COMMUNITY EARNINGS WALLET
                 </h2>
                 <p className="text-[8.5px] text-purple-300/80 font-mono-crypto">
-                  Direct Referral (10%) + 10-Level Unilevel + Matrix 2x10 • 10% Service Fee
+                  Direct Referral (10%) + 10-Level Unilevel + Matrix 2x10 • {safeFeePercent}% Service Fee
                 </p>
               </div>
             </div>
@@ -1070,7 +1059,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                 <span className="text-slate-100 font-bold">${grossMlmAmount.toFixed(2)} USDT</span>
               </div>
               <div className="flex justify-between text-rose-300">
-                <span>Platform Service Fee (10%):</span>
+                <span>Platform Service Fee ({safeFeePercent}%):</span>
                 <span>-${mlmFee.toFixed(2)} USDT</span>
               </div>
               <div className="border-t border-purple-500/20 pt-1 flex justify-between font-bold text-xs text-emerald-400">
@@ -1149,7 +1138,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
               <span className="font-bold text-slate-100">${successDetails.gross.toFixed(2)}</span>
             </div>
             <div className="p-1.5 rounded-lg bg-emerald-950/80 border border-emerald-500/20">
-              <span className="text-rose-400/80 block text-[7.5px]">10% Service Fee</span>
+              <span className="text-rose-400/80 block text-[7.5px]">{safeFeePercent}% Service Fee</span>
               <span className="font-bold text-rose-300">-${successDetails.fee.toFixed(2)}</span>
             </div>
             <div className="p-1.5 rounded-lg bg-emerald-950/80 border border-emerald-400/40">

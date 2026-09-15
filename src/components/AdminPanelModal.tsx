@@ -1088,7 +1088,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   <input
                     type="number"
                     min="0"
-                    max="20"
+                    max="100"
                     step="0.5"
                     value={localSystem.withdrawalFeePercent}
                     onChange={(e) => setLocalSystem({ ...localSystem, withdrawalFeePercent: parseFloat(e.target.value) || 0 })}
