@@ -285,7 +285,7 @@ export default function App() {
       }
 
       try {
-        const res = await fetch('/api/admin/configs');
+        const res = await fetch('/api/presale/config');
         const data = await res.json();
         if (data?.success) {
 
