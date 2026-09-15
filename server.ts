@@ -4,7 +4,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { db } from "./src/db/index.ts";
 import { users, matrixNodes, levelEarnings, transactions, sellOrders, systemConfigs, tokenSellLedgers, rankAchievements } from "./src/db/schema.ts";
-import { eq, desc, asc, and } from "drizzle-orm";
+import { eq, desc, asc, and, or } from "drizzle-orm";
 import { ethers } from "ethers";
 import { scryptSync, randomBytes, timingSafeEqual } from "crypto";
 
@@ -87,6 +87,119 @@ const ERC20_ABI = [
   "function balanceOf(address owner) view returns (uint256)",
   "function decimals() view returns (uint8)"
 ];
+
+const ERC20_TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
+const DEFAULT_NXBC_TOKEN_ADDRESS = "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1";
+const DEFAULT_BSC_RPC = "https://bsc-dataseed.binance.org/";
+const DEFAULT_USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
+const DEFAULT_PRESALE_ADDRESS = "0x4Bc1a2f057FF9a036b8C27a90f7C7F403dC85cae";
+const DEFAULT_ADMIN_WALLET = "0x8d1abCa8Cf0f42799b9a76254710e979bd59c261";
+
+function settlementEndpointsEnabled(): boolean {
+  return process.env.ENABLE_UNVERIFIED_INTERNAL_SETTLEMENTS === "true";
+}
+
+async function verifyPresalePurchaseOnChain(params: {
+  txHash: string;
+  buyer: string;
+  usdtAmount: number;
+  nxbcAmount: number;
+}): Promise<{ ok: boolean; pending?: boolean; error?: string }> {
+  const { txHash, buyer, usdtAmount, nxbcAmount } = params;
+  if (!/^0x[a-fA-F0-9]{64}$/.test(String(txHash || ""))) return { ok: false, error: "Invalid BSC transaction hash." };
+  const rpcUrl = process.env.RPC_URL || DEFAULT_BSC_RPC;
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const network = await provider.getNetwork();
+  if (network.chainId !== 56n) return { ok: false, error: "Configured RPC is not BSC Mainnet (chainId 56)." };
+  const receipt = await provider.getTransactionReceipt(txHash);
+  if (!receipt) return { ok: false, pending: true, error: "Purchase transaction is not mined yet." };
+  if (receipt.status !== 1) return { ok: false, error: "Purchase transaction reverted on BSC." };
+  if (receipt.from.toLowerCase() !== buyer.toLowerCase()) return { ok: false, error: "Purchase transaction sender does not match the buyer wallet." };
+
+  const usdtAddress = (process.env.USDT_CONTRACT_ADDRESS || DEFAULT_USDT_ADDRESS).toLowerCase();
+  const nxbcAddress = (process.env.NXBC_TOKEN_ADDRESS || DEFAULT_NXBC_TOKEN_ADDRESS).toLowerCase();
+  const adminWallet = (process.env.PRESALE_RECEIVING_WALLET || DEFAULT_ADMIN_WALLET).toLowerCase();
+  const presaleAddress = (process.env.NXBC_PRESALE_CONTRACT_ADDRESS || process.env.NXBC_PRESALE_CONTRACT || DEFAULT_PRESALE_ADDRESS).toLowerCase();
+  const iface = new ethers.Interface(["event Transfer(address indexed from, address indexed to, uint256 value)"]);
+  const usdtRaw = ethers.parseUnits(Number(usdtAmount).toFixed(6), 18);
+  const nxbcRaw = ethers.parseUnits(Number(nxbcAmount).toFixed(18), 18);
+  let usdtPaid = false;
+  let nxbcDelivered = false;
+
+  for (const log of receipt.logs) {
+    if (!log.topics?.[0] || log.topics[0].toLowerCase() !== ERC20_TRANSFER_TOPIC.toLowerCase()) continue;
+    if (log.address.toLowerCase() !== usdtAddress && log.address.toLowerCase() !== nxbcAddress) continue;
+    try {
+      const parsed = iface.parseLog(log);
+      if (!parsed || parsed.name !== "Transfer") continue;
+      const from = String(parsed.args.from).toLowerCase();
+      const to = String(parsed.args.to).toLowerCase();
+      const value = parsed.args.value as bigint;
+      if (log.address.toLowerCase() === usdtAddress && from === buyer.toLowerCase() && to === adminWallet && value >= usdtRaw) usdtPaid = true;
+      if (log.address.toLowerCase() === nxbcAddress && from === presaleAddress && to === buyer.toLowerCase() && value >= nxbcRaw) nxbcDelivered = true;
+    } catch {}
+  }
+  if (!usdtPaid) return { ok: false, error: "The BSC transaction does not contain the required USDT payment to the presale treasury." };
+  if (!nxbcDelivered) return { ok: false, error: "The BSC transaction does not contain the expected NXBC delivery from the current presale contract." };
+  return { ok: true };
+}
+
+/**
+ * Verify a user-signed NXBC return by reading the canonical BSC receipt and
+ * decoding the ERC-20 Transfer event. This intentionally does NOT trust the
+ * tx hash, client-supplied token count, or a locally generated fallback hash.
+ */
+async function verifyExactNxbcReturn(params: {
+  txHash: string;
+  expectedSender: string;
+  expectedRecipient: string;
+  expectedTokenAmount: number;
+}): Promise<{ ok: boolean; error?: string; blockNumber?: number; actualAmount?: string }> {
+  const { txHash, expectedSender, expectedRecipient, expectedTokenAmount } = params;
+  if (!/^0x[a-fA-F0-9]{64}$/.test(String(txHash || ""))) {
+    return { ok: false, error: "Invalid NXBC return transaction hash." };
+  }
+
+  const rpcUrl = process.env.RPC_URL || DEFAULT_BSC_RPC;
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const network = await provider.getNetwork();
+  if (network.chainId !== 56n) return { ok: false, error: "Configured RPC is not BSC Mainnet (chainId 56)." };
+  const receipt = await provider.getTransactionReceipt(txHash);
+  if (!receipt) return { ok: false, error: "NXBC return transaction is not mined yet." };
+  if (receipt.status !== 1) return { ok: false, error: "NXBC return transaction reverted on BSC." };
+  if (receipt.from.toLowerCase() !== expectedSender.toLowerCase()) {
+    return { ok: false, error: "NXBC return transaction sender does not match the withdrawing wallet." };
+  }
+
+  const tokenAddress = ethers.getAddress(process.env.NXBC_TOKEN_ADDRESS || DEFAULT_NXBC_TOKEN_ADDRESS);
+  const sender = ethers.getAddress(expectedSender);
+  const recipient = ethers.getAddress(expectedRecipient);
+  const expectedAmount = ethers.parseUnits(expectedTokenAmount.toFixed(18), 18);
+
+  let matched = false;
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== tokenAddress.toLowerCase()) continue;
+    if (!log.topics?.[0] || log.topics[0].toLowerCase() !== ERC20_TRANSFER_TOPIC.toLowerCase()) continue;
+    if (log.topics.length < 3 || !log.data) continue;
+    try {
+      const from = ethers.getAddress("0x" + log.topics[1].slice(-40));
+      const to = ethers.getAddress("0x" + log.topics[2].slice(-40));
+      const amount = BigInt(log.data);
+      if (from === sender && to === recipient && amount === expectedAmount) {
+        matched = true;
+        return { ok: true, blockNumber: receipt.blockNumber, actualAmount: amount.toString() };
+      }
+    } catch { /* ignore malformed/non-transfer logs */ }
+  }
+
+  if (!matched) {
+    return {
+      ok: false,
+      error: `NXBC return verification failed. Expected exactly ${expectedTokenAmount} NXBC from ${sender} to ${recipient}.`,
+    };
+  }
+  return { ok: false, error: "NXBC return verification failed." };
+}
 
 // ---------------------------------------------------------------------------
 // Wallet-signature authentication for money-moving endpoints
@@ -526,49 +639,27 @@ async function verifyPendingPresalePurchases() {
     }
 
     try {
-      const receipt = await provider.getTransactionReceipt(txRecord.txHash);
-      if (!receipt) continue; // not mined yet, check again next cycle
-
-      if (receipt.status !== 1) {
-        console.warn(`[PRESALE VERIFY] Tx ${txRecord.txHash} reverted on-chain, marking purchase #${txRecord.id} failed.`);
-        await db.update(transactions).set({ status: 'failed' }).where(eq(transactions.id, txRecord.id));
-        continue;
-      }
-
-      // Look for a genuine USDT Transfer(...) log paying our treasury wallet
-      // at least the expected amount.
-      const expectedRaw = ethers.parseUnits(Number(txRecord.amountUsdt).toFixed(6), usdtDecimals);
-      let paymentVerified = false;
-
-      for (const log of receipt.logs) {
-        if (log.address.toLowerCase() !== usdtContractAddress.toLowerCase()) continue;
-        let parsed;
-        try {
-          parsed = usdtInterface.parseLog(log);
-        } catch {
-          continue;
-        }
-        if (!parsed || parsed.name !== "Transfer") continue;
-        const to = String(parsed.args.to).toLowerCase();
-        const value = parsed.args.value as bigint;
-        if (to === treasuryWallet && value >= expectedRaw) {
-          paymentVerified = true;
-          break;
-        }
-      }
-
-      if (!paymentVerified) {
-        console.warn(`[PRESALE VERIFY] Tx ${txRecord.txHash} did not pay the treasury wallet the expected amount — marking purchase #${txRecord.id} failed.`);
-        await db.update(transactions).set({ status: 'failed' }).where(eq(transactions.id, txRecord.id));
-        continue;
-      }
-
-      // Payment confirmed on-chain: mark completed and apply all the side
-      // effects (phase progression, MLM commissions, matrix placement) that
-      // were deferred when the purchase was first recorded as pending.
       const user = await db.query.users.findFirst({ where: eq(users.id, txRecord.userId) });
       if (!user) {
         console.error(`[PRESALE VERIFY] User ${txRecord.userId} not found for pending purchase #${txRecord.id}.`);
+        continue;
+      }
+
+      // Use the same strict verifier as the synchronous endpoint. This prevents
+      // a pending purchase from becoming completed based only on a USDT payment;
+      // the same BSC transaction must also contain the expected NXBC delivery
+      // from the CURRENT presale contract to the buyer.
+      const verification = await verifyPresalePurchaseOnChain({
+        txHash: txRecord.txHash,
+        buyer: user.walletAddress,
+        usdtAmount: Number(txRecord.amountUsdt),
+        nxbcAmount: Number(txRecord.tokenAmount),
+      });
+
+      if (verification.pending) continue;
+      if (!verification.ok) {
+        console.warn(`[PRESALE VERIFY] Purchase #${txRecord.id} failed strict on-chain verification: ${verification.error}`);
+        await db.update(transactions).set({ status: 'failed' }).where(eq(transactions.id, txRecord.id));
         continue;
       }
 
@@ -747,6 +838,9 @@ async function startServer() {
 
   // Record a new Phase Auto-Sell entry into the internal ledger
   app.post("/api/wallet/token-sell-ledger/record", async (req, res) => {
+    if (!settlementEndpointsEnabled()) {
+      return res.status(403).json({ success: false, error: "Unverified client-side token settlement is disabled. No internal balance can be created from browser data." });
+    }
     try {
       const {
         walletAddress,
@@ -812,7 +906,7 @@ async function startServer() {
     }
   });
 
-  // Fully Automated Instant Crypto Payout Bot API with 10% Service Charge & Token Return Validation
+  // Fully Automated Instant Crypto Payout Bot API with dynamic Admin fee & token return validation
   app.post("/api/wallet/withdraw", async (req, res) => {
     try {
       const {
@@ -853,10 +947,23 @@ async function startServer() {
       // ------------------------------------------------------------------------
 
       const grossAmount = Number(amountUsdt);
-      const SERVICE_FEE_RATE = 0.10; // 10% Service Charge
-      const serviceFee = grossAmount * SERVICE_FEE_RATE;
-      const netPayout = Math.max(0, grossAmount - serviceFee);
       const normalizedAddress = walletAddress.toLowerCase();
+
+      // Read the live fee from the same admin-managed systemConfig used by the UI.
+      // Never trust a fee percentage supplied by the browser.
+      let withdrawalFeePercent = 0;
+      try {
+        const feeRow = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, "systemConfig") });
+        const parsedConfig = feeRow ? JSON.parse(feeRow.value) : null;
+        withdrawalFeePercent = Number(parsedConfig?.withdrawalFeePercent);
+      } catch {
+        withdrawalFeePercent = 0;
+      }
+      if (!Number.isFinite(withdrawalFeePercent) || withdrawalFeePercent < 0 || withdrawalFeePercent > 100) {
+        return res.status(500).json({ error: "Invalid withdrawal fee configuration. Admin must correct it before withdrawals." });
+      }
+      const serviceFee = grossAmount * (withdrawalFeePercent / 100);
+      const netPayout = Math.max(0, grossAmount - serviceFee);
 
       // Look up user in database — do NOT auto-create with a pre-loaded balance,
       // an unknown wallet has nothing to withdraw.
@@ -882,6 +989,7 @@ async function startServer() {
       // If Token Auto-Sell Withdrawal: Update Phase-by-Phase Internal Ledger (FIFO)
       let phaseBreakdown: Array<{ phaseIndex: number; phaseName: string; tokensToReturn: number; grossDeducted: number }> = [];
       let totalCalculatedTokensToReturn = 0;
+      const pendingLedgerUpdates: Array<{entry: any; withdrawn: number; returned: number; status: string; fee: number}> = [];
 
       if (walletType === 'token_sell') {
         const activeLedgerEntries = await db.select()
@@ -889,7 +997,7 @@ async function startServer() {
           .where(
             and(
               eq(tokenSellLedgers.walletAddress, normalizedAddress),
-              eq(tokenSellLedgers.status, 'unclaimed')
+              or(eq(tokenSellLedgers.status, 'unclaimed'), eq(tokenSellLedgers.status, 'partially_claimed'))
             )
           )
           .orderBy(asc(tokenSellLedgers.phaseIndex), asc(tokenSellLedgers.createdAt));
@@ -919,22 +1027,70 @@ async function startServer() {
             totalCalculatedTokensToReturn += tokensProportion;
             remainingToDeduct -= deductFromEntry;
 
-            // Update ledger record
-            await db.update(tokenSellLedgers)
-              .set({
-                withdrawnUsdt: newWithdrawn,
-                tokensReturned: newReturned,
-                serviceFeeUsdt: (entry.serviceFeeUsdt || 0) + (deductFromEntry * 0.10),
-                status: newStatus,
-                returnTxHash: tokenReturnTxHash || null,
-                updatedAt: new Date(),
-              })
-              .where(eq(tokenSellLedgers.id, entry.id));
+            // Defer all ledger mutations until exact on-chain NXBC return verification passes.
+            pendingLedgerUpdates.push({
+              entry,
+              withdrawn: newWithdrawn,
+              returned: newReturned,
+              status: newStatus,
+              fee: deductFromEntry * (withdrawalFeePercent / 100),
+            });
           }
         }
       }
 
-      const finalTokensReturned = tokensReturned > 0 ? tokensReturned : Math.round(totalCalculatedTokensToReturn);
+      // TOKEN-SELL SECURITY GATE: exact NXBC return must be proven on BSC before
+      // any ledger is marked withdrawn and before any USDT payout is dispatched.
+      if (walletType === 'token_sell') {
+        if (!tokenReturnTxHash) {
+          return res.status(400).json({ error: "NXBC return transaction is required. USDT withdrawal is blocked until the return is verified on BSC." });
+        }
+        const exactExpectedTokens = totalCalculatedTokensToReturn;
+        if (exactExpectedTokens <= 0) {
+          return res.status(400).json({ error: "No exact NXBC return amount could be calculated from the user's settlement ledger." });
+        }
+        if (tokensReturned > 0 && Math.abs(Number(tokensReturned) - exactExpectedTokens) > 0.000000001) {
+          return res.status(400).json({ error: "Client-supplied NXBC return amount does not match the server-calculated exact amount." });
+        }
+
+        let treasuryAddress = process.env.NXBC_RETURN_TREASURY_ADDRESS || "0x8d1abCa8Cf0f42799b9a76254710e979bd59c261";
+        try { treasuryAddress = ethers.getAddress(treasuryAddress); } catch {
+          return res.status(500).json({ error: "Invalid NXBC return treasury address configuration." });
+        }
+        // Prevent replay of an already-consumed NXBC return transaction.
+        // A valid on-chain transfer may only authorize one successful settlement.
+        // If a payout previously failed before ledger commit, the hash remains reusable.
+        try {
+          const priorUse = await db.query.tokenSellLedgers.findFirst({
+            where: eq(tokenSellLedgers.returnTxHash, tokenReturnTxHash),
+          });
+          if (priorUse) {
+            return res.status(400).json({
+              error: "This NXBC return transaction has already been used for a Token Sell withdrawal."
+            });
+          }
+        } catch (replayCheckError: any) {
+          console.error("[NXBC RETURN] Replay-check failed:", replayCheckError?.message);
+          return res.status(500).json({ error: "Could not verify NXBC return transaction uniqueness. Withdrawal blocked." });
+        }
+
+        const verification = await verifyExactNxbcReturn({
+          txHash: tokenReturnTxHash,
+          expectedSender: walletAddress,
+          expectedRecipient: treasuryAddress,
+          expectedTokenAmount: exactExpectedTokens,
+        });
+        if (!verification.ok) {
+          return res.status(400).json({ error: verification.error || "NXBC return could not be verified on BSC. USDT withdrawal blocked." });
+        }
+
+        // Verification passed. No ledger mutation is performed yet; it is deferred
+        // until the real USDT payout transaction has been broadcast successfully.
+      }
+
+      const finalTokensReturned = walletType === 'token_sell'
+        ? totalCalculatedTokensToReturn
+        : Number(tokensReturned) || 0;
 
       let txHash = "";
       let executionMode = "simulated_blockchain";
@@ -951,16 +1107,23 @@ async function startServer() {
           const wallet = new ethers.Wallet(formattedKey, provider);
           const usdtContract = new ethers.Contract(usdtContractAddress, ERC20_ABI, wallet);
 
-          // Convert NET payout amount to 18 decimals (after 10% service fee deduction)
+          // Convert NET payout amount to 18 decimals after the live Admin-configured fee deduction
           const decimals = 18;
           const parsedAmount = ethers.parseUnits(netPayout.toFixed(4), decimals);
 
           console.log(`[PAYOUT BOT] Sender Hot Wallet: ${wallet.address}`);
-          console.log(`[PAYOUT BOT] Initiating automated ${walletType} payout of Gross: $${grossAmount} | Fee (10%): $${serviceFee.toFixed(2)} | Net: $${netPayout.toFixed(2)} USDT to ${walletAddress}...`);
+          console.log(`[PAYOUT BOT] Initiating automated ${walletType} payout of Gross: $${grossAmount} | Fee (${withdrawalFeePercent}%): $${serviceFee.toFixed(2)} | Net: $${netPayout.toFixed(2)} USDT to ${walletAddress}...`);
           
           const tx = await usdtContract.transfer(walletAddress, parsedAmount);
           console.log(`[PAYOUT BOT] Real BSC Transaction Broadcasted: https://bscscan.com/tx/${tx.hash}`);
-          
+          const payoutReceipt = await tx.wait(1);
+          if (!payoutReceipt || payoutReceipt.status !== 1) {
+            return res.status(503).json({
+              error: "USDT payout transaction was broadcast but did not confirm successfully on BSC.",
+              txHash: tx.hash,
+              serviceFeePercent: withdrawalFeePercent,
+            });
+          }
           txHash = tx.hash;
           executionMode = "real_bsc_blockchain";
         } catch (botError: any) {
@@ -968,19 +1131,40 @@ async function startServer() {
           if (botError.info?.error?.message) {
             console.error("[PAYOUT BOT REASON]:", botError.info.error.message);
           }
-          txHash = `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
-          executionMode = `fallback_${botError.code || 'gas_or_balance_error'}`;
+          return res.status(503).json({
+            error: `USDT payout failed on BSC: ${botError?.message || 'unknown payout error'}`,
+            serviceFeePercent: withdrawalFeePercent,
+          });
         }
       } else {
-        console.warn("[PAYOUT BOT] PAYOUT_HOT_WALLET_PRIVATE_KEY is not set in .env! Operating in database-only mode.");
-        // Instant simulated on-chain broadcast hash
-        txHash = `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
+        return res.status(503).json({
+          error: "USDT payout wallet is not configured. No withdrawal was completed and no fake blockchain hash was generated.",
+          serviceFeePercent: withdrawalFeePercent,
+        });
+      }
+
+      // Only after the real payout has been broadcast do we commit the token-sell
+      // ledger changes. This prevents a failed payout from consuming the user's claim.
+      if (walletType === 'token_sell') {
+        for (const update of pendingLedgerUpdates) {
+          await db.update(tokenSellLedgers)
+            .set({
+              withdrawnUsdt: update.withdrawn,
+              tokensReturned: update.returned,
+              serviceFeeUsdt: (update.entry.serviceFeeUsdt || 0) + update.fee,
+              status: update.status,
+              returnTxHash: tokenReturnTxHash,
+              payoutTxHash: txHash,
+              updatedAt: new Date(),
+            })
+            .where(eq(tokenSellLedgers.id, update.entry.id));
+        }
       }
 
       // Record in Transactions Database
       const txTitle = walletType === 'token_sell'
-        ? `Token Auto-Sell Settlement Payout (Net $${netPayout.toFixed(2)} after 10% Fee)`
-        : `MLM & Community Earnings Payout (Net $${netPayout.toFixed(2)} after 10% Fee)`;
+        ? `Token Auto-Sell Settlement Payout (Net $${netPayout.toFixed(2)} after ${withdrawalFeePercent}% Fee)`
+        : `MLM & Community Earnings Payout (Net $${netPayout.toFixed(2)} after ${withdrawalFeePercent}% Fee)`;
 
       const [txRecord] = await db.insert(transactions).values({
         userId: user.id,
@@ -1143,11 +1327,20 @@ async function startServer() {
         return res.status(400).json({ error: "Purchase exceeds remaining supply in the active phase.", remainingInPhase });
       }
 
-      // Real on-chain payment tx hash is required — we no longer fabricate one.
-      // A missing/malformed hash means we can't confirm payment was made, so the
-      // purchase is recorded as pending rather than silently marked completed.
-      const hasPlausibleTxHash = typeof txHash === 'string' && txHash.startsWith('0x') && txHash.length >= 20;
-      const purchaseStatus = hasPlausibleTxHash ? 'completed' : 'pending_verification';
+      // SECURITY: a syntactically valid tx hash is NOT proof of payment. Verify
+      // the real BSC receipt, buyer, exact USDT treasury payment, and exact NXBC
+      // delivery from the current presale contract before applying any database
+      // side effects (MLM commissions, phase progression, qualification, etc.).
+      let purchaseStatus: 'completed' | 'pending_verification' | 'failed' = 'pending_verification';
+      const hasValidTxHash = typeof txHash === 'string' && /^0x[a-fA-F0-9]{64}$/.test(txHash);
+      if (hasValidTxHash) {
+        const chainCheck = await verifyPresalePurchaseOnChain({
+          txHash, buyer: walletAddress, usdtAmount: Number(amountUsdt), nxbcAmount: Number(tokenAmount),
+        });
+        if (chainCheck.ok) purchaseStatus = 'completed';
+        else if (chainCheck.pending) purchaseStatus = 'pending_verification';
+        else purchaseStatus = 'failed';
+      }
       // ------------------------------------------------------------------------
 
       const normalizedAddress = walletAddress.toLowerCase();
@@ -1167,6 +1360,15 @@ async function startServer() {
         user = newUser;
       }
 
+      // Never allow one real blockchain transaction to create multiple database
+      // purchases. A valid tx hash is a one-time settlement proof.
+      if (purchaseStatus === 'completed' && txHash) {
+        const existingTx = await db.query.transactions.findFirst({ where: eq(transactions.txHash, txHash) });
+        if (existingTx) {
+          return res.status(409).json({ success: false, error: "This blockchain transaction has already been recorded as a purchase.", transaction: existingTx });
+        }
+      }
+
       // Record transaction
       const [tx] = await db.insert(transactions).values({
         userId: user.id,
@@ -1176,16 +1378,18 @@ async function startServer() {
         tokenPrice: activePhasePrice,
         phaseIndex: Number(activePhase.phaseNumber || phaseIndex || 1),
         status: purchaseStatus,
-        txHash: hasPlausibleTxHash ? txHash : null,
+        txHash: hasValidTxHash ? txHash : null,
       }).returning();
 
       if (purchaseStatus === 'pending_verification') {
-        return res.json({
-          success: true,
-          pending: true,
-          message: "Purchase recorded as pending — awaiting a valid on-chain payment transaction hash before it's confirmed.",
+        return res.status(202).json({
+          success: true, pending: true,
+          message: "Purchase recorded as pending — awaiting a mined and fully verified BSC purchase transaction.",
           transaction: tx,
         });
+      }
+      if (purchaseStatus === 'failed') {
+        return res.status(400).json({ success: false, error: "Purchase transaction could not be verified as a valid payment and NXBC delivery on BSC.", transaction: tx });
       }
 
       const { newInvested, isNowMlmQualified } = await finalizeConfirmedPurchase(
@@ -1272,6 +1476,9 @@ async function startServer() {
 
   // 1:1 Instant Token Swap (USDT ⮂ NXBUSD)
   app.post("/api/swap/convert", async (req, res) => {
+    if (!settlementEndpointsEnabled()) {
+      return res.status(403).json({ success: false, error: "Unverified browser-side swaps are disabled. Use an on-chain verified settlement flow." });
+    }
     try {
       const { walletAddress, fromToken, toToken, amount, txHash } = req.body;
       if (!walletAddress || !amount || Number(amount) <= 0) {
@@ -1310,6 +1517,9 @@ async function startServer() {
 
   // Create P2P Sell Order
   app.post("/api/p2p/sell", async (req, res) => {
+    if (!settlementEndpointsEnabled()) {
+      return res.status(403).json({ success: false, error: "Unverified browser-side P2P sales are disabled. Tokens must be verified on-chain before a financial order is created." });
+    }
     try {
       const { walletAddress, amountTokens, tokenPrice } = req.body;
       const user = await db.query.users.findFirst({
@@ -1497,6 +1707,7 @@ async function startServer() {
 
   // Get Live System & Admin Configs
   app.get("/api/admin/configs", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
     try {
       let dbConfigs: Record<string, any> = {};
       try {
@@ -1569,6 +1780,7 @@ async function startServer() {
 
   // System Configurations (Admin Control Legacy endpoint)
   app.get("/api/system/configs", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
     try {
       const configs = await db.select().from(systemConfigs);
       res.json({ configs });
