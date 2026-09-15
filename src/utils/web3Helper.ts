@@ -15,6 +15,29 @@ export const NXBC_CONTRACT = NXBC_TOKEN_CONTRACT; // Standard token import point
 export const USDT_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
 export const ADMIN_TREASURY_WALLET = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261';
 
+/** Build the exact short-lived withdrawal authorization message expected by the server. */
+export function buildWithdrawMessage(walletAddress: string, amountUsdt: number, walletType: string, timestamp: number) {
+  return `Authorize withdrawal\nWallet: ${walletAddress.toLowerCase()}\nAmount: ${amountUsdt} USDT\nType: ${walletType}\nTimestamp: ${timestamp}`;
+}
+
+/** Ask the connected wallet to sign a withdrawal request. The server verifies the recovered address. */
+export async function signWithdrawRequest(
+  walletAddress: string,
+  amountUsdt: number,
+  walletType: string,
+): Promise<{ signature: string; timestamp: number }> {
+  const eth =
+    (typeof window !== 'undefined' && ((window as any).trustwallet?.ethereum || (window as any).ethereum || (window as any).binancew3w?.ethereum || (window as any).okxwallet)) || null;
+  if (!eth?.request) throw new Error('Web3 wallet not detected. Please connect your wallet.');
+  const timestamp = Date.now();
+  const message = buildWithdrawMessage(walletAddress, amountUsdt, walletType, timestamp);
+  const signature = await eth.request({
+    method: 'personal_sign',
+    params: [message, walletAddress],
+  });
+  return { signature, timestamp };
+}
+
 const BSC_RPCS = [
   'https://bsc-dataseed1.binance.org/',
   'https://bsc-dataseed.binance.org/',
