@@ -1705,6 +1705,38 @@ async function startServer() {
     }
   });
 
+  // Public Presale Config — exposes only safe phase data needed by user dashboards.
+  // Admin configuration remains protected by requireAdmin below.
+  app.get("/api/presale/config", async (_req, res) => {
+    try {
+      const configRecord = await db.query.systemConfigs.findFirst({
+        where: eq(systemConfigs.key, "phases"),
+      });
+      if (!configRecord?.value) {
+        return res.json({ success: true, phases: [] });
+      }
+      const phases = JSON.parse(configRecord.value);
+      const safePhases = Array.isArray(phases) ? phases.map((p: any) => ({
+        id: p.id,
+        phaseNumber: Number(p.phaseNumber ?? 0),
+        name: p.name,
+        shortName: p.shortName,
+        rate: Number(p.rate ?? p.tokenPrice ?? p.price ?? 0),
+        rateLabel: p.rateLabel,
+        totalSupply: Number(p.totalSupply ?? 0),
+        tokensSold: Number(p.tokensSold ?? 0),
+        status: p.status,
+        multiplier: p.multiplier,
+        unlockRequirement: p.unlockRequirement,
+        targetDate: p.targetDate,
+      })) : [];
+      res.json({ success: true, phases: safePhases });
+    } catch (error: any) {
+      console.error("Error in /api/presale/config:", error);
+      res.status(500).json({ success: false, error: "Failed to load presale configuration." });
+    }
+  });
+
   // Get Live System & Admin Configs
   app.get("/api/admin/configs", async (req, res) => {
     if (!requireAdmin(req, res)) return;
