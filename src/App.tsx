@@ -1558,6 +1558,7 @@ export default function App() {
                   allocation={allocation}
                   levelIncomeUsd={levelIncomeUsd}
                   matrixIncomeUsd={matrixIncomeUsd}
+                  withdrawalFeePercent={systemConfig.withdrawalFeePercent}
                   transactions={transactions}
                   onWithdraw={handleWithdraw}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
@@ -1688,6 +1689,7 @@ export default function App() {
                   allocation={allocation}
                   levelIncomeUsd={levelIncomeUsd}
                   matrixIncomeUsd={matrixIncomeUsd}
+                  withdrawalFeePercent={systemConfig.withdrawalFeePercent}
                   transactions={transactions}
                   onWithdraw={handleWithdraw}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
