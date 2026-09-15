@@ -666,6 +666,19 @@ export default function App() {
         if (data && data.user) {
           setTotalInvestedUsd(data.user.totalInvestedUsdt || 0);
           setClaimableBalanceUsd(data.user.availableUsdt || 0);
+
+          // IMPORTANT: the database is the authoritative source for purchased NXBC.
+          // The wallet is the user's ID in the DApp, so every connected wallet must
+          // display its DB total instead of relying only on browser localStorage.
+          const dbPurchasedTokens = Math.max(0, Number(data.user.totalPurchasedTokens || 0));
+          setAllocation((prev) => {
+            if (Number(prev.totalTokensPurchased || 0) === dbPurchasedTokens) return prev;
+            const updated = { ...prev, totalTokensPurchased: dbPurchasedTokens };
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('nxbc_user_allocation', JSON.stringify(updated));
+            }
+            return updated;
+          });
           
           // Optionally calculate matrix specific income from earnings if needed, 
           // For now we map totalEarned to a mix or keep them separate.
