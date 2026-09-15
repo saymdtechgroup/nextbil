@@ -27,6 +27,8 @@ import {
   Terminal,
   HelpCircle,
   RefreshCw,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import {
   PhaseConfig,
@@ -262,6 +264,30 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
     if (typeof window !== 'undefined') {
       localStorage.setItem('nxbc_admin_ranks', JSON.stringify(updated));
     }
+  };
+
+  const handleAddRank = () => {
+    const nextNumber = localRanks.reduce((m, r) => Math.max(m, Number(r.rankNumber || 0)), 0) + 1;
+    const newRank: RankReward = {
+      id: `rank-${Date.now()}-${nextNumber}`,
+      rankNumber: nextNumber,
+      name: `Rank ${nextNumber}`,
+      requiredDirectVolume: 0,
+      requiredTeamVolume: 0,
+      requiredDirects: 0,
+      rewardType: 'one_time',
+      rewardTitle: '$0 USD Reward',
+      oneTimeBonusUsd: 0,
+      rewardTokens: 0,
+      monthlyRoyaltyPercent: 0,
+      currentQualifiedCount: 0,
+      status: 'locked',
+    };
+    setLocalRanks([...localRanks, newRank]);
+  };
+
+  const handleDeleteRank = (index: number) => {
+    setLocalRanks(localRanks.filter((_, i) => i !== index));
   };
 
   // System Config Helper
@@ -879,7 +905,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                       </div>
 
                       {/* Inputs Row */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         {/* Coin Rate USD */}
                         <div>
                           <label className="text-[9px] uppercase text-amber-300 font-rajdhani font-bold block mb-1">
@@ -1222,11 +1248,16 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                   </p>
                 </div>
 
-                <div className="p-2 rounded-xl bg-purple-950 border border-purple-700 text-xs font-mono-crypto">
-                  <span className="text-purple-300">Royalty Pool: </span>
-                  <strong className="text-amber-300 font-bold">
-                    ${localSystem.royaltyPoolUsd?.toLocaleString() || '25,000'} USD
-                  </strong>
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-purple-950 border border-purple-700 text-xs font-mono-crypto">
+                    <span className="text-purple-300">Royalty Pool: </span>
+                    <strong className="text-amber-300 font-bold">
+                      ${localSystem.royaltyPoolUsd?.toLocaleString() || '25,000'} USD
+                    </strong>
+                  </div>
+                  <button type="button" onClick={handleAddRank} className="px-3 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase flex items-center gap-1.5">
+                    <Plus className="w-3.5 h-3.5" /> Add Rank Reward
+                  </button>
                 </div>
               </div>
 
@@ -1250,12 +1281,17 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                         />
                       </div>
 
-                      <span className="text-xs font-mono-crypto text-amber-300 font-bold">
-                        {rank.monthlyRoyaltyPercent}% Pool Share
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono-crypto text-amber-300 font-bold">
+                          {rank.monthlyRoyaltyPercent}% Pool Share
+                        </span>
+                        <button type="button" onClick={() => handleDeleteRank(idx)} className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-400/30 text-rose-300" title="Delete rank">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="text-[9px] uppercase text-amber-300 font-bold block mb-1">
                           Direct Business ($ USD)
@@ -1297,18 +1333,6 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                         />
                       </div>
 
-                      <div>
-                        <label className="text-[9px] uppercase text-amber-300 font-bold block mb-1">
-                          Reward NXBC Coins
-                        </label>
-                        <input
-                          type="number"
-                          step="1000"
-                          value={rank.rewardTokens}
-                          onChange={(e) => handleRankChange(idx, 'rewardTokens', parseInt(e.target.value) || 0)}
-                          className="w-full bg-[#06020c] border border-amber-500/40 rounded-xl py-1.5 px-2 text-xs font-mono-crypto text-amber-300 font-bold focus:outline-none"
-                        />
-                      </div>
                     </div>
                   </div>
                 ))}

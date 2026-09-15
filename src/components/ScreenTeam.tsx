@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Users,
   UserPlus,
@@ -25,6 +25,7 @@ interface ScreenTeamProps {
   totalInvestedUsd?: number;
   minMlmQualifyUsd?: number;
   onOpenBuyModal?: () => void;
+  walletAddress?: string;
 }
 
 export const ScreenTeam: React.FC<ScreenTeamProps> = ({
@@ -38,11 +39,40 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
   totalInvestedUsd = 0,
   minMlmQualifyUsd = 100,
   onOpenBuyModal,
+  walletAddress,
   referralCode = 'NXBC-COMMUNITY-0000',
 }) => {
   const [copied, setCopied] = useState<boolean>(false);
-  const totalMembers = levels.reduce((acc, l) => acc + l.directMembers, 0);
   const [isTreeModalOpen, setIsTreeModalOpen] = useState(false);
+  const [teamData, setTeamData] = useState<any>(null);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [teamError, setTeamError] = useState('');
+
+  useEffect(() => {
+    if (!walletAddress) { setTeamData(null); return; }
+    let cancelled = false;
+    const loadTeam = async () => {
+      try {
+        setTeamLoading(true); setTeamError('');
+        const r = await fetch(`/api/team/${encodeURIComponent(walletAddress)}`);
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'Failed to load team');
+        if (!cancelled) setTeamData(data);
+      } catch (e: any) {
+        if (!cancelled) setTeamError(e.message || 'Failed to load team');
+      } finally { if (!cancelled) setTeamLoading(false); }
+    };
+    loadTeam();
+    const timer = window.setInterval(loadTeam, 10000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [walletAddress]);
+
+  const teamLevelCounts = useMemo(() => Array.from({ length: 7 }, (_, i) => ({
+    level: i + 1,
+    members: Number(teamData?.counts?.[String(i + 1)] || 0),
+    list: Array.isArray(teamData?.levels?.[String(i + 1)]) ? teamData.levels[String(i + 1)] : [],
+  })), [teamData]);
+  const totalMembers = teamData ? Number(teamData.totalMatrixMembers || 0) : levels.reduce((acc, l) => acc + l.directMembers, 0);
   const totalTierPercent = levels.reduce((acc, l) => acc + l.commissionPercent, 0);
 
   const isMlmQualified = totalInvestedUsd >= minMlmQualifyUsd;
@@ -162,6 +192,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
               {totalMembers}
             </span>
             <span className="text-[9px] text-purple-300 block">Total Team Members</span>
+            <span className="text-[8px] text-amber-300/80 block mt-0.5">Direct: {teamData?.totalDirectMembers ?? 0} • Matrix L1-7</span>
           </div>
           <div>
             <span className="text-2xl font-black font-mono-crypto magenta-gradient-text">
@@ -186,35 +217,34 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
           </button>
         </div>
 
-        <div className="space-y-1.5 max-h-40 overflow-y-auto pr-0.5">
-          {levels.slice(0, 4).map((lvl) => (
-            <div
-              key={lvl.level}
-              onClick={onOpenTeamModal}
-              className="p-2 rounded-xl bg-[#110722] border border-purple-500/15 flex items-center justify-between text-[10px] hover:border-amber-400/40 cursor-pointer transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-purple-900/80 text-amber-300 font-mono-crypto font-bold text-[9px] flex items-center justify-center">
-                  L{lvl.level}
-                </span>
-                <div>
-                  <span className="font-semibold text-slate-200 block">Level {lvl.level}</span>
-                  <span className="text-[8px] font-mono-crypto text-purple-400">
-                    Req: {lvl.directRequirement} Directs • {lvl.directMembers} Users
-                  </span>
+        <div className="space-y-1.5 max-h-64 overflow-y-auto pr-0.5">
+          {teamLoading && <div className="p-3 text-[9px] text-purple-300 font-mono-crypto">Loading live team...</div>}
+          {teamError && <div className="p-3 text-[9px] text-rose-300 font-mono-crypto">{teamError}</div>}
+          {!teamLoading && !teamError && teamLevelCounts.map((lvl) => (
+            <div key={lvl.level} className="p-2 rounded-xl bg-[#110722] border border-purple-500/15 text-[10px]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-purple-900/80 text-amber-300 font-mono-crypto font-bold text-[9px] flex items-center justify-center">L{lvl.level}</span>
+                  <div>
+                    <span className="font-semibold text-slate-200 block">Level {lvl.level}</span>
+                    <span className="text-[8px] font-mono-crypto text-purple-400">{lvl.members} team member{lvl.members === 1 ? '' : 's'}</span>
+                  </div>
                 </div>
+                <span className="font-mono-crypto font-bold text-amber-300">{lvl.members}</span>
               </div>
-              <div className="text-right">
-                <span className="font-mono-crypto font-bold text-amber-300 block">
-                  {lvl.commissionPercent}%
-                </span>
-                <span className="text-[8px] font-mono-crypto text-emerald-400">
-                  +${lvl.earnedUsd.toFixed(2)}
-                </span>
-              </div>
+              {lvl.list.length > 0 && (
+                <div className="mt-1.5 pl-7 space-y-1">
+                  {lvl.list.slice(0, 8).map((m: any) => (
+                    <div key={m.userId} className="flex items-center justify-between gap-2 text-[8px] text-purple-200/90">
+                      <span className="truncate">{m.walletAddress.slice(0, 6)}...{m.walletAddress.slice(-4)}</span>
+                      <span className={m.status === 'active' ? 'text-emerald-400' : 'text-amber-300'}>{m.status}</span>
+                    </div>
+                  ))}
+                  {lvl.list.length > 8 && <div className="text-[8px] text-purple-400">+{lvl.list.length - 8} more</div>}
+                </div>
+              )}
             </div>
           ))}
-        </div>
       </div>
 
       {/* Leadership Rank & Global Royalty Banner */}
