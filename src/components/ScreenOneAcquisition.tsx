@@ -19,22 +19,37 @@ interface ScreenOneAcquisitionProps {
 }
 
 type FifoOrder = {
+  id?: number | string;
+  orderId?: number | string;
   position?: number;
   rank?: number;
+  globalPosition?: number;
   phase?: number | string;
   phaseNumber?: number;
   tokens?: number;
   tokenAmount?: number;
+  amountTokens?: number;
+  remainingTokens?: number;
   walletAddress?: string;
   wallet?: string;
   status?: string;
+  createdAt?: string;
 };
 
 type FifoSnapshot = {
   totalQueuedTokens?: number;
   totalOrders?: number;
   orders?: FifoOrder[];
-  phaseTotals?: Array<{ phase?: number | string; phaseNumber?: number; tokens?: number; totalTokens?: number; tokenAmount?: number; orders?: number }>;
+  phaseTotals?: Array<{
+    phase?: number | string;
+    phaseNumber?: number;
+    tokens?: number;
+    totalTokens?: number;
+    tokenAmount?: number;
+    amountTokens?: number;
+    orders?: number;
+    totalOrders?: number;
+  }>;
 };
 
 const numberValue = (...values: unknown[]): number => {
@@ -100,50 +115,92 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   const currentRate = numberValue(activePhase?.rate);
   const nextPhase = activePhase ? phases.find((phase) => phase.phaseNumber === (activePhase.phaseNumber ?? 1) + 1) : undefined;
 
-  const personalRows = useMemo(() => [
-    { label: 'P2 FIFO', tokens: p2Tokens, rate: 0.1 },
-    { label: 'P3 FIFO', tokens: p3Tokens, rate: 1 },
-    { label: 'P4 FIFO', tokens: p4Tokens, rate: 10 },
-    { label: 'P5 FIFO', tokens: p5Tokens, rate: 100 },
-    { label: 'DEX FIFO', tokens: dexTokens, rate: 1500 },
-  ], [p2Tokens, p3Tokens, p4Tokens, p5Tokens, dexTokens]);
-
   const fifoOrders = fifoSnapshot?.orders ?? [];
+  const sortedFifoOrders = useMemo(() => {
+    return [...fifoOrders].sort((a, b) => {
+      const aPosition = numberValue(a.globalPosition, a.position, a.rank);
+      const bPosition = numberValue(b.globalPosition, b.position, b.rank);
+      if (aPosition > 0 && bPosition > 0 && aPosition !== bPosition) return aPosition - bPosition;
+      if (aPosition > 0 && bPosition === 0) return -1;
+      if (aPosition === 0 && bPosition > 0) return 1;
+      const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return aDate - bDate;
+    });
+  }, [fifoOrders]);
+
+  const userOrders = useMemo(() => {
+    const normalizedWallet = walletAddress.toLowerCase();
+    return sortedFifoOrders.filter((order) => {
+      const orderWallet = String(order.walletAddress ?? order.wallet ?? '').toLowerCase();
+      return Boolean(normalizedWallet) && orderWallet === normalizedWallet;
+    });
+  }, [sortedFifoOrders, walletAddress]);
+
+  const userFifoPosition = useMemo(() => {
+    if (userOrders.length === 0) return 0;
+    const first = userOrders[0];
+    const explicit = numberValue(first.globalPosition, first.position, first.rank);
+    if (explicit > 0) return explicit;
+    return sortedFifoOrders.findIndex((order) => order === first) + 1;
+  }, [sortedFifoOrders, userOrders]);
+
+  const userQueuedTokens = userOrders.reduce(
+    (sum, order) => sum + numberValue(order.remainingTokens, order.tokens, order.tokenAmount, order.amountTokens),
+    0,
+  );
+
   const globalQueuedTokens = numberValue(
     fifoSnapshot?.totalQueuedTokens,
-    fifoOrders.reduce((sum, order) => sum + numberValue(order.tokens, order.tokenAmount), 0),
+    fifoOrders.reduce((sum, order) => sum + numberValue(order.remainingTokens, order.tokens, order.tokenAmount, order.amountTokens), 0),
     allocatedTokens,
   );
   const globalOrderCount = numberValue(fifoSnapshot?.totalOrders, fifoOrders.length);
 
-  const userOrderIndex = fifoOrders.findIndex((order) => {
-    const orderWallet = String(order.walletAddress ?? order.wallet ?? '').toLowerCase();
-    return Boolean(walletAddress) && orderWallet === walletAddress.toLowerCase();
-  });
-  const userOrder = userOrderIndex >= 0 ? fifoOrders[userOrderIndex] : undefined;
-  const userFifoPosition = numberValue(userOrder?.position, userOrder?.rank, userOrderIndex >= 0 ? userOrderIndex + 1 : 0);
-  const userQueuedTokens = numberValue(userOrder?.tokens, userOrder?.tokenAmount, allocatedTokens);
+  const phasePositionForUser = (phaseNumber: number): number => {
+    const phaseOrders = sortedFifoOrders.filter((order) => Number(order.phaseNumber ?? order.phase) === phaseNumber);
+    const index = phaseOrders.findIndex((order) => {
+      const orderWallet = String(order.walletAddress ?? order.wallet ?? '').toLowerCase();
+      return Boolean(walletAddress) && orderWallet === walletAddress.toLowerCase();
+    });
+    return index >= 0 ? index + 1 : 0;
+  };
+
+  const personalRows = useMemo(() => [
+    { label: 'P2 FIFO', phaseNumber: 2, tokens: p2Tokens, rate: 0.1 },
+    { label: 'P3 FIFO', phaseNumber: 3, tokens: p3Tokens, rate: 1 },
+    { label: 'P4 FIFO', phaseNumber: 4, tokens: p4Tokens, rate: 10 },
+    { label: 'P5 FIFO', phaseNumber: 5, tokens: p5Tokens, rate: 100 },
+    { label: 'DEX FIFO', phaseNumber: 6, tokens: dexTokens, rate: 1500 },
+  ].map((phase) => ({ ...phase, position: phasePositionForUser(phase.phaseNumber) })), [p2Tokens, p3Tokens, p4Tokens, p5Tokens, dexTokens, sortedFifoOrders, walletAddress]);
 
   const globalPhaseRows = useMemo(() => {
     const totals = new Map<string, { phaseNumber: number; tokens: number; orders: number }>();
+    const phaseTotals = fifoSnapshot?.phaseTotals ?? [];
 
-    const addPhase = (phaseValue: number | string | undefined, tokenValue: unknown, orderCount = 0) => {
-      const phaseNumber = Number(phaseValue);
-      if (!Number.isFinite(phaseNumber)) return;
-      const key = String(phaseNumber);
-      const current = totals.get(key) ?? { phaseNumber, tokens: 0, orders: 0 };
-      current.tokens += numberValue(tokenValue);
-      current.orders += numberValue(orderCount);
-      totals.set(key, current);
-    };
-
-    (fifoSnapshot?.phaseTotals ?? []).forEach((phase) => {
-      addPhase(phase.phaseNumber ?? phase.phase, phase.tokens ?? phase.totalTokens ?? phase.tokenAmount, phase.orders ?? 0);
-    });
-
-    fifoOrders.forEach((order) => {
-      addPhase(order.phaseNumber ?? order.phase, order.tokens ?? order.tokenAmount, 1);
-    });
+    // phaseTotals is the authoritative historical aggregate when the API sends it.
+    // Do not add the individual orders again, otherwise totals and order counts get doubled.
+    if (phaseTotals.length > 0) {
+      phaseTotals.forEach((phase) => {
+        const phaseNumber = Number(phase.phaseNumber ?? phase.phase);
+        if (!Number.isFinite(phaseNumber)) return;
+        totals.set(String(phaseNumber), {
+          phaseNumber,
+          tokens: numberValue(phase.tokens, phase.totalTokens, phase.tokenAmount, phase.amountTokens),
+          orders: numberValue(phase.orders, phase.totalOrders),
+        });
+      });
+    } else {
+      sortedFifoOrders.forEach((order) => {
+        const phaseNumber = Number(order.phaseNumber ?? order.phase);
+        if (!Number.isFinite(phaseNumber)) return;
+        const key = String(phaseNumber);
+        const current = totals.get(key) ?? { phaseNumber, tokens: 0, orders: 0 };
+        current.tokens += numberValue(order.remainingTokens, order.tokens, order.tokenAmount, order.amountTokens);
+        current.orders += 1;
+        totals.set(key, current);
+      });
+    }
 
     return Array.from(totals.values())
       .sort((a, b) => a.phaseNumber - b.phaseNumber)
@@ -152,7 +209,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
         tokens: phase.tokens,
         orders: phase.orders,
       }));
-  }, [fifoSnapshot?.phaseTotals, fifoOrders]);
+  }, [fifoSnapshot?.phaseTotals, sortedFifoOrders]);
 
   return (
     <div className="flex-1 p-3.5 space-y-4 relative">
@@ -187,7 +244,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
         <div className="flex items-center justify-between border-b border-purple-500/20 pb-2 gap-2"><div className="flex items-center gap-2"><div className="p-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300"><ListOrdered className="w-4 h-4" /></div><div><h3 className="text-xs font-black text-slate-100 font-rajdhani uppercase">Global FIFO Queue</h3><p className="text-[9px] text-purple-300/70 font-mono-crypto">All users · chronological execution order</p></div></div><span className="text-[8px] font-mono-crypto px-1.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300">LIVE</span></div>
         <div className="grid grid-cols-2 gap-2"><div className="p-2 rounded-xl bg-[#0b0518] border border-purple-500/20 text-center"><span className="text-[8px] text-purple-300/80 uppercase block font-rajdhani">Global Queued</span><span className="text-sm font-black font-mono-crypto text-amber-300 block">{globalQueuedTokens.toLocaleString()} NXBC</span><span className="text-[8px] text-purple-400 font-mono-crypto">{globalOrderCount.toLocaleString()} Active Orders</span></div><div className="p-2 rounded-xl bg-[#0b0518] border border-amber-500/30 text-center"><span className="text-[8px] text-amber-300 uppercase block font-rajdhani">Queue Status</span><span className="text-sm font-black font-mono-crypto text-emerald-300 block">{globalOrderCount > 0 ? 'ACTIVE' : 'STANDBY'}</span><span className="text-[8px] text-purple-400 font-mono-crypto">Oldest order first</span></div></div>
 
-        <div className="border-t border-purple-500/20 pt-3"><div className="flex items-center justify-between mb-2"><h3 className="text-xs font-black text-slate-100 font-rajdhani uppercase">Your FIFO Position</h3><span className="text-[9px] text-fuchsia-300 font-mono-crypto">{userFifoPosition > 0 ? `Queue #${userFifoPosition}` : totalTokens > 0 ? 'Position pending sync' : 'Not queued'}</span></div><div className="p-2 rounded-xl bg-[#0b0518] border border-fuchsia-500/30 mb-2 flex items-center justify-between"><div><span className="text-[8px] text-purple-300/80 uppercase block font-rajdhani">Your Queued Tokens</span><span className="text-lg font-black font-mono-crypto text-slate-100">{userQueuedTokens.toLocaleString()} NXBC</span></div><span className="text-[9px] text-emerald-300 font-mono-crypto">{unallocatedTokens.toLocaleString()} unallocated</span></div><div className="space-y-1.5">{personalRows.map((phase) => <div key={phase.label} className="flex items-center justify-between rounded-lg bg-[#0b0518] border border-purple-500/20 px-2 py-1.5"><span className="text-[10px] text-purple-200 font-mono-crypto">{phase.label}</span><span className="text-[10px] text-amber-300 font-mono-crypto">{phase.tokens.toLocaleString()} NXBC @ ${phase.rate.toLocaleString()}</span></div>)}</div></div>
+        <div className="border-t border-purple-500/20 pt-3"><div className="flex items-center justify-between mb-2"><h3 className="text-xs font-black text-slate-100 font-rajdhani uppercase">Your FIFO Position</h3><span className="text-[9px] text-fuchsia-300 font-mono-crypto">{userFifoPosition > 0 ? `Queue #${userFifoPosition}` : totalTokens > 0 ? 'Position pending sync' : 'Not queued'}</span></div><div className="p-2 rounded-xl bg-[#0b0518] border border-fuchsia-500/30 mb-2 flex items-center justify-between"><div><span className="text-[8px] text-purple-300/80 uppercase block font-rajdhani">Your Queued Tokens</span><span className="text-lg font-black font-mono-crypto text-slate-100">{userQueuedTokens.toLocaleString()} NXBC</span></div><span className="text-[9px] text-emerald-300 font-mono-crypto">{unallocatedTokens.toLocaleString()} unallocated</span></div><div className="space-y-1.5">{personalRows.map((phase) => <div key={phase.label} className="flex items-center justify-between rounded-lg bg-[#0b0518] border border-purple-500/20 px-2 py-1.5"><div><span className="text-[10px] text-purple-200 font-mono-crypto block">{phase.label}</span><span className="text-[8px] text-purple-400 font-mono-crypto">{phase.position > 0 ? `Queue #${phase.position}` : 'No active order'}</span></div><span className="text-[10px] text-amber-300 font-mono-crypto">{phase.tokens.toLocaleString()} NXBC @ ${phase.rate.toLocaleString()}</span></div>)}</div></div>
 
         <div className="border-t border-purple-500/20 pt-3"><div className="flex items-center justify-between mb-2"><h3 className="text-xs font-black text-slate-100 font-rajdhani uppercase">Global Phase-wise Sale Queue</h3><span className="text-[8px] text-purple-300/70 font-mono-crypto">Historical/API data</span></div>{globalPhaseRows.length > 0 ? <div className="space-y-1.5">{globalPhaseRows.map((phase) => <div key={phase.label} className="flex items-center justify-between rounded-lg bg-[#0b0518] border border-amber-500/20 px-2 py-2"><div><span className="text-[10px] text-purple-200 font-mono-crypto block">{phase.label}</span><span className="text-[8px] text-purple-400 font-mono-crypto">{phase.orders.toLocaleString()} orders</span></div><span className="text-[10px] text-amber-300 font-mono-crypto">{phase.tokens.toLocaleString()} NXBC</span></div>)}</div> : <div className="rounded-lg bg-[#0b0518] border border-purple-500/20 px-2 py-2 text-[9px] text-purple-300/80 font-mono-crypto">{fifoLoading ? 'Loading global phase history…' : 'Phase-wise historical totals are not included by the FIFO API yet.'}</div>}</div>
 
