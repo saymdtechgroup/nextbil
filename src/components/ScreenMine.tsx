@@ -24,9 +24,19 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
 }) => {
   const isMlmQualified = totalInvestedUsd >= minMlmQualifyUsd;
   const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
+  const [contractCopied, setContractCopied] = useState(false);
+  const NXBC_CONTRACT = '0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1';
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(`https://nxbc.network/ref/${walletAddress ? walletAddress.substring(2, 8) : 'guest'}`);
+    } catch {}
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+  const handleCopyContract = async () => {
+    try { await navigator.clipboard.writeText(NXBC_CONTRACT); } catch {}
+    setContractCopied(true);
+    setTimeout(() => setContractCopied(false), 2000);
   };
 
   return (
@@ -120,6 +130,25 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
             <span className="text-[9px] font-bold text-slate-300 uppercase tracking-wider">Total Team</span>
           </div>
           <p className="text-lg font-black font-mono-crypto text-fuchsia-300">0</p>
+        </div>
+      </div>
+
+      {/* NXBC Token Contract */}
+      <div className="rounded-xl bg-[#110722] border border-amber-500/20 overflow-hidden mt-2">
+        <div className="p-2.5 border-b border-amber-500/10 flex items-center gap-1.5">
+          <FileText className="w-3.5 h-3.5 text-amber-400" />
+          <h3 className="text-[10px] font-bold text-slate-200 font-rajdhani uppercase tracking-wider">NXBC Token Contract</h3>
+        </div>
+        <div className="p-2.5 bg-[#090317] flex items-center gap-2">
+          <p className="flex-1 min-w-0 text-[9px] font-mono-crypto text-purple-300 truncate">{NXBC_CONTRACT}</p>
+          <button
+            onClick={handleCopyContract}
+            className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 text-amber-200 text-[9px] font-bold transition-all"
+            title="Copy NXBC token contract address"
+          >
+            {contractCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {contractCopied ? 'Copied' : 'Copy'}
+          </button>
         </div>
       </div>
 
