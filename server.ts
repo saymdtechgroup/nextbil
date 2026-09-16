@@ -4,7 +4,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { db } from "./src/db/index.ts";
 import { users, matrixNodes, levelEarnings, transactions, sellOrders, systemConfigs, tokenSellLedgers, rankAchievements } from "./src/db/schema.ts";
-import { eq, desc, asc, and, or } from "drizzle-orm";
+import { eq, desc, asc, and, or, inArray } from "drizzle-orm";
 import { ethers } from "ethers";
 import { scryptSync, randomBytes, timingSafeEqual } from "crypto";
 
@@ -5130,6 +5130,79 @@ async function startServer() {
       res.json({ orders });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Public Global FIFO Queue — phase-wise active queue for every user.
+  // Wallets are masked for privacy; queue position and aggregate amounts are public.
+  app.get("/api/presale/fifo-global", async (_req, res) => {
+    try {
+      const activeOrders = await db.select({
+        id: sellOrders.id,
+        userId: sellOrders.userId,
+        walletAddress: users.walletAddress,
+        phaseNumber: sellOrders.phaseNumber,
+        amountTokens: sellOrders.amountTokens,
+        remainingTokens: sellOrders.remainingTokens,
+        tokenPrice: sellOrders.tokenPrice,
+        status: sellOrders.status,
+        priority: sellOrders.priority,
+        createdAt: sellOrders.createdAt,
+      })
+      .from(sellOrders)
+      .leftJoin(users, eq(sellOrders.userId, users.id))
+      .where(inArray(sellOrders.status, ['open', 'partially_filled']))
+      .orderBy(asc(sellOrders.phaseNumber), asc(sellOrders.createdAt), asc(sellOrders.priority), asc(sellOrders.id));
+
+      const byPhase: Record<number, any[]> = {};
+      for (const row of activeOrders) {
+        const phase = Number(row.phaseNumber);
+        if (!byPhase[phase]) byPhase[phase] = [];
+        byPhase[phase].push(row);
+      }
+
+      const maskWallet = (wallet: string | null | undefined) => {
+        const w = String(wallet || '');
+        if (w.length < 12) return 'Unknown';
+        return `${w.slice(0, 6)}...${w.slice(-4)}`;
+      };
+
+      const phases = Object.keys(byPhase).map(Number).sort((a, b) => a - b).map((phaseNumber) => {
+        let aheadTokens = 0;
+        const phaseOrders = byPhase[phaseNumber].map((row, index) => {
+          const remaining = Math.max(0, Number(row.remainingTokens || 0));
+          const position = index + 1;
+          const order = {
+            id: Number(row.id),
+            userId: Number(row.userId),
+            walletAddress: maskWallet(row.walletAddress),
+            phaseNumber,
+            amountTokens: Number(row.amountTokens || 0),
+            remainingTokens: remaining,
+            tokenPrice: Number(row.tokenPrice || 0),
+            status: row.status,
+            priority: Number(row.priority || 0),
+            position,
+            aheadTokens,
+            expectedRemainingUsdt: remaining * Number(row.tokenPrice || 0),
+            createdAt: row.createdAt,
+          };
+          aheadTokens += remaining;
+          return order;
+        });
+
+        return {
+          phaseNumber,
+          totalOrders: phaseOrders.length,
+          totalQueuedTokens: phaseOrders.reduce((sum, o) => sum + o.remainingTokens, 0),
+          orders: phaseOrders,
+        };
+      });
+
+      res.json({ success: true, phases, generatedAt: new Date().toISOString() });
+    } catch (error: any) {
+      console.error('Error fetching global FIFO queue:', error);
+      res.status(500).json({ success: false, error: 'Failed to load global FIFO queue.' });
     }
   });
 
