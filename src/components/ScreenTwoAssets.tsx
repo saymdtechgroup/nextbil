@@ -44,6 +44,13 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
     remainingTokens: number; tokenPrice: number; expectedUsdt: number;
     realizedUsdt: number; remainingUsdt: number; status: string; createdAt?: string;
   }>>([]);
+  const [globalFifo, setGlobalFifo] = useState<Array<{
+    phaseNumber: number; totalOrders: number; totalQueuedTokens: number;
+    orders: Array<{ id: number; userId: number; walletAddress: string; amountTokens: number;
+      remainingTokens: number; tokenPrice: number; status: string; position: number;
+      aheadTokens: number; expectedRemainingUsdt: number; createdAt?: string; }>;
+  }>>([]);
+  const [fifoLoading, setFifoLoading] = useState(true);
 
   useEffect(() => {
     if (!walletAddress) { setSaleOrders([]); return; }
@@ -61,6 +68,27 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
     const timer = setInterval(loadOrders, 5000);
     return () => { cancelled = true; clearInterval(timer); };
   }, [walletAddress]);
+
+  // Load the complete public FIFO queue. This is server-derived data, not localStorage.
+  useEffect(() => {
+    let cancelled = false;
+    const loadGlobalFifo = async () => {
+      try {
+        const r = await fetch('/api/presale/fifo-global');
+        const data = await r.json().catch(() => ({}));
+        if (!cancelled && r.ok && data.success) {
+          setGlobalFifo(Array.isArray(data.phases) ? data.phases : []);
+        }
+      } catch (e) {
+        console.error('Failed to load global FIFO queue:', e);
+      } finally {
+        if (!cancelled) setFifoLoading(false);
+      }
+    };
+    loadGlobalFifo();
+    const timer = setInterval(loadGlobalFifo, 5000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, []);
 
   // Compute token amounts for each box based on user allocation state
   const totalTokens = allocation.totalTokensPurchased;
@@ -144,6 +172,52 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               FIFO Queue Virtually Registered
             </span>
             <span className="text-purple-400">{allocation.lockedTimestamp || 'Active'}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Global FIFO Queue — live server data for all active users */}
+      <div className="rounded-xl bg-[#0b0518] border border-cyan-500/20 p-2.5">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <span className="text-[10px] font-bold text-cyan-300 font-rajdhani uppercase">Global FIFO Execution Queue</span>
+            <p className="text-[8px] text-purple-300/70 font-mono-crypto">All active phase orders • oldest order executes first</p>
+          </div>
+          <span className="text-[8px] text-emerald-300 font-mono-crypto">LIVE • 5s</span>
+        </div>
+        {fifoLoading ? (
+          <div className="py-3 text-center text-[9px] text-purple-300 font-mono-crypto">Loading global queue...</div>
+        ) : globalFifo.length === 0 ? (
+          <div className="py-3 text-center text-[9px] text-purple-300/70 font-mono-crypto">No active FIFO orders.</div>
+        ) : (
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            {globalFifo.map((phase) => (
+              <div key={phase.phaseNumber} className="rounded-lg border border-cyan-500/15 bg-purple-950/30 p-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[9px] font-bold text-cyan-300 font-rajdhani">PHASE {phase.phaseNumber}</span>
+                  <span className="text-[8px] text-purple-300 font-mono-crypto">
+                    {phase.totalOrders} orders • {phase.totalQueuedTokens.toLocaleString()} NXBC queued
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {phase.orders.map((o) => {
+                    const isMine = !!walletAddress && o.walletAddress.toLowerCase() === `${walletAddress.slice(0, 6).toLowerCase()}...${walletAddress.slice(-4).toLowerCase()}`;
+                    return (
+                      <div key={o.id} className={`rounded-md px-2 py-1.5 border ${isMine ? 'border-amber-400/40 bg-amber-500/10' : 'border-purple-500/10 bg-[#090317]/60'}`}>
+                        <div className="flex items-center justify-between gap-2 text-[8px] font-mono-crypto">
+                          <span className="text-slate-100 font-bold">#{o.position} {o.walletAddress}</span>
+                          <span className="text-amber-300">{o.remainingTokens.toLocaleString()} NXBC</span>
+                        </div>
+                        <div className="flex items-center justify-between mt-0.5 text-[7px] font-mono-crypto">
+                          <span className="text-purple-400">Ahead: <b className="text-fuchsia-300">{o.aheadTokens.toLocaleString()} NXBC</b></span>
+                          <span className="text-purple-300">@ ${o.tokenPrice.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
