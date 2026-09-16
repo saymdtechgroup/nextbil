@@ -35,15 +35,15 @@ interface ScreenOneAcquisitionProps {
   onOpenBuyModal: () => void;
   
   onOpenWalletModal: () => void;
-  nxbcBalance?: number;
   onOpenTeamPlanModal: () => void;
   onOpenMatrixModal: () => void;
   onSimulateFillPhase?: () => void;
   onResetPhases?: () => void;
   walletConnected: boolean;
   walletAddress: string;
+  totalEarningUsdt: number;
+  totalWithdrawnUsdt: number;
   
-  usdtBalance?: number;
 }
 
 export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
@@ -52,15 +52,15 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   onOpenBuyModal,
   
   onOpenWalletModal,
-  nxbcBalance = 0,
   onOpenTeamPlanModal,
   onOpenMatrixModal,
   onSimulateFillPhase,
   onResetPhases,
   walletConnected,
   walletAddress,
+  totalEarningUsdt,
+  totalWithdrawnUsdt,
   
-  usdtBalance = 0,
 }) => {
   const [selectedQueuePhase, setSelectedQueuePhase] = useState<'all' | 'p2' | 'p3' | 'p4' | 'p5' | 'dex'>('all');
 
@@ -128,23 +128,21 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
           </div>
         </div>
 
-        {/* Live Balance Pill Grid */}
+        {/* Authoritative Income Summary */}
         <div className="grid grid-cols-2 gap-2 w-full">
-          {/* USDT Balance */}
           <div className="bg-[#0b0318] p-2 rounded-xl border border-emerald-500/30 text-center">
-            <span className="text-[8px] text-purple-300/70 font-mono-crypto block">Direct Payment</span>
+            <span className="text-[8px] text-purple-300/70 font-mono-crypto block">Total Earnings</span>
             <span className="text-sm font-black font-mono-crypto text-emerald-300 block my-0.5">
-              {usdtBalance.toFixed(2)}
+              ${totalEarningUsdt.toFixed(2)}
             </span>
-            <span className="text-[8px] text-emerald-400/90 font-mono-crypto font-bold">USDT (BEP-20)</span>
+            <span className="text-[8px] text-emerald-400/90 font-mono-crypto font-bold">MLM • MATRIX • TOKEN SALE • REWARDS</span>
           </div>
-          {/* NXBC Balance */}
           <div className="bg-[#0b0318] p-2 rounded-xl border border-fuchsia-500/30 text-center">
-            <span className="text-[8px] text-purple-300/70 font-mono-crypto block">Future Asset</span>
+            <span className="text-[8px] text-purple-300/70 font-mono-crypto block">Total Withdrawn</span>
             <span className="text-sm font-black font-mono-crypto text-fuchsia-300 block my-0.5">
-              {nxbcBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ${totalWithdrawnUsdt.toFixed(2)}
             </span>
-            <span className="text-[8px] text-fuchsia-400/90 font-mono-crypto font-bold">NXBC (Token)</span>
+            <span className="text-[8px] text-fuchsia-400/90 font-mono-crypto font-bold">USDT WITHDRAWN</span>
           </div>
         </div>
       </div>

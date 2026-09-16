@@ -13,6 +13,7 @@ contract NXBCSmartEngine is Ownable, ReentrancyGuard {
     IERC20 public nxbcToken;
     IERC20 public usdtToken;
     address public adminWallet;
+    uint256 public withdrawalFeePercent = 10;
 
     struct Phase {
         uint256 price; // Price per NXBC in USDT (using 18 decimals)
@@ -204,6 +205,11 @@ contract NXBCSmartEngine is Ownable, ReentrancyGuard {
 
     function togglePresale(bool _status) external onlyOwner {
         presaleActive = _status;
+    }
+
+    function setWithdrawalFeePercent(uint256 _feePercent) external onlyOwner {
+        require(_feePercent <= 100, "Fee cannot exceed 100%");
+        withdrawalFeePercent = _feePercent;
     }
 
     function fundContractWithUSDT(uint256 amount) external onlyOwner {

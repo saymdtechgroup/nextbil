@@ -161,7 +161,7 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
             <div className="space-y-2">
               <h3 className="text-xs font-bold text-slate-200 uppercase font-rajdhani flex items-center justify-between">
                 <span>10-Tier Dynamic Commission Structure</span>
-                <span className="text-[10px] text-purple-400 font-mono-crypto">Admin Configured</span>
+                <span className="text-[10px] text-purple-400 font-mono-crypto">Contract Configured</span>
               </h3>
 
               <div className="space-y-1.5">

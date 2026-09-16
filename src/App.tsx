@@ -185,6 +185,9 @@ export default function App() {
     }
     return 0;
   });
+  const [totalEarningUsdt, setTotalEarningUsdt] = useState<number>(0);
+  const [totalWithdrawnUsdt, setTotalWithdrawnUsdt] = useState<number>(0);
+
   const [totalInvestedUsd, setTotalInvestedUsd] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('nxbc_total_invested');
@@ -667,6 +670,11 @@ export default function App() {
         if (data && data.user) {
           setTotalInvestedUsd(data.user.totalInvestedUsdt || 0);
           setClaimableBalanceUsd(data.user.availableUsdt || 0);
+          // The database is authoritative for cumulative earnings and withdrawals.
+          // Total earnings includes all credited income sources (MLM, matrix, token-sale
+          // settlement and rewards) recorded in users.totalEarnedUsdt.
+          setTotalEarningUsdt(Math.max(0, Number(data.user.totalEarnedUsdt || 0)));
+          setTotalWithdrawnUsdt(Math.max(0, Number(data.user.totalWithdrawnUsdt || 0)));
 
           // IMPORTANT: the database is the authoritative source for purchased NXBC.
           // The wallet is the user's ID in the DApp, so every connected wallet must
@@ -1559,8 +1567,8 @@ export default function App() {
                   onResetPhases={handleResetPhases}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
-                  nxbcBalance={nxbcBalance}
-                  usdtBalance={usdtBalance}
+                  totalEarningUsdt={totalEarningUsdt}
+                  totalWithdrawnUsdt={totalWithdrawnUsdt}
                 />
               )}
 
