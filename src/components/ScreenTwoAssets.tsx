@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   TrendingUp,
   PieChart,
@@ -26,6 +26,7 @@ interface ScreenTwoAssetsProps {
   onOpenMatrixModal: () => void;
   levelIncomeUsd: number;
   matrixIncomeUsd: number;
+  walletAddress?: string | null;
 }
 
 export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
@@ -35,11 +36,35 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   onOpenMatrixModal,
   levelIncomeUsd,
   matrixIncomeUsd,
+  walletAddress,
 }) => {
   const [showValues, setShowValues] = useState<boolean>(true);
+  const [saleOrders, setSaleOrders] = useState<Array<{
+    id: number; phaseNumber: number; amountTokens: number; soldTokens: number;
+    remainingTokens: number; tokenPrice: number; expectedUsdt: number;
+    realizedUsdt: number; remainingUsdt: number; status: string; createdAt?: string;
+  }>>([]);
+
+  useEffect(() => {
+    if (!walletAddress) { setSaleOrders([]); return; }
+    let cancelled = false;
+    const loadOrders = async () => {
+      try {
+        const r = await fetch(`/api/presale/sale-orders/${walletAddress}`);
+        const data = await r.json().catch(() => ({}));
+        if (!cancelled && r.ok && data.success) setSaleOrders(Array.isArray(data.orders) ? data.orders : []);
+      } catch (e) {
+        console.error('Failed to load personal phase sale orders:', e);
+      }
+    };
+    loadOrders();
+    const timer = setInterval(loadOrders, 5000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [walletAddress]);
 
   // Compute token amounts for each box based on user allocation state
   const totalTokens = allocation.totalTokensPurchased;
+  const p1Tokens = Math.round(totalTokens * ((allocation.p1Percent || 0) / 100));
   const p2Tokens = Math.round(totalTokens * (allocation.p2Percent / 100));
   const p3Tokens = Math.round(totalTokens * (allocation.p3Percent / 100));
   const p4Tokens = Math.round(totalTokens * (allocation.p4Percent / 100));
@@ -47,11 +72,12 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   const dexTokens = Math.round(totalTokens * (allocation.dexPercent / 100));
   const unallocatedTokens = Math.max(
     0,
-    totalTokens - (p2Tokens + p3Tokens + p4Tokens + p5Tokens + dexTokens)
+    totalTokens - (p1Tokens + p2Tokens + p3Tokens + p4Tokens + p5Tokens + dexTokens)
   );
 
   // Projected value calculation:
   // P2: $0.10, P3: $1.00, P4: $10.00, P5: $100.00, DEX: est $1500.00, Unallocated at Phase 1 rate $0.01
+  const p1Val = p1Tokens * 0.01;
   const p2Val = p2Tokens * 0.10;
   const p3Val = p3Tokens * 1.00;
   const p4Val = p4Tokens * 10.00;
@@ -132,6 +158,57 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
           <span className="text-[9px] font-mono-crypto text-fuchsia-300">
             6 Milestone Vectors
           </span>
+        </div>
+
+        {/* User-selected Phase 1 / Phase 2 allocation summary */}
+        <div className="rounded-xl bg-[#0b0518] border border-amber-500/30 p-2.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold text-amber-300 font-rajdhani uppercase">Your Phase Sale Allocation</span>
+            <span className="text-[8px] text-emerald-300 font-mono-crypto">Saved to account</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-purple-950/50 border border-amber-500/20 p-2">
+              <div className="text-[9px] text-purple-300">Phase 1 Sell</div>
+              <div className="text-sm font-black text-amber-300 font-mono-crypto">{showValues ? `${(allocation.p1Tokens?.allocated || p1Tokens).toLocaleString()} NXBC` : '••••'}</div>
+              <div className="text-[8px] text-purple-400">Sold: {showValues ? (allocation.p1Tokens?.sold || 0).toLocaleString() : '••'}</div>
+            </div>
+            <div className="rounded-lg bg-purple-950/50 border border-emerald-500/20 p-2">
+              <div className="text-[9px] text-purple-300">Phase 2 Sell</div>
+              <div className="text-sm font-black text-emerald-300 font-mono-crypto">{showValues ? `${(allocation.p2Tokens?.allocated || p2Tokens).toLocaleString()} NXBC` : '••••'}</div>
+              <div className="text-[8px] text-purple-400">Sold: {showValues ? (allocation.p2Tokens?.sold || 0).toLocaleString() : '••'}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Persistent personal FIFO sale orders */}
+        <div className="rounded-xl bg-[#0b0518] border border-purple-500/20 p-2.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold text-slate-100 font-rajdhani uppercase">Your FIFO Sale Orders</span>
+            <span className="text-[8px] text-purple-300 font-mono-crypto">20% buyer flow • 80% admin</span>
+          </div>
+          {saleOrders.length === 0 ? (
+            <div className="text-[9px] text-purple-300/70 font-mono-crypto py-2">No phase sale orders yet.</div>
+          ) : (
+            <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+              {saleOrders.map((o) => (
+                <div key={o.id} className="rounded-lg border border-purple-500/15 bg-purple-950/30 p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[9px] font-bold text-amber-300 font-rajdhani">PHASE {o.phaseNumber}</span>
+                    <span className={`text-[8px] uppercase font-bold ${o.status === 'completed' ? 'text-emerald-300' : o.status === 'partially_filled' ? 'text-amber-300' : 'text-cyan-300'}`}>{o.status.replace('_', ' ')}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 mt-1.5 text-[8px] font-mono-crypto">
+                    <div><span className="text-purple-400 block">ORDER</span><span className="text-slate-100">{o.amountTokens.toLocaleString()} NXBC</span></div>
+                    <div><span className="text-purple-400 block">SOLD</span><span className="text-emerald-300">{o.soldTokens.toLocaleString()}</span></div>
+                    <div><span className="text-purple-400 block">LEFT</span><span className="text-amber-300">{o.remainingTokens.toLocaleString()}</span></div>
+                  </div>
+                  <div className="flex justify-between mt-1.5 pt-1 border-t border-purple-500/10 text-[8px] font-mono-crypto">
+                    <span className="text-purple-300">@ ${o.tokenPrice.toFixed(4)} • Expected ${o.expectedUsdt.toFixed(2)}</span>
+                    <span className="text-emerald-300">Received ${o.realizedUsdt.toFixed(2)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 6-Box Grid Container */}

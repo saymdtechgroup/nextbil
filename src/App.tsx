@@ -185,6 +185,9 @@ export default function App() {
     }
     return 0;
   });
+  const [totalEarningUsdt, setTotalEarningUsdt] = useState<number>(0);
+  const [totalWithdrawnUsdt, setTotalWithdrawnUsdt] = useState<number>(0);
+
   const [totalInvestedUsd, setTotalInvestedUsd] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('nxbc_total_invested');
@@ -400,6 +403,7 @@ export default function App() {
       }
     }
     return {
+      p1Percent: 0,
       p2Percent: 0,
       p3Percent: 0,
       p4Percent: 0,
@@ -666,6 +670,11 @@ export default function App() {
         if (data && data.user) {
           setTotalInvestedUsd(data.user.totalInvestedUsdt || 0);
           setClaimableBalanceUsd(data.user.availableUsdt || 0);
+          // The database is authoritative for cumulative earnings and withdrawals.
+          // Total earnings includes all credited income sources (MLM, matrix, token-sale
+          // settlement and rewards) recorded in users.totalEarnedUsdt.
+          setTotalEarningUsdt(Math.max(0, Number(data.user.totalEarnedUsdt || 0)));
+          setTotalWithdrawnUsdt(Math.max(0, Number(data.user.totalWithdrawnUsdt || 0)));
 
           // IMPORTANT: the database is the authoritative source for purchased NXBC.
           // The wallet is the user's ID in the DApp, so every connected wallet must
@@ -709,10 +718,11 @@ export default function App() {
   }, [walletAddress]);
 
   // Purchase handler with sequential phase progression & immutable allocation lock
-  const handleConfirmPurchase = (
+  const handleConfirmPurchase = async (
     tokenAmount: number,
     usdAmount: number,
     sellAlloc: {
+      p1Percent: number;
       p2Percent: number;
       p3Percent: number;
       p4Percent: number;
@@ -751,18 +761,25 @@ export default function App() {
     }
 
     
+    const p1TokensAllocated = Math.floor(tokenAmount * (sellAlloc.p1Percent / 100));
     const p2TokensAllocated = Math.floor(tokenAmount * (sellAlloc.p2Percent / 100));
     const p3TokensAllocated = Math.floor(tokenAmount * (sellAlloc.p3Percent / 100));
     const p4TokensAllocated = Math.floor(tokenAmount * (sellAlloc.p4Percent / 100));
     const p5TokensAllocated = Math.floor(tokenAmount * (sellAlloc.p5Percent / 100));
+    const dexTokens = Math.floor(tokenAmount * (sellAlloc.dexPercent / 100));
 
     const updatedAlloc: AllocationState = {
+      p1Percent: sellAlloc.p1Percent,
       p2Percent: sellAlloc.p2Percent,
       p3Percent: sellAlloc.p3Percent,
       p4Percent: sellAlloc.p4Percent,
       p5Percent: sellAlloc.p5Percent,
       dexPercent: sellAlloc.dexPercent,
       unallocatedPercent: sellAlloc.unallocatedPercent,
+      p1Tokens: {
+        allocated: (allocation.p1Tokens?.allocated || 0) + p1TokensAllocated,
+        sold: allocation.p1Tokens?.sold || 0,
+      },
       p2Tokens: {
         allocated: (allocation.p2Tokens?.allocated || 0) + p2TokensAllocated,
         sold: allocation.p2Tokens?.sold || 0,
@@ -784,35 +801,53 @@ export default function App() {
       lockedTimestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    // Add to global sell queue via Backend API
-    const addressToUse = walletAddress || 'Unknown Wallet';
-    const postOrders = async () => {
-       const ordersToPost = [];
-       const phaseRate = (n: number) => Number(phases.find((p) => p.phaseNumber === n)?.rate || 0);
-       if (p2TokensAllocated > 0) ordersToPost.push({ phaseNumber: 2, amountTokens: p2TokensAllocated, tokenPrice: phaseRate(2) });
-       if (p3TokensAllocated > 0) ordersToPost.push({ phaseNumber: 3, amountTokens: p3TokensAllocated, tokenPrice: phaseRate(3) });
-       if (p4TokensAllocated > 0) ordersToPost.push({ phaseNumber: 4, amountTokens: p4TokensAllocated, tokenPrice: phaseRate(4) });
-       if (p5TokensAllocated > 0) ordersToPost.push({ phaseNumber: 5, amountTokens: p5TokensAllocated, tokenPrice: phaseRate(5) });
-       
-       for (const order of ordersToPost) {
-          try {
-            await fetch('/api/p2p/sell', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                walletAddress: addressToUse,
-                amountTokens: order.amountTokens,
-                tokenPrice: order.tokenPrice,
-                phaseNumber: order.phaseNumber
-              })
-            });
-          } catch (e) {
-            console.error(e);
-          }
-       }
-       fetchSellOrders(); // refresh after posting
+    // Persist the user's phase sell plan only after the on-chain purchase has been
+    // verified by the server. This is a plan/queue reservation, not an earnings credit.
+    const persistPurchaseAndAllocation = async () => {
+      if (!walletAddress) throw new Error('Wallet address is required.');
+
+      const buyResponse = await fetch('/api/presale/buy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress,
+          amountUsdt: usdAmount,
+          tokenAmount,
+          tokenPrice: activePhase.rate,
+          phaseIndex: activePhase.phaseNumber,
+          txHash: txHash || undefined,
+        }),
+      });
+      const buyData = await buyResponse.json().catch(() => ({}));
+      if (!buyResponse.ok || !buyData.success) {
+        throw new Error(buyData.error || 'Purchase could not be verified and recorded.');
+      }
+
+      const allocations = [
+        { phaseNumber: 1, amountTokens: p1TokensAllocated },
+        { phaseNumber: 2, amountTokens: p2TokensAllocated },
+        { phaseNumber: 3, amountTokens: p3TokensAllocated },
+        { phaseNumber: 4, amountTokens: p4TokensAllocated },
+        { phaseNumber: 5, amountTokens: p5TokensAllocated },
+        { phaseNumber: 6, amountTokens: dexTokens },
+      ].filter((x) => x.amountTokens > 0);
+
+      if (allocations.length) {
+        const allocationResponse = await fetch('/api/presale/allocation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ walletAddress, allocations }),
+        });
+        const allocationData = await allocationResponse.json().catch(() => ({}));
+        if (!allocationResponse.ok || !allocationData.success) {
+          throw new Error(allocationData.error || 'Purchase succeeded, but the phase sell plan was not saved.');
+        }
+      }
+
+      return buyData;
     };
-    if (walletAddress) postOrders();
+
+    await persistPurchaseAndAllocation();
 
     setAllocation(updatedAlloc);
     if (typeof window !== 'undefined') {
@@ -822,7 +857,6 @@ export default function App() {
 // UNIVERSAL MLM Qualification Logic (Default $100 limit applies to Level, Direct, Matrix, Ranks)
     const minQualify = systemConfig.minMlmQualifyUsd || 100;
     const newTotalInvested = totalInvestedUsd + usdAmount;
-    const wasQualified = totalInvestedUsd >= minQualify;
     const isNowQualified = newTotalInvested >= minQualify;
     
     // Record Transaction in PostgreSQL Backend
@@ -856,6 +890,7 @@ export default function App() {
       localStorage.removeItem('nxbc_transactions');
     }
     setAllocation({
+      p1Percent: 0,
       p2Percent: 20,
       p3Percent: 30,
       p4Percent: 20,
@@ -1532,8 +1567,8 @@ export default function App() {
                   onResetPhases={handleResetPhases}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
-                  nxbcBalance={nxbcBalance}
-                  usdtBalance={usdtBalance}
+                  totalEarningUsdt={totalEarningUsdt}
+                  totalWithdrawnUsdt={totalWithdrawnUsdt}
                 />
               )}
 
@@ -1545,6 +1580,7 @@ export default function App() {
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
                   levelIncomeUsd={levelIncomeUsd}
                   matrixIncomeUsd={matrixIncomeUsd}
+                  walletAddress={walletAddress}
                 />
               )}
 
@@ -1559,6 +1595,7 @@ export default function App() {
                   totalInvestedUsd={totalInvestedUsd}
                   minMlmQualifyUsd={systemConfig.minMlmQualifyUsd || 100}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
+                  walletAddress={walletAddress}
                 />
               )}
 
@@ -1674,6 +1711,7 @@ export default function App() {
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
                   levelIncomeUsd={levelIncomeUsd}
                   matrixIncomeUsd={matrixIncomeUsd}
+                  walletAddress={walletAddress}
                 />
                 <BottomNavBar
                   idPrefix="s2-nav"
@@ -1747,6 +1785,7 @@ export default function App() {
           tokensSold: activePhase.tokensSold,
         }}
         initialAllocation={{
+          p1Percent: allocation.p1Percent,
           p2Percent: allocation.p2Percent,
           p3Percent: allocation.p3Percent,
           p4Percent: allocation.p4Percent,

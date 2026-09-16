@@ -14,12 +14,14 @@ export interface PhaseConfig {
 }
 
 export interface AllocationState {
+  p1Percent: number;
   p2Percent: number;
   p3Percent: number;
   p4Percent: number;
   p5Percent: number;
   dexPercent: number;
   unallocatedPercent: number;
+  p1Tokens?: PhaseAllocation;
   p2Tokens?: PhaseAllocation;
   p3Tokens?: PhaseAllocation;
   p4Tokens?: PhaseAllocation;

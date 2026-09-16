@@ -1,3 +1,11 @@
+/*
+ * IMPORTANT: LEGACY / REFERENCE CONTRACT — NOT THE CURRENT LIVE PRESALE.
+ * Current live presale contract: 0x4Bc1a2f057FF9a036b8C27a90f7C7F403dC85cae
+ * Actual NXBC token: 0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1
+ * Admin / NXBC return wallet: 0x8d1abCa8Cf0f42799b9a76254710e979bd59c261
+ * Do not deploy this legacy file as a replacement for the current live presale.
+ */
+
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
@@ -69,7 +77,7 @@ abstract contract Ownable {
  * @notice Complete Decentralized Presale, In-Contract USDT<->NXBUSD 1:1 Swap, 10-Tier Unilevel, 2x2 Matrix & Pure Cash Leadership Funds
  * 
  * --- CONFIGURATION (HARDCODED ADDRESSES): ---
- * 1. NXBC Token:      0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7
+ * 1. NXBC Token:      0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1
  * 2. NXBUSD Token:    0xbEFB5857cd4309a4a64f92Dd67507c34fCbca78b
  * 3. USDT Token:      0x55d398326f99059fF775485246999027B3197955 (BSC-USD Mainnet)
  * 4. Treasury Vault:  0x8d1abCa8Cf0f42799b9a76254710e979bd59c261
@@ -77,13 +85,13 @@ abstract contract Ownable {
 contract NXBCPresale is Ownable, ReentrancyGuard {
 
     // --- HARDCODED CONTRACT ADDRESSES ---
-    IERC20 public constant nxbcToken = IERC20(0x3F9d8f0b233A7764b567342Bc90c2a1Ac0961ff7);
+    IERC20 public constant nxbcToken = IERC20(0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1);
     IERC20 public constant nxbusdToken = IERC20(0xbEFB5857cd4309a4a64f92Dd67507c34fCbca78b);
     IERC20 public constant usdtToken = IERC20(0x55d398326f99059fF775485246999027B3197955);
     address public treasuryWallet = 0x8d1abCa8Cf0f42799b9a76254710e979bd59c261;
 
     // --- PLATFORM WITHDRAWAL DEDUCTION ---
-    uint256 public constant WITHDRAWAL_DEDUCTION_PERCENT = 10; // 10% Flat Fee to Treasury
+    uint256 public withdrawalFeePercent = 10; // Admin-configurable withdrawal fee (%)
 
     // --- PRESALE PHASE CONFIGURATION ---
     struct Phase {
@@ -490,7 +498,7 @@ contract NXBCPresale is Ownable, ReentrancyGuard {
         fin.mlmAvailableUsd -= grossUsdAmount;
         fin.totalWithdrawnUsd += grossUsdAmount;
 
-        uint256 fee = (grossUsdAmount * WITHDRAWAL_DEDUCTION_PERCENT) / 100;
+        uint256 fee = (grossUsdAmount * withdrawalFeePercent) / 100;
         uint256 netPayout = grossUsdAmount - fee;
 
         if (fee > 0) {
@@ -522,7 +530,7 @@ contract NXBCPresale is Ownable, ReentrancyGuard {
             );
         }
 
-        uint256 fee = (grossUsdAmount * WITHDRAWAL_DEDUCTION_PERCENT) / 100;
+        uint256 fee = (grossUsdAmount * withdrawalFeePercent) / 100;
         uint256 netPayout = grossUsdAmount - fee;
 
         if (fee > 0) {
@@ -550,6 +558,11 @@ contract NXBCPresale is Ownable, ReentrancyGuard {
     function setTreasury(address _treasury) external onlyOwner {
         require(_treasury != address(0), "Zero address");
         treasuryWallet = _treasury;
+    }
+
+    function setWithdrawalFeePercent(uint256 _feePercent) external onlyOwner {
+        require(_feePercent <= 100, "Fee cannot exceed 100%");
+        withdrawalFeePercent = _feePercent;
     }
 
     function emergencyWithdrawTokens(address tokenAddress, uint256 amount) external onlyOwner {

@@ -34,6 +34,7 @@ interface BuyTokenModalProps {
     tokenAmount: number,
     usdAmount: number,
     sellAlloc: {
+      p1Percent: number;
       p2Percent: number;
       p3Percent: number;
       p4Percent: number;
@@ -42,7 +43,7 @@ interface BuyTokenModalProps {
       unallocatedPercent: number;
     },
     txHash?: string
-  ) => void;
+  ) => void | Promise<void>;
   currentRate: number;
   walletConnected?: boolean;
   walletAddress?: string;
@@ -60,6 +61,7 @@ interface BuyTokenModalProps {
     tokensSold: number;
   };
   initialAllocation?: {
+    p1Percent: number;
     p2Percent: number;
     p3Percent: number;
     p4Percent: number;
@@ -89,6 +91,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     tokensSold: 0,
   },
   initialAllocation = {
+    p1Percent: 0,
     p2Percent: 20,
     p3Percent: 30,
     p4Percent: 20,
@@ -145,6 +148,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   };
 
   // Exact Token Quantities assigned per phase based on user's purchased tokens
+  const [p1Tokens, setP1Tokens] = useState<number>(0);
   const [p2Tokens, setP2Tokens] = useState<number>(0);
   const [p3Tokens, setP3Tokens] = useState<number>(0);
   const [p4Tokens, setP4Tokens] = useState<number>(0);
@@ -210,11 +214,13 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   // Initialize token breakdown whenever tokenQuantity changes or when entering step 2
   useEffect(() => {
     if (tokenQuantity > 0) {
+      const p1 = Math.floor(tokenQuantity * ((initialAllocation.p1Percent || 0) / 100));
       const p2 = Math.floor(tokenQuantity * (initialAllocation.p2Percent / 100));
       const p3 = Math.floor(tokenQuantity * (initialAllocation.p3Percent / 100));
       const p4 = Math.floor(tokenQuantity * (initialAllocation.p4Percent / 100));
       const p5 = Math.floor(tokenQuantity * (initialAllocation.p5Percent / 100));
       const dex = Math.floor(tokenQuantity * (initialAllocation.dexPercent / 100));
+      setP1Tokens(p1);
       setP2Tokens(p2);
       setP3Tokens(p3);
       setP4Tokens(p4);
@@ -225,7 +231,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
   if (!isOpen) return null;
 
-  const totalAllocatedTokens = p2Tokens + p3Tokens + p4Tokens + p5Tokens + dexTokens;
+  const totalAllocatedTokens = p1Tokens + p2Tokens + p3Tokens + p4Tokens + p5Tokens + dexTokens;
   const remainingTokens = Math.max(0, tokenQuantity - totalAllocatedTokens);
   const isOverAllocated = totalAllocatedTokens > tokenQuantity;
 
@@ -238,6 +244,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   // Preset Allocation Helpers based on exact token quantity
   const applyPresetEqual = () => {
     const split = Math.floor(tokenQuantity / 5);
+    setP1Tokens(0);
     setP2Tokens(split);
     setP3Tokens(split);
     setP4Tokens(split);
@@ -247,8 +254,9 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
   const applyPresetEarlyProfit = () => {
     const half = Math.floor(tokenQuantity / 2);
-    setP2Tokens(half);
-    setP3Tokens(tokenQuantity - half);
+    setP1Tokens(Math.floor(tokenQuantity * 0.30));
+    setP2Tokens(Math.floor(tokenQuantity * 0.70));
+    setP3Tokens(0);
     setP4Tokens(0);
     setP5Tokens(0);
     setDexTokens(0);
@@ -256,6 +264,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
   const applyPresetHodl = () => {
     const part = Math.floor((tokenQuantity * 0.5) / 4);
+    setP1Tokens(0);
     setP2Tokens(part);
     setP3Tokens(part);
     setP4Tokens(part);
@@ -264,6 +273,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   };
 
   const applyPresetAllDex = () => {
+    setP1Tokens(0);
     setP2Tokens(0);
     setP3Tokens(0);
     setP4Tokens(0);
@@ -439,12 +449,13 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     setPaymentStatusText('Finalizing allocation & locking coins...');
 
     // Calculate exact percentage distribution to save in smart contract state
+    const p1Percent = tokenQuantity > 0 ? Math.round((p1Tokens / tokenQuantity) * 100) : 0;
     const p2Percent = tokenQuantity > 0 ? Math.round((p2Tokens / tokenQuantity) * 100) : 0;
     const p3Percent = tokenQuantity > 0 ? Math.round((p3Tokens / tokenQuantity) * 100) : 0;
     const p4Percent = tokenQuantity > 0 ? Math.round((p4Tokens / tokenQuantity) * 100) : 0;
     const p5Percent = tokenQuantity > 0 ? Math.round((p5Tokens / tokenQuantity) * 100) : 0;
     const dexPercent = tokenQuantity > 0 ? Math.round((dexTokens / tokenQuantity) * 100) : 0;
-    const unallocatedPercent = Math.max(0, 100 - (p2Percent + p3Percent + p4Percent + p5Percent + dexPercent));
+    const unallocatedPercent = Math.max(0, 100 - (p1Percent + p2Percent + p3Percent + p4Percent + p5Percent + dexPercent));
 
     try {
         // Execute the confirmation asynchronously without blocking the modal closing
@@ -452,6 +463,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
           tokenQuantity,
           usdValue,
           {
+            p1Percent,
             p2Percent,
             p3Percent,
             p4Percent,
@@ -769,6 +781,34 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             {/* Exact Coin Allocator inputs */}
             <div className="space-y-2 max-h-[36vh] overflow-y-auto pr-1">
               
+              {/* Phase 1 ($0.01) */}
+              <div className="bg-[#090317] p-2.5 rounded-xl border border-amber-500/30 space-y-1.5">
+                <div className="flex justify-between items-center text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-slate-100 font-rajdhani">Phase 1 Sell Amount</span>
+                    <span className="text-[9px] font-mono-crypto text-amber-300 font-bold bg-amber-950 px-1.5 py-0.2 rounded border border-amber-500/30">
+                      @ $0.01
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono-crypto text-emerald-400 font-bold">
+                    Returns: ${(p1Tokens * 0.01).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input type="number" min="0" max={tokenQuantity} value={p1Tokens || ''}
+                      onChange={(e) => setP1Tokens(Math.max(0, Math.min(tokenQuantity, parseInt(e.target.value) || 0)))}
+                      placeholder="0" className="w-full bg-[#130728] border border-purple-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-slate-100 font-bold focus:outline-none" />
+                    <span className="absolute right-2 top-2 text-[10px] font-mono-crypto text-purple-400">NXBC</span>
+                  </div>
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => setP1Tokens(Math.floor(tokenQuantity * 0.30))} className="px-1.5 py-1 rounded bg-purple-900/50 hover:bg-purple-800 text-[9px] font-mono-crypto text-purple-200">30%</button>
+                    <button type="button" onClick={() => setP1Tokens(Math.floor(tokenQuantity * 0.50))} className="px-1.5 py-1 rounded bg-purple-900/50 hover:bg-purple-800 text-[9px] font-mono-crypto text-purple-200">50%</button>
+                    <button type="button" onClick={() => setP1Tokens(0)} className="px-1.5 py-1 rounded bg-purple-950 text-[9px] font-mono-crypto text-purple-400 hover:text-rose-300">0</button>
+                  </div>
+                </div>
+              </div>
+
               {/* Phase 2 ($0.10) */}
               <div className="bg-[#090317] p-2.5 rounded-xl border border-purple-500/20 space-y-1.5">
                 <div className="flex justify-between items-center text-xs">
