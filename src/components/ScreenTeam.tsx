@@ -245,6 +245,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
               )}
             </div>
           ))}
+        </div>
       </div>
 
       {/* Leadership Rank & Global Royalty Banner */}
