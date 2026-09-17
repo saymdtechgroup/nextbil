@@ -67,11 +67,16 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [walletAddress]);
 
-  const teamLevelCounts = useMemo(() => Array.from({ length: 7 }, (_, i) => ({
-    level: i + 1,
-    members: Number(teamData?.counts?.[String(i + 1)] || 0),
-    list: Array.isArray(teamData?.levels?.[String(i + 1)]) ? teamData.levels[String(i + 1)] : [],
-  })), [teamData]);
+  const teamLevelCounts = useMemo(() => Array.from({ length: 10 }, (_, i) => {
+    const lvlNum = i + 1;
+    const lvlConfig = levels.find((l) => l.level === lvlNum);
+    return {
+      level: lvlNum,
+      commissionPercent: lvlConfig ? lvlConfig.commissionPercent : (lvlNum === 1 ? 5 : lvlNum === 2 ? 3 : lvlNum <= 5 ? 1 : 0.5),
+      members: Number(teamData?.counts?.[String(lvlNum)] || 0),
+      list: Array.isArray(teamData?.levels?.[String(lvlNum)]) ? teamData.levels[String(lvlNum)] : [],
+    };
+  }), [teamData, levels]);
   const totalMembers = teamData ? Number(teamData.totalMatrixMembers || 0) : levels.reduce((acc, l) => acc + l.directMembers, 0);
   const totalTierPercent = levels.reduce((acc, l) => acc + l.commissionPercent, 0);
 
@@ -192,7 +197,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
               {totalMembers}
             </span>
             <span className="text-[9px] text-purple-300 block">Total Team Members</span>
-            <span className="text-[8px] text-amber-300/80 block mt-0.5">Direct: {teamData?.totalDirectMembers ?? 0} • Matrix L1-7</span>
+            <span className="text-[8px] text-amber-300/80 block mt-0.5">Direct: {teamData?.totalDirectMembers ?? 0} • 10-Level Matrix</span>
           </div>
           <div>
             <span className="text-2xl font-black font-mono-crypto magenta-gradient-text">
@@ -226,7 +231,12 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                 <div className="flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-purple-900/80 text-amber-300 font-mono-crypto font-bold text-[9px] flex items-center justify-center">L{lvl.level}</span>
                   <div>
-                    <span className="font-semibold text-slate-200 block">Level {lvl.level}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-slate-200 block">Level {lvl.level}</span>
+                      <span className="text-[8px] font-mono-crypto font-bold text-amber-300/90 bg-amber-500/15 px-1 rounded border border-amber-400/20">
+                        {lvl.commissionPercent}%
+                      </span>
+                    </div>
                     <span className="text-[8px] font-mono-crypto text-purple-400">{lvl.members} team member{lvl.members === 1 ? '' : 's'}</span>
                   </div>
                 </div>
