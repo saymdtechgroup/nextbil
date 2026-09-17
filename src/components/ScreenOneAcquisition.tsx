@@ -1,6 +1,7 @@
-import React from 'react';
-import { Clock, Flame, Info, Sparkles, TrendingUp, ArrowRight, Wallet, DollarSign, Activity } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Clock, Flame, Info, Sparkles, TrendingUp, ArrowRight, Wallet, DollarSign, Activity, ShieldCheck, CheckCircle2, Layers, Zap } from 'lucide-react';
 import { AllocationState, PhaseConfig, QueueEntry } from '../types/crypto';
+import { DEFAULT_DEMO_QUEUE } from '../utils/fifoHelper';
 
 interface ScreenOneAcquisitionProps {
   allocation: AllocationState;
@@ -27,6 +28,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   onOpenBuyModal,
   onOpenWalletModal,
   onViewFIFO,
+  sellQueue = [],
   walletConnected,
   walletAddress,
   totalEarningUsdt,
@@ -42,6 +44,87 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   const nextPhase = activePhase
     ? phases.find((phase) => phase.phaseNumber === (activePhase.phaseNumber ?? 1) + 1)
     : undefined;
+
+  // Active presale running phase
+  const currentRunningPhase = activePhase?.phaseNumber ?? 1;
+  // Next phase whose queue is scheduled to execute
+  const nextTargetPhase = Math.min(5, currentRunningPhase + 1);
+
+  // Automatically default filter to the NEXT phase relative to the running presale
+  const [selectedPhaseFilter, setSelectedPhaseFilter] = useState<number>(nextTargetPhase);
+
+  useEffect(() => {
+    setSelectedPhaseFilter(nextTargetPhase);
+  }, [nextTargetPhase]);
+
+  const rateMap: Record<number, number> = useMemo(() => {
+    const map: Record<number, number> = {
+      1: 0.01,
+      2: 0.15,
+      3: 0.20,
+      4: 0.25,
+      5: 0.30,
+      6: 1500.0,
+    };
+    phases.forEach((p) => {
+      if (p.phaseNumber && p.rate) {
+        map[p.phaseNumber] = p.rate;
+      }
+    });
+    return map;
+  }, [phases]);
+
+  // Token breakdown
+  const p2Allocated = allocation.p2Tokens?.allocated ?? Math.floor(totalTokens * ((allocation.p2Percent || 20) / 100));
+  const p2Sold = allocation.p2Tokens?.sold ?? 0;
+  const p3Allocated = allocation.p3Tokens?.allocated ?? Math.floor(totalTokens * ((allocation.p3Percent || 30) / 100));
+  const p3Sold = allocation.p3Tokens?.sold ?? 0;
+  const p4Allocated = allocation.p4Tokens?.allocated ?? Math.floor(totalTokens * ((allocation.p4Percent || 20) / 100));
+  const p4Sold = allocation.p4Tokens?.sold ?? 0;
+  const p5Allocated = allocation.p5Tokens?.allocated ?? Math.floor(totalTokens * ((allocation.p5Percent || 15) / 100));
+  const p5Sold = allocation.p5Tokens?.sold ?? 0;
+  const dexAllocated = allocation.dexTokens?.allocated ?? Math.floor(totalTokens * ((allocation.dexPercent || 5) / 100));
+  const dexSold = allocation.dexTokens?.sold ?? 0;
+
+  // Effective Global Queue (combining live DB records with benchmark queue & user orders)
+  const effectiveQueue: QueueEntry[] = useMemo(() => {
+    const userAllocQueue: QueueEntry[] = [];
+    const addr = walletAddress || '0x71c8...a89F';
+    if (p2Allocated > 0) userAllocQueue.push({ id: 'my-p2', userId: addr, phaseNumber: 2, tokensRequested: p2Allocated, tokensSold: p2Sold });
+    if (p3Allocated > 0) userAllocQueue.push({ id: 'my-p3', userId: addr, phaseNumber: 3, tokensRequested: p3Allocated, tokensSold: p3Sold });
+    if (p4Allocated > 0) userAllocQueue.push({ id: 'my-p4', userId: addr, phaseNumber: 4, tokensRequested: p4Allocated, tokensSold: p4Sold });
+    if (p5Allocated > 0) userAllocQueue.push({ id: 'my-p5', userId: addr, phaseNumber: 5, tokensRequested: p5Allocated, tokensSold: p5Sold });
+    if (dexAllocated > 0) userAllocQueue.push({ id: 'my-dex', userId: addr, phaseNumber: 6, tokensRequested: dexAllocated, tokensSold: dexSold });
+
+    if (sellQueue && sellQueue.length > 0) {
+      const dbIds = new Set(sellQueue.map((o) => o.id));
+      const userExtra = userAllocQueue.filter((u) => !dbIds.has(u.id));
+      return [...userExtra, ...sellQueue];
+    }
+
+    if (userAllocQueue.length > 0) {
+      return [...userAllocQueue, ...DEFAULT_DEMO_QUEUE];
+    }
+    return DEFAULT_DEMO_QUEUE;
+  }, [sellQueue, walletAddress, p2Allocated, p2Sold, p3Allocated, p3Sold, p4Allocated, p4Sold, p5Allocated, p5Sold, dexAllocated, dexSold]);
+
+  // Filter queue by phase (completed/settled orders automatically clear out)
+  const filteredQueue = useMemo(() => {
+    const list = effectiveQueue.filter((entry) => {
+      const isCompleted = entry.tokensSold >= entry.tokensRequested && entry.tokensRequested > 0;
+      return entry.phaseNumber === selectedPhaseFilter && !isCompleted;
+    });
+    // If no records in this phase yet, fallback to phase-specific demo queue
+    if (list.length === 0) {
+      return DEFAULT_DEMO_QUEUE.filter((entry) => entry.phaseNumber === selectedPhaseFilter);
+    }
+    return list;
+  }, [effectiveQueue, selectedPhaseFilter]);
+
+  // Top 10 records for Next Phase
+  const top10Queue = useMemo(() => {
+    return filteredQueue.slice(0, 10);
+  }, [filteredQueue]);
 
   return (
     <div className="flex-1 px-4 py-4 space-y-4 max-w-xl mx-auto w-full">
@@ -162,36 +245,220 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
         </div>
       </div>
 
-      {/* FIFO Engine Widget */}
-      <div className="rounded-2xl bg-gradient-to-r from-[#0f172a] to-[#0a0312] border border-blue-500/20 p-5 shadow-lg shadow-blue-900/10">
-        <div className="flex items-center justify-between mb-3.5">
+      {/* GLOBAL FIFO ENGINE WIDGET: TOP 10 NEXT PHASE RECORDS */}
+      <div className="rounded-2xl bg-gradient-to-br from-[#0c1222] via-[#090d1a] to-[#120824] border border-blue-500/25 p-4 sm:p-5 shadow-xl shadow-blue-950/30">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3.5 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-blue-400" />
+            <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shadow-inner">
+              <TrendingUp className="w-5 h-5 text-blue-400" />
             </div>
-            <span className="text-[13px] font-bold font-rajdhani uppercase tracking-wider text-slate-200">
-              Live Auto-Sell Engine
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-black font-rajdhani uppercase tracking-wider text-slate-100">
+                  Global FIFO Sell Queue
+                </span>
+                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                  10 Records
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-rajdhani">
+                Target:{' '}
+                <span className="text-emerald-400 font-bold">
+                  {selectedPhaseFilter === 6 ? 'Phase 6 (Live DEX Launch)' : `Phase ${selectedPhaseFilter}`}
+                </span>{' '}
+                {selectedPhaseFilter !== 6 && `(Next after Running Phase ${currentRunningPhase})`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono-crypto flex items-center gap-1.5 uppercase tracking-wider">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              P{currentRunningPhase} Presale Running
             </span>
           </div>
-          <span className="px-3 py-1 rounded-md text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono-crypto flex items-center gap-1.5 uppercase tracking-wider">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-            Active
+        </div>
+
+        {/* Phase Filter Quick Pills */}
+        <div className="mt-3.5 flex items-center gap-1.5 overflow-x-auto pb-1.5 no-scrollbar">
+          <button
+            onClick={() => setSelectedPhaseFilter(nextTargetPhase)}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold font-rajdhani uppercase tracking-wider whitespace-nowrap transition-all flex items-center gap-1.5 ${
+              selectedPhaseFilter === nextTargetPhase
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 border border-blue-400/40'
+                : 'bg-slate-800/60 hover:bg-slate-800 text-slate-300 border border-slate-700/50'
+            }`}
+          >
+            <Sparkles className="w-3 h-3 text-amber-400" />
+            <span>Next Phase (P{nextTargetPhase})</span>
+            <span className="text-[9px] px-1.5 py-0.2 bg-black/30 rounded text-emerald-300 font-mono-crypto">
+              ${(rateMap[nextTargetPhase] ?? 0.15).toFixed(2)}
+            </span>
+          </button>
+
+          {[2, 3, 4, 5].map((pNum) => {
+            if (pNum === nextTargetPhase) return null;
+            return (
+              <button
+                key={pNum}
+                onClick={() => setSelectedPhaseFilter(pNum)}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold font-rajdhani uppercase tracking-wider whitespace-nowrap transition-all flex items-center gap-1 ${
+                  selectedPhaseFilter === pNum
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 border border-blue-400/40'
+                    : 'bg-slate-800/60 hover:bg-slate-800 text-slate-400 border border-slate-700/50'
+                }`}
+              >
+                <span>Phase {pNum}</span>
+                <span className="text-[9px] opacity-70 font-mono-crypto">
+                  ${(rateMap[pNum] ?? 0.15).toFixed(2)}
+                </span>
+              </button>
+            );
+          })}
+
+          <button
+            onClick={() => setSelectedPhaseFilter(6)}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold font-rajdhani uppercase tracking-wider whitespace-nowrap transition-all flex items-center gap-1.5 ${
+              selectedPhaseFilter === 6
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30 border border-purple-400/40'
+                : 'bg-slate-800/60 hover:bg-slate-800 text-slate-400 border border-slate-700/50'
+            }`}
+          >
+            <Zap className="w-3 h-3 text-purple-400" />
+            <span>DEX Launch</span>
+            <span className="text-[9px] px-1.5 py-0.2 bg-black/30 rounded text-amber-300 font-mono-crypto">
+              $1,500+
+            </span>
+          </button>
+        </div>
+
+        {/* Explain Rule Box */}
+        <div className="mt-3 p-2.5 rounded-xl bg-blue-950/30 border border-blue-500/15 flex items-start gap-2.5">
+          <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-slate-300 font-rajdhani leading-relaxed">
+            {selectedPhaseFilter === 6 ? (
+              <>
+                <span className="text-amber-300 font-bold">Phase 6 DEX Allocation:</span> Tokens reserved for public Decentralized Exchange launch ($1,500+ listing target). Settleable via FIFO liquidity pool upon DEX listing.
+              </>
+            ) : (
+              <>
+                Phase {currentRunningPhase} buyers queued auto-sales for{' '}
+                <span className="text-amber-300 font-bold">Phase {selectedPhaseFilter}</span>. When target phase runs, incoming buyer volume settles queued sellers automatically in order (#1 first).
+              </>
+            )}
+          </p>
+        </div>
+
+        {/* 10 Records Table */}
+        <div className="mt-3.5 space-y-1.5">
+          <div className="grid grid-cols-12 text-[10px] uppercase font-bold font-mono-crypto text-slate-400 px-2 py-1">
+            <span className="col-span-2">Rank</span>
+            <span className="col-span-4">Seller Wallet</span>
+            <span className="col-span-3 text-right">Tokens</span>
+            <span className="col-span-3 text-right">USDT Value</span>
+          </div>
+
+          {top10Queue.map((item, index) => {
+            const isFirst = index === 0;
+            const targetRate = rateMap[item.phaseNumber] ?? 0.15;
+            const usdtVal = (item.tokensRequested || 0) * targetRate;
+            const isMyWallet =
+              walletAddress &&
+              (item.userId.toLowerCase() === walletAddress.toLowerCase() ||
+                item.userId.includes(walletAddress.slice(0, 6)));
+
+            return (
+              <div
+                key={item.id || index}
+                className={`grid grid-cols-12 items-center p-2 rounded-xl text-xs transition-all border ${
+                  isFirst
+                    ? 'bg-gradient-to-r from-emerald-950/40 via-blue-950/30 to-black/40 border-emerald-500/40 shadow-sm shadow-emerald-900/20'
+                    : isMyWallet
+                    ? 'bg-amber-950/30 border-amber-500/40'
+                    : 'bg-black/30 hover:bg-slate-800/40 border-white/5'
+                }`}
+              >
+                {/* Rank & FIFO Number */}
+                <div className="col-span-2 flex items-center gap-1.5">
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-black font-mono-crypto ${
+                      isFirst
+                        ? 'bg-emerald-500 text-slate-950 font-extrabold shadow-sm'
+                        : index < 3
+                        ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    #{index + 1}
+                  </span>
+                  {isFirst && (
+                    <span className="hidden sm:inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  )}
+                </div>
+
+                {/* Seller Wallet & Phase Badge */}
+                <div className="col-span-4 min-w-0 pr-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span
+                      className={`font-mono-crypto truncate text-[11px] ${
+                        isMyWallet ? 'text-amber-300 font-bold' : 'text-slate-200'
+                      }`}
+                    >
+                      {item.userId}
+                    </span>
+                    {isMyWallet && (
+                      <span className="px-1 py-0.2 rounded text-[8px] bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase font-bold">
+                        You
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-rajdhani flex items-center gap-1">
+                    <span className="text-blue-400 font-bold">P{item.phaseNumber}</span>
+                    <span>@ ${targetRate.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* Tokens Amount */}
+                <div className="col-span-3 text-right">
+                  <span className="font-mono-crypto font-bold text-slate-200 text-xs">
+                    {item.tokensRequested.toLocaleString()}
+                  </span>
+                  <div className="text-[9px] text-slate-400 font-rajdhani uppercase">NXBC</div>
+                </div>
+
+                {/* USDT Value & Status */}
+                <div className="col-span-3 text-right">
+                  <span className="font-mono-crypto font-bold text-emerald-400 text-xs">
+                    ${usdtVal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </span>
+                  <div className="text-[9px] font-mono-crypto text-slate-400">
+                    {isFirst ? (
+                      <span className="text-emerald-400 font-bold uppercase">Next Settle</span>
+                    ) : item.tokensSold > 0 ? (
+                      <span className="text-blue-300">
+                        {Math.round((item.tokensSold / item.tokensRequested) * 100)}% Fill
+                      </span>
+                    ) : (
+                      <span>Queued</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer Info */}
+        <div className="mt-3.5 pt-2.5 border-t border-white/10 flex items-center justify-between text-[11px] text-slate-400 font-rajdhani">
+          <span>
+            Showing top {top10Queue.length} of {filteredQueue.length} FIFO sellers for Phase{' '}
+            {selectedPhaseFilter === 'all' ? nextTargetPhase : selectedPhaseFilter}.
+          </span>
+          <span className="text-[10px] font-mono-crypto text-emerald-400/80">
+            Auto-Updated
           </span>
         </div>
-        
-        <p className="text-xs text-slate-400 font-rajdhani mb-5 leading-relaxed">
-          Queue your allocation to auto-sell in upcoming phases. 20% of new incoming buyer volume is automatically routed to fulfill seller queues.
-        </p>
-
-        {onViewFIFO && (
-          <button
-            onClick={onViewFIFO}
-            className="w-full py-3 rounded-xl bg-black/40 hover:bg-[#1a0a38] border border-blue-500/30 text-blue-400 text-xs font-bold font-rajdhani uppercase tracking-widest transition-colors flex items-center justify-center gap-2 group"
-          >
-            <span>Open FIFO Queue</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </button>
-        )}
       </div>
     </div>
   );

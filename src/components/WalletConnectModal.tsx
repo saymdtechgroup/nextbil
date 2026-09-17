@@ -112,7 +112,7 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
 
     if (!eth) {
       setErrorMessage(
-        'Chrome mobile me extension nahi chalti. Kirpya "Mobile App DApp" tab se Trust Wallet ya MetaMask me kholein, ya neeche apna BEP-20 address paste karein.'
+        'Browser extensions are not supported on mobile browsers. Please use the "Mobile App DApp" tab to open in Trust Wallet / MetaMask, or paste your BEP-20 address directly.'
       );
       setConnectingId(null);
       setActiveTab('deeplink');
@@ -360,11 +360,11 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
           </div>
         )}
 
-        {/* TAB 2: MOBILE DEEP LINKS (Agar user direct mobile chrome me khola hai) */}
+        {/* TAB 2: MOBILE DEEP LINKS (Direct mobile wallet dApp browser launcher) */}
         {activeTab === 'deeplink' && (
           <div className="space-y-2.5 mb-4">
             <div className="p-2.5 rounded-xl bg-purple-950/80 border border-purple-500/30 text-[11px] text-purple-200 leading-snug">
-              📱 <strong>Mobile Chrome User:</strong> Agar aap mobile browser me hain, to niche diye gaye button par click karke direct wallet app me ye website kholein.
+              📱 <strong>Mobile Browser User:</strong> If you are using a mobile browser, tap the button below to open this dApp directly inside your wallet application.
             </div>
 
             {/* Open in TokenPocket App */}
@@ -460,7 +460,7 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
         {activeTab === 'manual' && (
           <form onSubmit={handleManualSubmit} className="space-y-3 mb-4">
             <div className="p-2.5 rounded-xl bg-purple-950/80 border border-purple-500/30 text-[11px] text-purple-200 leading-snug">
-              ✍️ <strong>Instant Address Connection:</strong> Apna Trust Wallet ya MetaMask se BEP-20 (BNB/USDT) deposit address copy karke yahan paste karein.
+              ✍️ <strong>Instant Address Connection:</strong> Copy your BEP-20 (BNB / USDT) deposit address from Trust Wallet or MetaMask and paste it below.
             </div>
 
             <div>
