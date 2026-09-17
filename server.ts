@@ -1466,89 +1466,149 @@ async function startServer() {
   // Dynamic MLM Team / Genealogy endpoint: resolves the user's 2x2 matrix tree up to 7 levels.
   app.get("/api/team/:walletAddress", async (req, res) => {
     try {
-      const walletAddress = String(req.params.walletAddress || '').toLowerCase();
+      const walletAddress = String(req.params.walletAddress || '').trim().toLowerCase();
       if (!walletAddress) return res.status(400).json({ error: "walletAddress is required" });
 
       const leader = await db.query.users.findFirst({ where: eq(users.walletAddress, walletAddress) });
       if (!leader) return res.status(404).json({ error: "User not found" });
 
-      const leaderNode = await db.query.matrixNodes.findFirst({ where: eq(matrixNodes.userId, leader.id) });
       const allUsers = await db.select().from(users);
-      const userById = new Map(allUsers.map((u: any) => [u.id, u]));
       const allNodes = await db.select().from(matrixNodes).orderBy(asc(matrixNodes.id));
+      const userById = new Map(allUsers.map((u: any) => [u.id, u]));
       const nodeById = new Map(allNodes.map((n: any) => [n.id, n]));
       const childrenByParent = new Map<number, any[]>();
-      for (const n of allNodes as any[]) {
-        if (n.parentId == null) continue;
-        const arr = childrenByParent.get(n.parentId) || [];
-        arr.push(n);
-        childrenByParent.set(n.parentId, arr);
+
+      for (const node of allNodes as any[]) {
+        if (node.parentId == null) continue;
+        const children = childrenByParent.get(node.parentId) || [];
+        children.push(node);
+        childrenByParent.set(node.parentId, children);
       }
-      for (const arr of childrenByParent.values()) arr.sort((a, b) => (a.position || 0) - (b.position || 0));
+      for (const children of childrenByParent.values()) {
+        children.sort((a, b) => (a.position || 0) - (b.position || 0));
+      }
 
       type MemberRow = {
-        userId: number; walletAddress: string; referralCode: string; sponsorReferralCode: string | null;
-        level: number; position: number; parentWalletAddress: string | null; status: string;
-        totalInvestedUsdt: number; totalPurchasedTokens: number; joinedAt: string | null;
+        userId: number;
+        walletAddress: string;
+        referralCode: string;
+        sponsorReferralCode: string | null;
+        level: number;
+        position: number;
+        parentWalletAddress: string | null;
+        status: string;
+        totalInvestedUsdt: number;
+        totalPurchasedTokens: number;
+        joinedAt: string | null;
       };
-      const levels: Record<string, MemberRow[]> = {};
-      for (let i = 1; i <= 7; i++) levels[String(i)] = [];
 
+      const matrixLevels: Record<string, MemberRow[]> = {};
+      const unilevelLevels: Record<string, MemberRow[]> = {};
+      for (let i = 1; i <= 10; i++) {
+        matrixLevels[String(i)] = [];
+        unilevelLevels[String(i)] = [];
+      }
+
+      const toMemberRow = (member: any, level: number, position = 0, parentUser: any = null): MemberRow => ({
+        userId: member.id,
+        walletAddress: member.walletAddress,
+        referralCode: member.referralCode,
+        sponsorReferralCode: member.referredBy || null,
+        level,
+        position,
+        parentWalletAddress: parentUser?.walletAddress || null,
+        status: member.isMlmQualified ? 'active' : 'investor',
+        totalInvestedUsdt: Number(member.totalInvestedUsdt || 0),
+        totalPurchasedTokens: Number(member.totalPurchasedTokens || 0),
+        joinedAt: member.createdAt ? new Date(member.createdAt).toISOString() : null,
+      });
+
+      // Matrix tree: placement hierarchy, maximum 10 levels.
+      const leaderNode = await db.query.matrixNodes.findFirst({ where: eq(matrixNodes.userId, leader.id) });
       if (leaderNode) {
-        const queue: Array<{ nodeId: number; relativeLevel: number }> = [{ nodeId: leaderNode.id, relativeLevel: 0 }];
+        const queue: Array<{ nodeId: number; level: number }> = [{ nodeId: leaderNode.id, level: 0 }];
         const seen = new Set<number>([leaderNode.id]);
         while (queue.length) {
           const current = queue.shift()!;
-          if (current.relativeLevel >= 7) continue;
-          const children = childrenByParent.get(current.nodeId) || [];
-          for (const child of children) {
+          if (current.level >= 10) continue;
+          for (const child of childrenByParent.get(current.nodeId) || []) {
             if (seen.has(child.id)) continue;
             seen.add(child.id);
-            const relLevel = current.relativeLevel + 1;
-            const member: any = userById.get(child.userId);
-            if (member && relLevel <= 7) {
-              const parentNode: any = nodeById.get(child.parentId);
-              const parentUser: any = parentNode ? userById.get(parentNode.userId) : null;
-              levels[String(relLevel)].push({
-                userId: member.id,
-                walletAddress: member.walletAddress,
-                referralCode: member.referralCode,
-                sponsorReferralCode: member.referredBy || null,
-                level: relLevel,
-                position: child.position,
-                parentWalletAddress: parentUser?.walletAddress || null,
-                status: member.isMlmQualified ? 'active' : 'investor',
-                totalInvestedUsdt: Number(member.totalInvestedUsdt || 0),
-                totalPurchasedTokens: Number(member.totalPurchasedTokens || 0),
-                joinedAt: member.createdAt ? new Date(member.createdAt).toISOString() : null,
-              });
+            const level = current.level + 1;
+            const member = userById.get(child.userId);
+            if (member) {
+              const parentNode = child.parentId ? nodeById.get(child.parentId) : null;
+              const parentUser = parentNode ? userById.get(parentNode.userId) : null;
+              matrixLevels[String(level)].push(toMemberRow(member, level, child.position, parentUser));
             }
-            queue.push({ nodeId: child.id, relativeLevel: relLevel });
+            queue.push({ nodeId: child.id, level });
           }
         }
       }
 
-      // Direct referrals are sponsor-chain members, independent from matrix placement.
-      const directMembers = allUsers
-        .filter((u: any) => String(u.referredBy || '').toUpperCase() === String(leader.referralCode || '').toUpperCase())
-        .map((u: any) => ({
-          userId: u.id, walletAddress: u.walletAddress, referralCode: u.referralCode,
-          status: u.isMlmQualified ? 'active' : 'investor',
-          totalInvestedUsdt: Number(u.totalInvestedUsdt || 0),
-          totalPurchasedTokens: Number(u.totalPurchasedTokens || 0),
-          joinedAt: u.createdAt ? new Date(u.createdAt).toISOString() : null,
-        }));
+      // Unilevel tree: sponsor/referral hierarchy, independent from matrix placement.
+      const usersBySponsor = new Map<string, any[]>();
+      for (const member of allUsers as any[]) {
+        const sponsor = String(member.referredBy || '').trim().toUpperCase();
+        if (!sponsor) continue;
+        const children = usersBySponsor.get(sponsor) || [];
+        children.push(member);
+        usersBySponsor.set(sponsor, children);
+      }
+      const sponsorKeys = new Set<string>([String(leader.referralCode || '').trim().toUpperCase(), leader.walletAddress.toUpperCase()]);
+      let currentMembers = [leader];
+      const seenUsers = new Set<number>([leader.id]);
+      for (let level = 1; level <= 10; level++) {
+        const nextMembers: any[] = [];
+        for (const parent of currentMembers) {
+          const keys = [String(parent.referralCode || '').trim().toUpperCase(), String(parent.walletAddress || '').trim().toUpperCase()];
+          for (const key of keys) {
+            for (const member of usersBySponsor.get(key) || []) {
+              if (seenUsers.has(member.id)) continue;
+              seenUsers.add(member.id);
+              unilevelLevels[String(level)].push(toMemberRow(member, level));
+              nextMembers.push(member);
+            }
+          }
+        }
+        currentMembers = nextMembers;
+      }
 
-      const counts = Object.fromEntries(Object.entries(levels).map(([k, v]) => [k, v.length]));
-      const totalMatrixMembers = Object.values(counts).reduce((a, b) => a + b, 0);
+      const earnings = await db.select().from(levelEarnings).where(eq(levelEarnings.beneficiaryId, leader.id));
+      const unilevelIncome: Record<string, number> = {};
+      const matrixIncome: Record<string, number> = {};
+      for (let i = 1; i <= 10; i++) {
+        unilevelIncome[String(i)] = 0;
+        matrixIncome[String(i)] = 0;
+      }
+      for (const earning of earnings as any[]) {
+        const level = Number(earning.levelNumber);
+        if (level < 1 || level > 10) continue;
+        const amount = Number(earning.commissionUsdt || 0);
+        if (earning.txType === 'matrix_join') matrixIncome[String(level)] += amount;
+        else if (earning.txType === 'token_purchase') unilevelIncome[String(level)] += amount;
+      }
+
+      const counts = Object.fromEntries(Object.entries(matrixLevels).map(([k, v]) => [k, v.length]));
+      const unilevelCounts = Object.fromEntries(Object.entries(unilevelLevels).map(([k, v]) => [k, v.length]));
+      const sum = (obj: Record<string, number>) => Object.values(obj).reduce((a, b) => a + b, 0);
+
       res.json({
         leader: { userId: leader.id, walletAddress: leader.walletAddress, referralCode: leader.referralCode },
-        directMembers,
-        levels,
+        directMembers: unilevelLevels["1"],
+        levels: matrixLevels,
         counts,
-        totalMatrixMembers,
-        totalDirectMembers: directMembers.length,
-        maxLevel: 7,
+        totalMatrixMembers: sum(counts),
+        totalDirectMembers: unilevelLevels["1"].length,
+        matrixLevels,
+        matrixCounts: counts,
+        unilevelLevels,
+        unilevelCounts,
+        unilevelIncome,
+        matrixIncome,
+        totalUnilevelIncome: sum(unilevelIncome),
+        totalMatrixIncome: sum(matrixIncome),
+        maxLevel: 10,
         structure: '2x2 forced matrix',
       });
     } catch (error: any) {
