@@ -72,24 +72,30 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
     void loadTeam();
   }, [loadTeam]);
 
-  const teamLevelCounts = useMemo(() => Array.from({ length: 10 }, (_, i) => {
-    const levelNumber = i + 1;
-    const levelConfig = levels.find((level) => level.level === levelNumber);
+  const unilevelLevels = useMemo(() => Array.from({ length: 10 }, (_, i) => {
+    const level = i + 1;
+    const config = levels.find((item) => item.level === level);
     return {
-      level: levelNumber,
-      commissionPercent: levelConfig
-        ? levelConfig.commissionPercent
-        : (levelNumber === 1 ? 5 : levelNumber === 2 ? 3 : levelNumber <= 5 ? 1 : 0.5),
-      members: Number(teamData?.counts?.[String(levelNumber)] || 0),
-      list: Array.isArray(teamData?.levels?.[String(levelNumber)])
-        ? teamData.levels[String(levelNumber)]
-        : [],
+      level,
+      commissionPercent: config ? config.commissionPercent : (level === 1 ? 5 : level === 2 ? 3 : level <= 5 ? 1 : 0.5),
+      members: Number(teamData?.unilevelCounts?.[String(level)] || 0),
+      income: Number(teamData?.unilevelIncome?.[String(level)] || 0),
+      list: Array.isArray(teamData?.unilevelLevels?.[String(level)]) ? teamData.unilevelLevels[String(level)] : [],
     };
   }), [teamData, levels]);
 
-  const totalMembers = teamData
-    ? Number(teamData.totalMatrixMembers || 0)
-    : levels.reduce((total, level) => total + level.directMembers, 0);
+  const matrixLevels = useMemo(() => Array.from({ length: 10 }, (_, i) => {
+    const level = i + 1;
+    return {
+      level,
+      members: Number(teamData?.matrixCounts?.[String(level)] || 0),
+      income: Number(teamData?.matrixIncome?.[String(level)] || 0),
+      list: Array.isArray(teamData?.matrixLevels?.[String(level)]) ? teamData.matrixLevels[String(level)] : [],
+    };
+  }), [teamData]);
+
+  const totalUnilevelMembers = unilevelLevels.reduce((sum, item) => sum + item.members, 0);
+  const totalMatrixMembers = matrixLevels.reduce((sum, item) => sum + item.members, 0);
   const totalTierPercent = levels.reduce((total, level) => total + level.commissionPercent, 0);
 
   const isMlmQualified = totalInvestedUsd >= minMlmQualifyUsd;
@@ -239,7 +245,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
         <div className="space-y-1.5 max-h-64 overflow-y-auto pr-0.5">
           {teamLoading && <div className="p-3 text-[9px] text-purple-300 font-mono-crypto">Loading team data...</div>}
           {teamError && <div className="p-3 text-[9px] text-rose-300 font-mono-crypto">{teamError}</div>}
-          {!teamLoading && !teamError && teamLevelCounts.map((level) => (
+          {!teamLoading && !teamError && unilevelLevels.map((level) => (
             <div key={level.level} className="p-2 rounded-xl bg-[#110722] border border-purple-500/15 text-[10px]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -249,7 +255,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                       <span className="font-semibold text-slate-200 block">Unilevel Level {level.level}</span>
                       <span className="text-[8px] font-mono-crypto font-bold text-amber-300/90 bg-amber-500/15 px-1 rounded border border-amber-400/20">{level.commissionPercent}%</span>
                     </div>
-                    <span className="text-[8px] font-mono-crypto text-purple-400">{level.members} member{level.members === 1 ? '' : 's'}</span>
+                    <span className="text-[8px] font-mono-crypto text-purple-400">{level.members} member{level.members === 1 ? '' : 's'} • ${level.income.toFixed(2)} earned</span>
                   </div>
                 </div>
                 <span className="font-mono-crypto font-bold text-amber-300">{level.members}</span>
@@ -265,6 +271,39 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                   {level.list.length > 8 && <div className="text-[8px] text-purple-400">+{level.list.length - 8} more</div>}
                 </div>
               )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Matrix level summary - kept separate from Unilevel data */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between px-1 gap-2">
+          <div>
+            <h2 className="text-[11px] font-bold text-slate-100 font-rajdhani uppercase tracking-wider">Matrix Rewards & Placement</h2>
+            <p className="text-[8px] text-purple-300/70 font-mono-crypto">
+              Separate 2x2 placement levels. Matrix income is never added to Unilevel income.
+            </p>
+          </div>
+          <button onClick={onOpenMatrixModal} className="text-[9px] text-fuchsia-300 font-mono-crypto hover:underline">Open Matrix →</button>
+        </div>
+        <div className="p-2 rounded-xl bg-[#110722] border border-fuchsia-500/20 text-[9px] flex items-center justify-between">
+          <span className="text-purple-200">Total Matrix Members: <strong className="text-fuchsia-300">{totalMatrixMembers}</strong></span>
+          <span className="text-purple-200">Matrix Income: <strong className="text-fuchsia-300">${Number(teamData?.totalMatrixIncome || 0).toFixed(2)}</strong></span>
+        </div>
+        <div className="space-y-1.5 max-h-64 overflow-y-auto pr-0.5">
+          {!teamLoading && !teamError && matrixLevels.map((level) => (
+            <div key={`matrix-${level.level}`} className="p-2 rounded-xl bg-[#110722] border border-fuchsia-500/15 text-[10px]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-fuchsia-900/80 text-fuchsia-200 font-mono-crypto font-bold text-[9px] flex items-center justify-center">L{level.level}</span>
+                  <div>
+                    <span className="font-semibold text-slate-200 block">Matrix Level {level.level}</span>
+                    <span className="text-[8px] font-mono-crypto text-purple-400">{level.members} member{level.members === 1 ? '' : 's'} • ${level.income.toFixed(2)} earned</span>
+                  </div>
+                </div>
+                <span className="font-mono-crypto font-bold text-fuchsia-300">{level.members}</span>
+              </div>
             </div>
           ))}
         </div>
