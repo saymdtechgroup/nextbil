@@ -385,9 +385,86 @@ export default function App() {
             if (data.user.referralCode) {
               setUserRefCode(data.user.referralCode);
             }
+            if (data.user.availableUsdt !== undefined) {
+              setUserEarnings((prev) => ({
+                ...prev,
+                availableUsdt: Number(data.user.availableUsdt || 0),
+                withdrawnUsdt: Number(data.user.totalWithdrawnUsdt || 0),
+              }));
+            }
+            if (data.user.totalInvestedUsdt !== undefined && Number(data.user.totalInvestedUsdt) > 0) {
+              setTotalInvestedUsd(Number(data.user.totalInvestedUsdt));
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('nxbc_total_invested', String(data.user.totalInvestedUsdt));
+              }
+            }
           }
         })
         .catch((err) => console.log('PostgreSQL sync notice:', err));
+
+        // Fetch user phase allocations from DB
+        fetch(`/api/presale/allocation/${walletAddress}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success && data.allocations) {
+              const a = data.allocations;
+              const totalTokens = data.totalPurchasedTokens || 0;
+              
+              const localAlloc = JSON.parse(localStorage.getItem('nxbc_user_allocation') || '{}');
+              const localTxs = JSON.parse(localStorage.getItem('nxbc_transactions') || '[]');
+              const localTotalInvested = localStorage.getItem('nxbc_total_invested') || '0';
+
+              if (totalTokens === 0 && (localAlloc.totalTokensPurchased > 0 || localTxs.length > 0)) {
+                 console.log("Syncing legacy data to server...");
+                 
+                 // Reconstruct allocations payload from local storage
+                 const allocPayload = [
+                    { phaseNumber: 1, amountTokens: localAlloc.p1Tokens?.allocated || 0 },
+                    { phaseNumber: 2, amountTokens: localAlloc.p2Tokens?.allocated || 0 },
+                    { phaseNumber: 3, amountTokens: localAlloc.p3Tokens?.allocated || 0 },
+                    { phaseNumber: 4, amountTokens: localAlloc.p4Tokens?.allocated || 0 },
+                    { phaseNumber: 5, amountTokens: localAlloc.p5Tokens?.allocated || 0 },
+                    { phaseNumber: 6, amountTokens: localAlloc.dexTokens?.allocated || 0 },
+                 ].filter(x => x.amountTokens > 0);
+
+                 fetch('/api/presale/sync-legacy-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                       walletAddress,
+                       allocations: allocPayload,
+                       transactions: localTxs,
+                       totalInvestedUsdt: localTotalInvested
+                    })
+                 }).then(r => r.json()).then(syncRes => {
+                    console.log("Legacy sync complete:", syncRes);
+                    // Refetch from server now
+                    window.location.reload();
+                 });
+                 return; // Wait for reload
+              }
+
+              setAllocation((prev) => {
+
+                const next = {
+                  ...prev,
+                  totalTokensPurchased: totalTokens,
+                  isLocked: totalTokens > 0,
+                  p1Tokens: a[1] || { allocated: 0, sold: 0 },
+                  p2Tokens: a[2] || { allocated: 0, sold: 0 },
+                  p3Tokens: a[3] || { allocated: 0, sold: 0 },
+                  p4Tokens: a[4] || { allocated: 0, sold: 0 },
+                  p5Tokens: a[5] || { allocated: 0, sold: 0 },
+                  dexTokens: a[6] || { allocated: 0, sold: 0 },
+                };
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('nxbc_user_allocation', JSON.stringify(next));
+                }
+                return next;
+              });
+            }
+          })
+          .catch((err) => console.log('PostgreSQL allocation sync error:', err));
     }
   }, [walletConnected, walletAddress]);
 
@@ -1497,18 +1574,15 @@ export default function App() {
       {/* Main Foreground Container */}
       <div className="relative z-10 w-full max-w-7xl mx-auto px-1 sm:px-4 py-2 sm:py-6 flex flex-col min-h-screen">
         
-        {/* Dynamic View Rendering: Single Full Mobile Screen (Default) OR Trio Multi-Screen Grid */}
-        {viewMode === 'single' ? (
-          /* PURE FULL-WIDTH MOBILE SCREEN APPLICATION INTERFACE MATCHING SCREENSHOT */
-          <div className="flex-1 flex flex-col w-full max-w-xl mx-auto bg-gradient-to-b from-[#110726] via-[#090317] to-[#0d051e] rounded-2xl sm:rounded-[32px] border border-amber-500/25 shadow-[0_15px_60px_rgba(0,0,0,0.8)] overflow-hidden relative my-0 sm:my-2">
-            
-            {/* Native Mobile App Header Card matching screenshot */}
-            <div className="p-4 sm:p-5 border-b border-purple-900/40 bg-[#0e0724]/90">
+        {/* Top Header Bar */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 mb-3 sm:mb-4 border-b border-purple-500/20 bg-[#0e0720]/80 backdrop-blur-md px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl border">
+          <div className="flex items-center justify-between w-full">
+            <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base sm:text-lg font-black tracking-wider text-slate-100 font-cinzel">
                   {systemConfig.tokenSymbol}<span className="text-amber-400"> COIN</span>
                 </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 border border-amber-400/50 text-amber-300 font-mono-crypto">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 border border-amber-400/50 text-amber-300 font-mono-crypto">
                   PRESALE PLATFORM
                 </span>
                 {systemConfig.presalePaused && (
@@ -1517,10 +1591,20 @@ export default function App() {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-purple-200/90 mt-2 leading-relaxed">
+              <p className="text-xs text-purple-200/90 mt-1.5 max-w-2xl leading-relaxed">
                 NXBC is a next-generation utility coin designed for secure, high-yield P2P trading. By participating in this exclusive presale, early adopters secure their allocation at the lowest entry prices. This provides massive growth potential, automated instant payouts via our FIFO smart contract, and guaranteed liquidity before the official Decentralized Exchange (DEX) launch.
               </p>
             </div>
+          </div>
+        </header>
+
+        {/* Dynamic View Rendering: Single Full Mobile Screen (Default) OR Trio Multi-Screen Grid */}
+        {viewMode === 'single' ? (
+          /* PURE FULL-WIDTH MOBILE SCREEN APPLICATION INTERFACE */
+          <div className="flex-1 flex flex-col w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto bg-gradient-to-b from-[#110726] via-[#090317] to-[#0d051e] rounded-2xl sm:rounded-[32px] border border-amber-500/25 shadow-[0_15px_60px_rgba(0,0,0,0.8)] overflow-hidden relative my-0 sm:my-2">
+            
+            {/* Native Mobile App Header Bar Removed as per user request */}
+
 
             {/* Quick Screen Switcher Tabs */}
             <div className="px-3 pt-2.5 pb-1 flex items-center gap-1 overflow-x-auto no-scrollbar bg-[#090317]/80 border-b border-purple-500/10 select-none">
@@ -1546,11 +1630,12 @@ export default function App() {
             </div>
 
             {/* Mobile Screen Body Content */}
-            <div className="flex-1 pb-16 min-h-[520px]">
+            <div className="flex-1 pb-2 min-h-[520px] flex flex-col">
               {activeSingleScreen === 'home' && (
                 <ScreenOneAcquisition
                   allocation={allocation}
                   phases={phases}
+                  sellQueue={sellQueue}
                   onUpdateAllocation={setAllocation}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
                   onOpenWalletModal={() => setWalletModalOpen(true)}
@@ -1672,15 +1757,19 @@ export default function App() {
                 <ScreenOneAcquisition
                   allocation={allocation}
                   phases={phases}
+                  sellQueue={sellQueue}
                   onUpdateAllocation={setAllocation}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
-                  
                   onOpenWalletModal={() => setWalletModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
                   onSimulateFillPhase={handleSimulateFillPhase}
                   onSimulateExternalBuy={handleSimulateExternalBuy}
                   onResetPhases={handleResetPhases}
+                  onViewFIFO={() => {
+                    setViewMode('single');
+                    setActiveSingleScreen('assets');
+                  }}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
                   nxbcBalance={nxbcBalance}
@@ -1699,8 +1788,8 @@ export default function App() {
               {/* DEVICE 2: User Assets, Sell Schedule (6-Box Grid) & Community (Assets) */}
               <DeviceFrame
                 screenNumber={2}
-                screenTitle="Screen 2: Assets & 6-Box Grid"
-                badgeText="6 Phase Vectors"
+                screenTitle="Screen 2: Assets & FIFO Queue"
+                badgeText="6 Phase Vectors & FIFO"
                 badgeColor="magenta"
                 url="nxbc.network/assets"
                 isHero={true}
