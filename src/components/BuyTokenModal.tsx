@@ -588,7 +588,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                     <div>
                       <span className="font-bold block text-rose-300">Insufficient USDT Balance!</span>
                       <span>
-                        Aapke wallet me sirf <strong>{effectiveBalance.toFixed(2)} USDT</strong> hai, jabki order ke liye <strong>${usdValue.toFixed(2)} USDT</strong> chahiye.
+                        Your connected wallet has only <strong>{effectiveBalance.toFixed(2)} USDT</strong>, but this order requires <strong>${usdValue.toFixed(2)} USDT</strong>.
                       </span>
                     </div>
                   </div>
