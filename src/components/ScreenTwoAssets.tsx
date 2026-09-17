@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Coins,
   Eye,
@@ -15,7 +15,6 @@ import {
   Info
 } from 'lucide-react';
 import { AllocationState, UserEarnings, PhaseConfig, QueueEntry } from '../types/crypto';
-import { DEFAULT_DEMO_QUEUE } from '../utils/fifoHelper';
 
 export interface ScreenTwoAssetsProps {
   initialTab?: string;
@@ -49,6 +48,20 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
 }) => {
   const [showValues, setShowValues] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [liveOrders, setLiveOrders] = useState<any[]>([]);
+  const [inviteLoading, setInviteLoading] = useState<number | null>(null);
+  const [inviteUrl, setInviteUrl] = useState('');
+  useEffect(() => {
+    if (!walletAddress) { setLiveOrders([]); return; }
+    let cancelled=false;
+    const load=async()=>{try{const r=await fetch(`/api/presale/sale-orders/${encodeURIComponent(walletAddress)}`);const d=await r.json();if(!cancelled&&r.ok)setLiveOrders(Array.isArray(d.orders)?d.orders:[]);}catch{}};
+    load(); const t=window.setInterval(load,5000); return()=>{cancelled=true;window.clearInterval(t);};
+  },[walletAddress]);
+  const createDirectInvite=async(orderId:number)=>{
+    if(!walletAddress)return; setInviteLoading(orderId); setInviteUrl('');
+    try{const r=await fetch('/api/presale/direct-buyer/invite',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({walletAddress,orderId})});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.error||'Unable to create buyer link');setInviteUrl(d.shareUrl);try{await navigator.clipboard.writeText(d.shareUrl);}catch{}}
+    catch(e:any){window.alert(e?.message||'Unable to create buyer link.');}finally{setInviteLoading(null);}
+  };
 
   const totalTokens = asNumber(allocation.totalTokensPurchased);
 
@@ -111,12 +124,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   const remainingExpectedUsdt = Math.max(0, totalExpectedFifoIncome - totalRealizedUsdt);
 
   // Effective Queue (Live DB queue or benchmark queue)
-  const effectiveQueue = useMemo(() => {
-    if (sellQueue && sellQueue.length > 0) {
-      return sellQueue;
-    }
-    return DEFAULT_DEMO_QUEUE;
-  }, [sellQueue]);
+  const effectiveQueue = useMemo(() => sellQueue || [], [sellQueue]);
 
   // Find user's exact active FIFO queue entries and queue position
   const myQueueEntries = useMemo(() => {
@@ -125,19 +133,19 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
       ...entry,
       globalPosition: index + 1,
     })).filter((entry) => {
-      if (!normalizedUser) return entry.userId.toLowerCase().includes('0x71c8') || entry.userId.toLowerCase().includes('me');
+      if (!normalizedUser) return false;
       return entry.userId.toLowerCase() === normalizedUser || entry.userId.toLowerCase().includes(normalizedUser.slice(0, 6));
     });
   }, [effectiveQueue, walletAddress]);
 
   // Primary active FIFO order for this user
   const primaryEntry = myQueueEntries[0];
-  const userFifoNumber = primaryEntry?.globalPosition ?? 1;
+  const userFifoNumber = primaryEntry?.globalPosition ?? 0;
   const ordersAhead = Math.max(0, userFifoNumber - 1);
 
   const displayWallet = walletAddress
     ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
-    : '0x71c8...a89F';
+    : 'Not connected';
 
   const copyWallet = () => {
     if (walletAddress) {
@@ -149,6 +157,8 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
 
   return (
     <div className="flex-1 min-w-0 p-3 sm:p-4 max-w-4xl mx-auto w-full">
+      {liveOrders.filter(o=>[2,3,4,5].includes(Number(o.phaseNumber))&&['open','partially_filled'].includes(String(o.status))&&Number(o.remainingTokens)>0).length>0&&(<div className="mb-4 rounded-3xl border border-emerald-400/30 bg-gradient-to-br from-[#0c241d] via-[#101c24] to-[#0a1118] shadow-xl p-4 sm:p-5"><div className="flex items-center justify-between gap-3 mb-3"><div><div className="text-sm font-black uppercase tracking-wider text-emerald-300 font-rajdhani">Direct Buyer Match</div><div className="text-[10px] text-emerald-100/70 font-mono-crypto mt-1">Bring a real buyer in your phase. Their 20% buyer-share is routed to your order before normal FIFO.</div></div><span className="px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-[9px] text-emerald-300 font-bold">PRIORITY</span></div><div className="space-y-2">{liveOrders.filter(o=>[2,3,4,5].includes(Number(o.phaseNumber))&&['open','partially_filled'].includes(String(o.status))&&Number(o.remainingTokens)>0).slice(0,5).map(o=><div key={o.id} className="rounded-2xl border border-emerald-400/15 bg-black/20 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div className="text-xs"><div className="font-bold text-slate-100">Phase {o.phaseNumber} · Order #{o.id}</div><div className="text-[10px] text-slate-400 mt-1">Remaining: <strong className="text-emerald-300">{Number(o.remainingTokens).toLocaleString()} NXBC</strong> · Rate: ${Number(o.tokenPrice).toFixed(4)}</div></div><button type="button" disabled={inviteLoading===o.id} onClick={()=>createDirectInvite(Number(o.id))} className="px-3 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-[10px] font-bold uppercase tracking-wider disabled:opacity-50">{inviteLoading===o.id?'Creating…':'Create Buyer Link'}</button></div>)}</div>{inviteUrl&&<div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-[10px] text-amber-100 break-all"><strong>Buyer Link (copied):</strong> {inviteUrl}</div>}</div>)}
+
       {/* SINGLE UNIFIED MASTER BOX */}
       <div className="rounded-3xl border border-amber-500/30 bg-gradient-to-br from-[#1b0a33] via-[#120724] to-[#0a0316] shadow-2xl p-4 sm:p-6 space-y-5 relative overflow-hidden">
         {/* Glow ambient background effects */}
