@@ -963,6 +963,109 @@ export default function App() {
     syncConfigsToServer({ matrixConfig: newMatrix });
   };
 
+  const handleUpdateSellQueue = async (newQueue: QueueEntry[]) => {
+    const rateMap: Record<number, number> = {
+      2: 0.10,
+      3: 1.00,
+      4: 10.00,
+      5: 100.00,
+    };
+    phases.forEach((p) => {
+      if (p.phaseNumber && p.rate) {
+        rateMap[p.phaseNumber] = p.rate;
+      }
+    });
+
+    // Sync fulfillment to PostgreSQL DB for the connected user
+    if (walletAddress) {
+      for (let i = 0; i < newQueue.length; i++) {
+        const oldEntry = sellQueue[i];
+        const newEntry = newQueue[i];
+        if (newEntry && oldEntry && newEntry.tokensSold > oldEntry.tokensSold) {
+          const newlySold = newEntry.tokensSold - oldEntry.tokensSold;
+          const phasePrice = rateMap[newEntry.phaseNumber] || 0.10;
+          const grossUsdt = newlySold * phasePrice;
+          try {
+            await fetch('/api/wallet/token-sell-ledger/record', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                walletAddress: walletAddress,
+                phaseIndex: newEntry.phaseNumber,
+                phaseName: `Phase ${newEntry.phaseNumber}`,
+                tokenPrice: phasePrice,
+                tokensSold: newlySold,
+                grossUsdt: grossUsdt
+              })
+            });
+          } catch (e) {
+            console.error("DB Sync Error:", e);
+          }
+        }
+      }
+    }
+
+    try {
+      if (typeof window !== 'undefined') {
+        const adminToken = localStorage.getItem('nxbc_admin_token');
+        if (adminToken) {
+          await fetch('/api/admin/sellqueue/reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
+            body: JSON.stringify({ orderIds: newQueue.map((q) => Number(q.id)) })
+          });
+        }
+      }
+    } catch (e) { console.error('Queue reorder persistence error:', e); }
+    setSellQueue(newQueue);
+    if (typeof window !== 'undefined') localStorage.setItem('nxbc_sell_queue', JSON.stringify(newQueue));
+
+    // Compute total fulfilled USDT based on phase rates
+    let totalEarnedUsdt = 0;
+    let p2Sold = 0;
+    let p3Sold = 0;
+    let p4Sold = 0;
+    let p5Sold = 0;
+
+    newQueue.forEach((entry) => {
+      const sold = entry.tokensSold || 0;
+      const rate = rateMap[entry.phaseNumber] || 0.10;
+      totalEarnedUsdt += sold * rate;
+
+      if (entry.phaseNumber === 2) p2Sold += sold;
+      if (entry.phaseNumber === 3) p3Sold += sold;
+      if (entry.phaseNumber === 4) p4Sold += sold;
+      if (entry.phaseNumber === 5) p5Sold += sold;
+    });
+
+    if (totalEarnedUsdt > 0) {
+      setUserEarnings((prev) => {
+        const updated = {
+          ...prev,
+          availableUsdt: Math.max(prev.availableUsdt, totalEarnedUsdt - (prev.withdrawnUsdt || 0)),
+        };
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('nxbc_user_earnings', JSON.stringify(updated));
+        }
+        return updated;
+      });
+
+      setAllocation((prev) => {
+        const updated = {
+          ...prev,
+          p2Tokens: prev.p2Tokens ? { ...prev.p2Tokens, sold: p2Sold } : undefined,
+          p3Tokens: prev.p3Tokens ? { ...prev.p3Tokens, sold: p3Sold } : undefined,
+          p4Tokens: prev.p4Tokens ? { ...prev.p4Tokens, sold: p4Sold } : undefined,
+          p5Tokens: prev.p5Tokens ? { ...prev.p5Tokens, sold: p5Sold } : undefined,
+        };
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('nxbc_user_allocation', JSON.stringify(updated));
+        }
+        return updated;
+      });
+    }
+  };
+
   // Helper to easily simulate 100% phase completion for sequential demo
   
   const handleSimulateExternalBuy = (amount: number) => {
@@ -1366,108 +1469,7 @@ export default function App() {
         onUpdateRankRewards={handleUpdateRankRewards}
         onUpdateSystemConfig={handleUpdateSystemConfig}
         onUpdateMatrixConfig={handleUpdateMatrixConfig}
-        onUpdateSellQueue={async (newQueue) => {
-          const rateMap: Record<number, number> = {
-            2: 0.10,
-            3: 1.00,
-            4: 10.00,
-            5: 100.00,
-          };
-          phases.forEach((p) => {
-            if (p.phaseNumber && p.rate) {
-              rateMap[p.phaseNumber] = p.rate;
-            }
-          });
-
-          // Sync fulfillment to PostgreSQL DB for the connected user
-          if (walletAddress) {
-            for (let i = 0; i < newQueue.length; i++) {
-              const oldEntry = sellQueue[i];
-              const newEntry = newQueue[i];
-              if (newEntry && oldEntry && newEntry.tokensSold > oldEntry.tokensSold) {
-                const newlySold = newEntry.tokensSold - oldEntry.tokensSold;
-                const phasePrice = rateMap[newEntry.phaseNumber] || 0.10;
-                const grossUsdt = newlySold * phasePrice;
-                try {
-                  await fetch('/api/wallet/token-sell-ledger/record', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      walletAddress: walletAddress,
-                      phaseIndex: newEntry.phaseNumber,
-                      phaseName: `Phase ${newEntry.phaseNumber}`,
-                      tokenPrice: phasePrice,
-                      tokensSold: newlySold,
-                      grossUsdt: grossUsdt
-                    })
-                  });
-                } catch (e) {
-                  console.error("DB Sync Error:", e);
-                }
-              }
-            }
-          }
-
-          try {
-            if (typeof window !== 'undefined') {
-              const adminToken = localStorage.getItem('nxbc_admin_token');
-              if (adminToken) {
-                await fetch('/api/admin/sellqueue/reorder', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'x-admin-token': adminToken },
-                  body: JSON.stringify({ orderIds: newQueue.map((q) => Number(q.id)) })
-                });
-              }
-            }
-          } catch (e) { console.error('Queue reorder persistence error:', e); }
-          setSellQueue(newQueue);
-          if (typeof window !== 'undefined') localStorage.setItem('nxbc_sell_queue', JSON.stringify(newQueue));
-
-          // Compute total fulfilled USDT based on phase rates
-          let totalEarnedUsdt = 0;
-          let p2Sold = 0;
-          let p3Sold = 0;
-          let p4Sold = 0;
-          let p5Sold = 0;
-
-          newQueue.forEach((entry) => {
-            const sold = entry.tokensSold || 0;
-            const rate = rateMap[entry.phaseNumber] || 0.10;
-            totalEarnedUsdt += sold * rate;
-
-            if (entry.phaseNumber === 2) p2Sold += sold;
-            if (entry.phaseNumber === 3) p3Sold += sold;
-            if (entry.phaseNumber === 4) p4Sold += sold;
-            if (entry.phaseNumber === 5) p5Sold += sold;
-          });
-
-          if (totalEarnedUsdt > 0) {
-            setUserEarnings((prev) => {
-              const updated = {
-                ...prev,
-                availableUsdt: Math.max(prev.availableUsdt, totalEarnedUsdt - (prev.withdrawnUsdt || 0)),
-              };
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('nxbc_user_earnings', JSON.stringify(updated));
-              }
-              return updated;
-            });
-
-            setAllocation((prev) => {
-              const updated = {
-                ...prev,
-                p2Tokens: prev.p2Tokens ? { ...prev.p2Tokens, sold: p2Sold } : undefined,
-                p3Tokens: prev.p3Tokens ? { ...prev.p3Tokens, sold: p3Sold } : undefined,
-                p4Tokens: prev.p4Tokens ? { ...prev.p4Tokens, sold: p4Sold } : undefined,
-                p5Tokens: prev.p5Tokens ? { ...prev.p5Tokens, sold: p5Sold } : undefined,
-              };
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('nxbc_user_allocation', JSON.stringify(updated));
-              }
-              return updated;
-            });
-          }
-        }}
+        onUpdateSellQueue={handleUpdateSellQueue}
         onResetToDefaults={handleResetToDefaults}
         onExitAdmin={() => {
           setShowSecretAdminPage(false);
@@ -1495,15 +1497,18 @@ export default function App() {
       {/* Main Foreground Container */}
       <div className="relative z-10 w-full max-w-7xl mx-auto px-1 sm:px-4 py-2 sm:py-6 flex flex-col min-h-screen">
         
-        {/* Top Header Bar */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 mb-3 sm:mb-4 border-b border-purple-500/20 bg-[#0e0720]/80 backdrop-blur-md px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl border">
-          <div className="flex items-center justify-between w-full">
-            <div>
+        {/* Dynamic View Rendering: Single Full Mobile Screen (Default) OR Trio Multi-Screen Grid */}
+        {viewMode === 'single' ? (
+          /* PURE FULL-WIDTH MOBILE SCREEN APPLICATION INTERFACE MATCHING SCREENSHOT */
+          <div className="flex-1 flex flex-col w-full max-w-xl mx-auto bg-gradient-to-b from-[#110726] via-[#090317] to-[#0d051e] rounded-2xl sm:rounded-[32px] border border-amber-500/25 shadow-[0_15px_60px_rgba(0,0,0,0.8)] overflow-hidden relative my-0 sm:my-2">
+            
+            {/* Native Mobile App Header Card matching screenshot */}
+            <div className="p-4 sm:p-5 border-b border-purple-900/40 bg-[#0e0724]/90">
               <div className="flex items-center gap-2">
                 <h1 className="text-base sm:text-lg font-black tracking-wider text-slate-100 font-cinzel">
                   {systemConfig.tokenSymbol}<span className="text-amber-400"> COIN</span>
                 </h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 border border-amber-400/50 text-amber-300 font-mono-crypto">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 border border-amber-400/50 text-amber-300 font-mono-crypto">
                   PRESALE PLATFORM
                 </span>
                 {systemConfig.presalePaused && (
@@ -1512,26 +1517,16 @@ export default function App() {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-purple-200/90 mt-1.5 max-w-2xl leading-relaxed">
+              <p className="text-xs text-purple-200/90 mt-2 leading-relaxed">
                 NXBC is a next-generation utility coin designed for secure, high-yield P2P trading. By participating in this exclusive presale, early adopters secure their allocation at the lowest entry prices. This provides massive growth potential, automated instant payouts via our FIFO smart contract, and guaranteed liquidity before the official Decentralized Exchange (DEX) launch.
               </p>
             </div>
-          </div>
-        </header>
-
-        {/* Dynamic View Rendering: Single Full Mobile Screen (Default) OR Trio Multi-Screen Grid */}
-        {viewMode === 'single' ? (
-          /* PURE FULL-WIDTH MOBILE SCREEN APPLICATION INTERFACE */
-          <div className="flex-1 flex flex-col w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto bg-gradient-to-b from-[#110726] via-[#090317] to-[#0d051e] rounded-2xl sm:rounded-[32px] border border-amber-500/25 shadow-[0_15px_60px_rgba(0,0,0,0.8)] overflow-hidden relative my-0 sm:my-2">
-            
-            {/* Native Mobile App Header Bar Removed as per user request */}
-
 
             {/* Quick Screen Switcher Tabs */}
             <div className="px-3 pt-2.5 pb-1 flex items-center gap-1 overflow-x-auto no-scrollbar bg-[#090317]/80 border-b border-purple-500/10 select-none">
               {[
                 { id: 'home', label: 'Home (Acquisition)' },
-                { id: 'assets', label: 'Assets (6-Box Grid)' },
+                { id: 'assets', label: 'Assets & FIFO Queue' },
                 { id: 'team', label: '10-Level Team' },
                 { id: 'withdraw', label: 'Withdraw' },
                 { id: 'mine', label: 'Account' },
@@ -1558,13 +1553,13 @@ export default function App() {
                   phases={phases}
                   onUpdateAllocation={setAllocation}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
-                  
                   onOpenWalletModal={() => setWalletModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
                   onSimulateFillPhase={handleSimulateFillPhase}
                   onSimulateExternalBuy={handleSimulateExternalBuy}
                   onResetPhases={handleResetPhases}
+                  onViewFIFO={() => setActiveSingleScreen('assets')}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
                   totalEarningUsdt={totalEarningUsdt}
@@ -1576,11 +1571,17 @@ export default function App() {
                 <ScreenTwoAssets
                   userEarnings={userEarnings}
                   allocation={allocation}
+                  phases={phases}
+                  sellQueue={sellQueue}
+                  onUpdateSellQueue={handleUpdateSellQueue}
+                  onSimulateExternalBuy={handleSimulateExternalBuy}
+                  onOpenBuyModal={() => setBuyModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
                   levelIncomeUsd={levelIncomeUsd}
                   matrixIncomeUsd={matrixIncomeUsd}
                   walletAddress={walletAddress}
+                  walletConnected={walletConnected}
                 />
               )}
 
@@ -1707,11 +1708,17 @@ export default function App() {
                 <ScreenTwoAssets
                   userEarnings={userEarnings}
                   allocation={allocation}
+                  phases={phases}
+                  sellQueue={sellQueue}
+                  onUpdateSellQueue={handleUpdateSellQueue}
+                  onSimulateExternalBuy={handleSimulateExternalBuy}
+                  onOpenBuyModal={() => setBuyModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
                   levelIncomeUsd={levelIncomeUsd}
                   matrixIncomeUsd={matrixIncomeUsd}
                   walletAddress={walletAddress}
+                  walletConnected={walletConnected}
                 />
                 <BottomNavBar
                   idPrefix="s2-nav"
