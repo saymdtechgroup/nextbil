@@ -1825,7 +1825,7 @@ async function startServer() {
       })
       .from(sellOrders)
       .leftJoin(users, eq(sellOrders.userId, users.id))
-      .where(eq(sellOrders.status, 'open'))
+      .where(inArray(sellOrders.status, ['open', 'partially_filled']))
       .orderBy(asc(sellOrders.createdAt), asc(sellOrders.priority));
       res.json({ orders });
     } catch (error: any) {
