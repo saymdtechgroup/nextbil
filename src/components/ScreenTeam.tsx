@@ -185,7 +185,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
   return (
     <div className="nxbc-screen flex-1 p-3.5 sm:p-4 space-y-4 max-w-4xl mx-auto w-full">
       {/* 1. Header Bar: Community Network & Invite */}
-      <div className="flex items-center justify-between pb-2 border-b border-purple-500/15">
+      <div className="flex items-center justify-between pb-2 border-b border-cyan-500/15">
         <div className="flex items-center gap-2.5">
           <div className="p-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-400/30">
             <Users className="w-5 h-5" />
@@ -194,7 +194,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
             <h1 className="text-sm sm:text-base font-bold text-slate-100 font-rajdhani uppercase tracking-wider">
               Community & Team Rewards
             </h1>
-            <p className="text-[10px] text-purple-300/80 font-mono-crypto">
+            <p className="text-[10px] text-cyan-300/80 font-mono-crypto">
               Direct: {directSponsorPercent}% • 10-Tier Unilevel: {totalTierPercent.toFixed(1)}% • 2x2 Matrix & Leadership
             </p>
           </div>
@@ -233,7 +233,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                   {isMlmQualified ? '👑 Active Leader ($100+ Qualified)' : 'Token Investor (< $100)'}
                 </span>
               </div>
-              <p className="text-[10px] text-purple-200/90 font-mono-crypto mt-0.5">
+              <p className="text-[10px] text-cyan-200/90 font-mono-crypto mt-0.5">
                 {isMlmQualified
                   ? `Purchased: $${totalInvestedUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD • Full 10-level Unilevel & Matrix earnings active`
                   : `Purchased: $${totalInvestedUsd.toFixed(2)} USD • Total $${minMlmQualifyUsd} cumulative purchases required to unlock MLM earnings`}
@@ -272,48 +272,48 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
 
       {/* 3. Overall Income & Community Stats Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="p-3 rounded-2xl bg-[#110722] border border-purple-500/20 text-center">
-          <span className="text-[9px] uppercase font-bold text-purple-300/80 block font-mono-crypto">Unilevel Team</span>
+        <div className="p-3 rounded-2xl bg-[#110722] border border-cyan-500/20 text-center">
+          <span className="text-[9px] uppercase font-bold text-cyan-300/80 block font-mono-crypto">Unilevel Team</span>
           <span className="text-xl sm:text-2xl font-black font-mono-crypto gold-gradient-text block mt-0.5">
             {totalUnilevelMembers}
           </span>
           <span className="text-[8px] text-amber-300/70 font-mono-crypto">Direct: {teamData?.totalDirectMembers ?? 0}</span>
         </div>
 
-        <div className="p-3 rounded-2xl bg-[#110722] border border-purple-500/20 text-center">
-          <span className="text-[9px] uppercase font-bold text-purple-300/80 block font-mono-crypto">Unilevel Income</span>
+        <div className="p-3 rounded-2xl bg-[#110722] border border-cyan-500/20 text-center">
+          <span className="text-[9px] uppercase font-bold text-cyan-300/80 block font-mono-crypto">Unilevel Income</span>
           <span className="text-xl sm:text-2xl font-black font-mono-crypto text-emerald-400 block mt-0.5">
             ${levelIncomeUsd.toFixed(2)}
           </span>
           <span className="text-[8px] text-emerald-300/70 font-mono-crypto">10-Tier Generations</span>
         </div>
 
-        <div className="p-3 rounded-2xl bg-[#110722] border border-fuchsia-500/20 text-center">
-          <span className="text-[9px] uppercase font-bold text-fuchsia-300/80 block font-mono-crypto">Matrix Team</span>
-          <span className="text-xl sm:text-2xl font-black font-mono-crypto text-fuchsia-300 block mt-0.5">
+        <div className="p-3 rounded-2xl bg-[#110722] border border-cyan-500/20 text-center">
+          <span className="text-[9px] uppercase font-bold text-cyan-300/80 block font-mono-crypto">Matrix Team</span>
+          <span className="text-xl sm:text-2xl font-black font-mono-crypto text-cyan-300 block mt-0.5">
             {totalMatrixMembers}
           </span>
-          <span className="text-[8px] text-fuchsia-300/70 font-mono-crypto">2x2 Spillover</span>
+          <span className="text-[8px] text-cyan-300/70 font-mono-crypto">2x2 Spillover</span>
         </div>
 
-        <div className="p-3 rounded-2xl bg-[#110722] border border-fuchsia-500/20 text-center">
-          <span className="text-[9px] uppercase font-bold text-fuchsia-300/80 block font-mono-crypto">Matrix Income</span>
-          <span className="text-xl sm:text-2xl font-black font-mono-crypto text-fuchsia-400 block mt-0.5">
+        <div className="p-3 rounded-2xl bg-[#110722] border border-cyan-500/20 text-center">
+          <span className="text-[9px] uppercase font-bold text-cyan-300/80 block font-mono-crypto">Matrix Income</span>
+          <span className="text-xl sm:text-2xl font-black font-mono-crypto text-cyan-400 block mt-0.5">
             ${Number(teamData?.totalMatrixIncome || 0).toFixed(2)}
           </span>
-          <span className="text-[8px] text-fuchsia-300/70 font-mono-crypto">Independent Pool</span>
+          <span className="text-[8px] text-cyan-300/70 font-mono-crypto">Independent Pool</span>
         </div>
       </div>
 
       {/* 4. EXPLICIT 3-TAB SELECTOR (Clears all confusion between Unilevel, Matrix, and Leadership Funds) */}
       <div className="space-y-3">
-        <div className="flex rounded-2xl bg-[#0d041c] p-1.5 border border-purple-500/30 gap-1.5 shadow-inner">
+        <div className="flex rounded-2xl bg-[#0d041c] p-1.5 border border-cyan-500/30 gap-1.5 shadow-inner">
           <button
             onClick={() => setIncomeTab('unilevel')}
             className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-bold font-rajdhani uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
               incomeTab === 'unilevel'
                 ? 'bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 shadow-md font-black ring-2 ring-amber-400/50'
-                : 'text-purple-300 hover:text-white hover:bg-purple-900/30'
+                : 'text-cyan-300 hover:text-white hover:bg-cyan-900/30'
             }`}
           >
             <Users className="w-3.5 h-3.5 shrink-0" />
@@ -324,8 +324,8 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
             onClick={() => setIncomeTab('matrix')}
             className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-bold font-rajdhani uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
               incomeTab === 'matrix'
-                ? 'bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white shadow-md font-black ring-2 ring-fuchsia-400/50'
-                : 'text-purple-300 hover:text-white hover:bg-purple-900/30'
+                ? 'bg-gradient-to-r from-cyan-600 to-cyan-600 text-white shadow-md font-black ring-2 ring-cyan-400/50'
+                : 'text-cyan-300 hover:text-white hover:bg-cyan-900/30'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5 shrink-0" />
@@ -337,7 +337,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
             className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-bold font-rajdhani uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
               incomeTab === 'leadership'
                 ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-slate-950 shadow-md font-black ring-2 ring-amber-400/50'
-                : 'text-purple-300 hover:text-white hover:bg-purple-900/30'
+                : 'text-cyan-300 hover:text-white hover:bg-cyan-900/30'
             }`}
           >
             <Crown className="w-3.5 h-3.5 shrink-0" />
@@ -347,9 +347,9 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
 
         {/* ----------------- TAB 1: UNILEVEL REFERRAL INCOME ----------------- */}
         {incomeTab === 'unilevel' && (
-          <div className="rounded-3xl border border-amber-500/30 bg-gradient-to-br from-[#1a0c30] via-[#120722] to-[#0a0314] p-4 sm:p-5 space-y-4 shadow-xl">
+          <div className="rounded-3xl border border-amber-500/30 bg-gradient-to-br from-[#071426] via-[#040d18] to-[#0a0314] p-4 sm:p-5 space-y-4 shadow-xl">
             {/* Tab Explanation Banner */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-purple-500/20">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-cyan-500/20">
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-sm sm:text-base font-black text-slate-100 font-rajdhani uppercase tracking-wider">
@@ -359,7 +359,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                     Direct & Downlines
                   </span>
                 </div>
-                <p className="text-[11px] text-purple-200/80 font-mono-crypto mt-1">
+                <p className="text-[11px] text-cyan-200/80 font-mono-crypto mt-1">
                   Earned from direct referral token purchases and up to 10 generations of indirect team network volume.
                 </p>
               </div>
@@ -376,7 +376,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                 </button>
                 <button
                   onClick={() => setIsTreeModalOpen(true)}
-                  className="px-3 py-1.5 rounded-xl bg-purple-900/60 hover:bg-purple-800/80 border border-purple-500/40 text-purple-200 font-mono-crypto text-xs font-bold flex items-center gap-1.5 transition-all"
+                  className="px-3 py-1.5 rounded-xl bg-cyan-900/60 hover:bg-cyan-800/80 border border-cyan-500/40 text-cyan-200 font-mono-crypto text-xs font-bold flex items-center gap-1.5 transition-all"
                 >
                   <GitFork className="w-3.5 h-3.5 text-amber-400" />
                   <span>View Tree</span>
@@ -391,16 +391,16 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
             </div>
 
             {/* Direct Sponsor Commission Highlight */}
-            <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-purple-900/40 to-[#100524] border border-amber-400/40 flex items-center justify-between">
+            <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-cyan-900/40 to-[#100524] border border-amber-400/40 flex items-center justify-between">
               <div>
-                <span className="text-[10px] uppercase text-purple-300 font-semibold font-rajdhani flex items-center gap-1">
+                <span className="text-[10px] uppercase text-cyan-300 font-semibold font-rajdhani flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-400" />
                   Direct Sponsor Bonus
                 </span>
                 <div className="text-base sm:text-lg font-black font-mono-crypto gold-gradient-text">
                   {directSponsorPercent}% Instant Commission
                 </div>
-                <span className="text-[10px] text-purple-300/80 font-mono-crypto">
+                <span className="text-[10px] text-cyan-300/80 font-mono-crypto">
                   Instant reward credited on every token purchase made by your directly invited members
                 </span>
               </div>
@@ -412,7 +412,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
             {/* 10-Generation Unilevel Breakdown Table */}
             <div className="space-y-2">
               <div className="flex items-center justify-between px-1">
-                <span className="text-xs font-bold uppercase tracking-wider text-purple-200 font-rajdhani">
+                <span className="text-xs font-bold uppercase tracking-wider text-cyan-200 font-rajdhani">
                   10-Generation Commission Ledger
                 </span>
                 <span className="text-[10px] text-amber-300 font-mono-crypto">
@@ -420,14 +420,14 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                 </span>
               </div>
 
-              <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1 divide-y divide-purple-500/10">
-                {teamLoading && <div className="p-4 text-xs text-purple-300 font-mono-crypto text-center">Loading team network data...</div>}
+              <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1 divide-y divide-cyan-500/10">
+                {teamLoading && <div className="p-4 text-xs text-cyan-300 font-mono-crypto text-center">Loading team network data...</div>}
                 {teamError && <div className="p-4 text-xs text-rose-300 font-mono-crypto text-center">{teamError}</div>}
                 {!teamLoading && !teamError && unilevelLevels.map((level) => (
                   <div key={`uni-${level.level}`} className="pt-2 pb-1 first:pt-0">
-                    <div className="p-2.5 rounded-xl bg-[#0e061d] border border-purple-500/15 hover:border-amber-400/40 transition-colors flex items-center justify-between text-xs">
+                    <div className="p-2.5 rounded-xl bg-[#0e061d] border border-cyan-500/15 hover:border-amber-400/40 transition-colors flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2.5">
-                        <span className="w-7 h-7 rounded-xl bg-purple-900/80 text-amber-300 font-mono-crypto font-bold text-xs flex items-center justify-center border border-purple-700 shrink-0">
+                        <span className="w-7 h-7 rounded-xl bg-cyan-900/80 text-amber-300 font-mono-crypto font-bold text-xs flex items-center justify-center border border-cyan-700 shrink-0">
                           L{level.level}
                         </span>
                         <div>
@@ -439,7 +439,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                               {level.commissionPercent}% Commission
                             </span>
                           </div>
-                          <span className="text-[10px] font-mono-crypto text-purple-400">
+                          <span className="text-[10px] font-mono-crypto text-cyan-400">
                             {level.members} member{level.members === 1 ? '' : 's'} registered &bull; ${level.income.toFixed(2)} USD earned
                           </span>
                         </div>
@@ -449,7 +449,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                         <span className="font-mono-crypto font-black text-emerald-400 block text-xs sm:text-sm">
                           +${level.income.toFixed(2)}
                         </span>
-                        <span className="text-[9px] font-mono-crypto text-purple-400">
+                        <span className="text-[9px] font-mono-crypto text-cyan-400">
                           {level.members} User{level.members === 1 ? '' : 's'}
                         </span>
                       </div>
@@ -457,15 +457,15 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
 
                     {/* Member address previews if available */}
                     {level.list.length > 0 && (
-                      <div className="mt-1 pl-9 pr-2 py-1 space-y-1 bg-purple-950/20 rounded-lg">
+                      <div className="mt-1 pl-9 pr-2 py-1 space-y-1 bg-cyan-950/20 rounded-lg">
                         {level.list.slice(0, 5).map((member: any) => (
-                          <div key={member.userId} className="flex items-center justify-between text-[9px] font-mono-crypto text-purple-300/80">
+                          <div key={member.userId} className="flex items-center justify-between text-[9px] font-mono-crypto text-cyan-300/80">
                             <span className="truncate">{String(member.walletAddress || '').slice(0, 6)}...{String(member.walletAddress || '').slice(-4)}</span>
                             <span className={member.status === 'active' ? 'text-emerald-400' : 'text-amber-300'}>{member.status}</span>
                           </div>
                         ))}
                         {level.list.length > 5 && (
-                          <div className="text-[8px] text-purple-400 font-mono-crypto">+{level.list.length - 5} more members</div>
+                          <div className="text-[8px] text-cyan-400 font-mono-crypto">+{level.list.length - 5} more members</div>
                         )}
                       </div>
                     )}
@@ -478,26 +478,26 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
 
         {/* ----------------- TAB 2: 2x2 AUTO-PLACEMENT MATRIX ----------------- */}
         {incomeTab === 'matrix' && (
-          <div className="rounded-3xl border border-fuchsia-500/30 bg-gradient-to-br from-[#1d0933] via-[#130624] to-[#0a0214] p-4 sm:p-5 space-y-4 shadow-xl">
+          <div className="rounded-3xl border border-cyan-500/30 bg-gradient-to-br from-[#1d0933] via-[#130624] to-[#0a0214] p-4 sm:p-5 space-y-4 shadow-xl">
             {/* Tab Explanation Banner */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-fuchsia-500/20">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-cyan-500/20">
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-sm sm:text-base font-black text-slate-100 font-rajdhani uppercase tracking-wider">
                     ⚡ 2x2 Auto-Placement Matrix (Separate Binary Pool)
                   </h2>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-400/40 font-mono-crypto">
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 font-mono-crypto">
                     Auto-Spillover
                   </span>
                 </div>
-                <p className="text-[11px] text-purple-200/80 font-mono-crypto mt-1">
+                <p className="text-[11px] text-cyan-200/80 font-mono-crypto mt-1">
                   Matrix rewards operate on an independent binary structure. Slots are filled automatically via community spillover and upline placement (left-to-right).
                 </p>
               </div>
 
               <button
                 onClick={onOpenMatrixModal}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-rajdhani uppercase tracking-wider text-xs font-bold flex items-center gap-2 shadow-md active:scale-95 transition-all self-end sm:self-auto shrink-0"
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-600 hover:from-cyan-500 hover:to-cyan-500 text-white font-rajdhani uppercase tracking-wider text-xs font-bold flex items-center gap-2 shadow-md active:scale-95 transition-all self-end sm:self-auto shrink-0"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Open Matrix Visualizer →</span>
@@ -505,16 +505,16 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
             </div>
 
             {/* Matrix Stats Card */}
-            <div className="p-3.5 rounded-2xl bg-fuchsia-950/40 border border-fuchsia-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="p-3.5 rounded-2xl bg-cyan-950/40 border border-cyan-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <span className="text-[10px] text-fuchsia-300/80 font-mono-crypto block uppercase">Total Matrix Team Slots</span>
-                <span className="text-2xl font-black font-mono-crypto text-fuchsia-300">{totalMatrixMembers} Members Filled</span>
-                <span className="text-[10px] text-purple-300/70 font-mono-crypto block mt-0.5">
+                <span className="text-[10px] text-cyan-300/80 font-mono-crypto block uppercase">Total Matrix Team Slots</span>
+                <span className="text-2xl font-black font-mono-crypto text-cyan-300">{totalMatrixMembers} Members Filled</span>
+                <span className="text-[10px] text-cyan-300/70 font-mono-crypto block mt-0.5">
                   Base placement reward distributed 10 levels up
                 </span>
               </div>
               <div className="text-left sm:text-right">
-                <span className="text-[10px] text-fuchsia-300/80 font-mono-crypto block uppercase">Lifetime Matrix Income</span>
+                <span className="text-[10px] text-cyan-300/80 font-mono-crypto block uppercase">Lifetime Matrix Income</span>
                 <span className="text-2xl font-black font-mono-crypto text-emerald-400">
                   ${Number(teamData?.totalMatrixIncome || 0).toFixed(2)} USD
                 </span>
@@ -523,7 +523,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
 
             {/* Matrix 10-Tier Placement Breakdown */}
             <div className="space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-fuchsia-200 font-rajdhani block px-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-cyan-200 font-rajdhani block px-1">
                 Matrix 10-Level Placement Ledger
               </span>
 
@@ -531,27 +531,27 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                 {matrixLevels.map((level) => (
                   <div
                     key={`mat-${level.level}`}
-                    className="p-2.5 rounded-xl bg-[#0f0520] border border-fuchsia-500/15 hover:border-fuchsia-400/40 transition-colors flex items-center justify-between text-xs"
+                    className="p-2.5 rounded-xl bg-[#0f0520] border border-cyan-500/15 hover:border-cyan-400/40 transition-colors flex items-center justify-between text-xs"
                   >
                     <div className="flex items-center gap-2.5">
-                      <span className="w-7 h-7 rounded-xl bg-fuchsia-900/60 text-fuchsia-200 font-mono-crypto font-bold text-xs flex items-center justify-center border border-fuchsia-700/60 shrink-0">
+                      <span className="w-7 h-7 rounded-xl bg-cyan-900/60 text-cyan-200 font-mono-crypto font-bold text-xs flex items-center justify-center border border-cyan-700/60 shrink-0">
                         M{level.level}
                       </span>
                       <div>
                         <span className="font-semibold text-slate-200 block font-rajdhani">
                           Matrix Placement Level {level.level}
                         </span>
-                        <span className="text-[10px] font-mono-crypto text-purple-400">
+                        <span className="text-[10px] font-mono-crypto text-cyan-400">
                           {level.members} slot{level.members === 1 ? '' : 's'} filled via auto-spillover
                         </span>
                       </div>
                     </div>
 
                     <div className="text-right">
-                      <span className="font-mono-crypto font-black text-fuchsia-300 block text-xs sm:text-sm">
+                      <span className="font-mono-crypto font-black text-cyan-300 block text-xs sm:text-sm">
                         ${level.income.toFixed(2)} USD
                       </span>
-                      <span className="text-[9px] font-mono-crypto text-purple-400">
+                      <span className="text-[9px] font-mono-crypto text-cyan-400">
                         {level.members} member{level.members === 1 ? '' : 's'}
                       </span>
                     </div>
@@ -576,7 +576,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                     Volume Based
                   </span>
                 </div>
-                <p className="text-[11px] text-purple-200/80 font-mono-crypto mt-1">
+                <p className="text-[11px] text-cyan-200/80 font-mono-crypto mt-1">
                   The 5 Major Leadership Funds and Monthly Salaries are unlocked through cumulative Direct and Team business volume milestones. Independent from generation commissions.
                 </p>
               </div>
@@ -617,22 +617,22 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                           ? `$${rank.monthlySalaryUsd}/Month Salary`
                           : `$${rank.oneTimeBonusUsd.toLocaleString()} USD Payout`}
                       </span>
-                      <span className="text-[9px] font-mono-crypto text-purple-300/70">
+                      <span className="text-[9px] font-mono-crypto text-cyan-300/70">
                         Pure USDT Reward
                       </span>
                     </div>
                   </div>
 
                   {/* Qualification Turnover Targets */}
-                  <div className="grid grid-cols-2 gap-2 text-[10px] bg-[#070310] p-2.5 rounded-xl border border-purple-500/15 font-mono-crypto">
+                  <div className="grid grid-cols-2 gap-2 text-[10px] bg-[#070310] p-2.5 rounded-xl border border-cyan-500/15 font-mono-crypto">
                     <div>
-                      <span className="text-purple-400 text-[8px] uppercase font-bold block">1. Direct Business Goal</span>
+                      <span className="text-cyan-400 text-[8px] uppercase font-bold block">1. Direct Business Goal</span>
                       <strong className="text-amber-300 text-xs block mt-0.5">
                         ${(rank.requiredDirectVolume || 0).toLocaleString()} USD
                       </strong>
                     </div>
                     <div>
-                      <span className="text-purple-400 text-[8px] uppercase font-bold block">2. Total Team Business Goal</span>
+                      <span className="text-cyan-400 text-[8px] uppercase font-bold block">2. Total Team Business Goal</span>
                       <strong className="text-emerald-400 text-xs block mt-0.5">
                         ${(rank.requiredTeamVolume || 0).toLocaleString()} USD
                       </strong>

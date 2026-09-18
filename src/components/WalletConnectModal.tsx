@@ -171,12 +171,12 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
-      <div className="w-full max-w-sm rounded-3xl bg-[#120824] border border-purple-500/30 p-5 shadow-[0_0_50px_rgba(217,70,239,0.25)] relative text-slate-100 max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-sm rounded-3xl bg-[#120824] border border-cyan-500/30 p-5 shadow-[0_0_50px_rgba(217,70,239,0.25)] relative text-slate-100 max-h-[90vh] overflow-y-auto">
         
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-1.5 rounded-full bg-purple-950 text-purple-300 hover:text-white border border-purple-800/60 transition-colors"
+          className="absolute top-4 right-4 p-1.5 rounded-full bg-cyan-950 text-cyan-300 hover:text-white border border-cyan-800/60 transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
@@ -186,19 +186,19 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
             <Wallet className="w-4 h-4 text-amber-400" />
             Connect BEP-20 Wallet
           </h2>
-          <p className="text-xs text-purple-300/80 font-mono-crypto">
+          <p className="text-xs text-cyan-300/80 font-mono-crypto">
             BNB Smart Chain (BSC) direct connection for Presale & Commissions.
           </p>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex bg-purple-950/60 p-1 rounded-xl border border-purple-500/20 mb-3.5 text-xs font-rajdhani font-bold">
+        <div className="flex bg-cyan-950/60 p-1 rounded-xl border border-cyan-500/20 mb-3.5 text-xs font-rajdhani font-bold">
           <button
             onClick={() => setActiveTab('web3')}
             className={`flex-1 py-1.5 rounded-lg transition-all ${
               activeTab === 'web3'
                 ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black shadow-sm'
-                : 'text-purple-300 hover:text-white'
+                : 'text-cyan-300 hover:text-white'
             }`}
           >
             Web3 / DApp
@@ -208,7 +208,7 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
             className={`flex-1 py-1.5 rounded-lg transition-all ${
               activeTab === 'deeplink'
                 ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black shadow-sm'
-                : 'text-purple-300 hover:text-white'
+                : 'text-cyan-300 hover:text-white'
             }`}
           >
             Mobile App
@@ -218,7 +218,7 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
             className={`flex-1 py-1.5 rounded-lg transition-all ${
               activeTab === 'manual'
                 ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-black shadow-sm'
-                : 'text-purple-300 hover:text-white'
+                : 'text-cyan-300 hover:text-white'
             }`}
           >
             Paste Address
@@ -292,18 +292,18 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
                   <span className="text-xs font-bold text-slate-100 font-rajdhani block">
                     TokenPocket
                   </span>
-                  <span className="text-[9px] font-mono-crypto text-purple-300/80">
+                  <span className="text-[9px] font-mono-crypto text-cyan-300/80">
                     Chrome Extension / DApp Browser
                   </span>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-purple-300 group-hover:text-blue-300 group-hover:translate-x-0.5 transition-all" />
+              <ArrowRight className="w-4 h-4 text-cyan-300 group-hover:text-blue-300 group-hover:translate-x-0.5 transition-all" />
             </button>
 
             {/* SafePal */}
             <button
               onClick={() => handleInjectedConnect('SafePal')}
-              className="w-full p-3 rounded-2xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
+              className="w-full p-3 rounded-2xl bg-gradient-to-r from-indigo-500/20 to-cyan-500/20 border border-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
             >
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-[#4b35ef]/20 border border-[#4b35ef]/40 p-1 flex items-center justify-center overflow-hidden">
@@ -321,12 +321,12 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
                   <span className="text-xs font-bold text-slate-100 font-rajdhani block">
                     SafePal
                   </span>
-                  <span className="text-[9px] font-mono-crypto text-purple-300/80">
+                  <span className="text-[9px] font-mono-crypto text-cyan-300/80">
                     Hardware & Mobile Web3 DApp
                   </span>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-purple-300 group-hover:text-indigo-300 group-hover:translate-x-0.5 transition-all" />
+              <ArrowRight className="w-4 h-4 text-cyan-300 group-hover:text-indigo-300 group-hover:translate-x-0.5 transition-all" />
             </button>
 
             {/* MetaMask */}
@@ -350,12 +350,12 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
                   <span className="text-xs font-bold text-slate-100 font-rajdhani block">
                     MetaMask
                   </span>
-                  <span className="text-[9px] font-mono-crypto text-purple-300/80">
+                  <span className="text-[9px] font-mono-crypto text-cyan-300/80">
                     EVM / BSC Native Browser
                   </span>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-purple-300 group-hover:text-amber-300 group-hover:translate-x-0.5 transition-all" />
+              <ArrowRight className="w-4 h-4 text-cyan-300 group-hover:text-amber-300 group-hover:translate-x-0.5 transition-all" />
             </button>
           </div>
         )}
@@ -363,7 +363,7 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
         {/* TAB 2: MOBILE DEEP LINKS (Direct mobile wallet dApp browser launcher) */}
         {activeTab === 'deeplink' && (
           <div className="space-y-2.5 mb-4">
-            <div className="p-2.5 rounded-xl bg-purple-950/80 border border-purple-500/30 text-[11px] text-purple-200 leading-snug">
+            <div className="p-2.5 rounded-xl bg-cyan-950/80 border border-cyan-500/30 text-[11px] text-cyan-200 leading-snug">
               📱 <strong>Mobile Browser User:</strong> If you are using a mobile browser, tap the button below to open this dApp directly inside your wallet application.
             </div>
 
@@ -399,7 +399,7 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
             {/* Open in SafePal App */}
             <button
               onClick={() => openDAppDeepLink('safepal')}
-              className="w-full p-3 rounded-2xl bg-gradient-to-r from-indigo-600/30 to-purple-600/30 border border-indigo-400 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
+              className="w-full p-3 rounded-2xl bg-gradient-to-r from-indigo-600/30 to-cyan-600/30 border border-indigo-400 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-between text-left group"
             >
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-[#4b35ef]/20 border border-[#4b35ef]/40 p-1 flex items-center justify-center overflow-hidden">
@@ -459,12 +459,12 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
         {/* TAB 3: MANUAL BEP-20 ADDRESS (Direct paste) */}
         {activeTab === 'manual' && (
           <form onSubmit={handleManualSubmit} className="space-y-3 mb-4">
-            <div className="p-2.5 rounded-xl bg-purple-950/80 border border-purple-500/30 text-[11px] text-purple-200 leading-snug">
+            <div className="p-2.5 rounded-xl bg-cyan-950/80 border border-cyan-500/30 text-[11px] text-cyan-200 leading-snug">
               ✍️ <strong>Instant Address Connection:</strong> Copy your BEP-20 (BNB / USDT) deposit address from Trust Wallet or MetaMask and paste it below.
             </div>
 
             <div>
-              <label className="block text-[10px] font-mono-crypto text-purple-300 mb-1 uppercase tracking-wider">
+              <label className="block text-[10px] font-mono-crypto text-cyan-300 mb-1 uppercase tracking-wider">
                 Your BEP-20 BSC Address (0x...)
               </label>
               <input
@@ -472,7 +472,7 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
                 value={manualAddress}
                 onChange={(e) => setManualAddress(e.target.value)}
                 placeholder="0xF1F82363Dfb5a5B52BE94c6C..."
-                className="w-full bg-[#0a0414] border border-purple-500/40 rounded-xl px-3 py-2.5 text-xs text-amber-300 font-mono-crypto focus:outline-none focus:border-amber-400"
+                className="w-full bg-[#0a0414] border border-cyan-500/40 rounded-xl px-3 py-2.5 text-xs text-amber-300 font-mono-crypto focus:outline-none focus:border-amber-400"
               />
             </div>
 
@@ -486,9 +486,9 @@ export const WalletConnectModal: React.FC<WalletConnectModalProps> = ({
           </form>
         )}
 
-        <div className="p-2.5 rounded-xl bg-purple-950/60 border border-purple-500/20 flex items-center gap-2 text-[10px] text-purple-300">
+        <div className="p-2.5 rounded-xl bg-cyan-950/60 border border-cyan-500/20 flex items-center gap-2 text-[10px] text-cyan-300">
           <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>Non-custodial EVM / BSC protocol audited by CertiK.</span>
+          <span>Non-custodial EVM / BSC connection on BSC Mainnet.</span>
         </div>
       </div>
     </div>

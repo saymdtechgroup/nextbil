@@ -7,7 +7,6 @@ interface ScreenMineProps {
   walletAddress: string;
   walletConnected: boolean;
   onToggleWallet: () => void;
-  onOpenAdmin?: () => void;
   onResetAllData?: () => void;
   totalInvestedUsd?: number;
   minMlmQualifyUsd?: number;
@@ -17,7 +16,6 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
   walletAddress,
   walletConnected,
   onToggleWallet,
-  onOpenAdmin,
   onResetAllData,
   totalInvestedUsd = 0,
   minMlmQualifyUsd = 100,
@@ -159,10 +157,10 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
             <div>
               <span className="font-semibold text-slate-100 block">Smart Contract Security</span>
-              <span className="text-[9px] font-mono-crypto text-purple-400">CertiK Audited Multi-Sig</span>
+              <span className="text-[9px] font-mono-crypto text-purple-400">Verified Platform Security</span>
             </div>
           </div>
-          <span className="text-[10px] text-emerald-400 font-mono-crypto font-bold">100% Passed</span>
+          <span className="text-[10px] text-emerald-400 font-mono-crypto font-bold">Active</span>
         </div>
 
         <div className="p-2.5 rounded-xl bg-[#110722] border border-purple-500/20 flex items-center justify-between text-xs">

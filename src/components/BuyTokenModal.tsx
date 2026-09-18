@@ -518,7 +518,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-purple-400 hover:text-amber-400 transition-colors p-1 bg-[#1a0f35] rounded-full z-10"
+          className="absolute top-4 right-4 text-cyan-400 hover:text-amber-400 transition-colors p-1 bg-[#1a0f35] rounded-full z-10"
         >
           <X className="w-5 h-5" />
         </button>
@@ -539,32 +539,20 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                   <span>Direct Web3 Wallet Delivery</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleAddNxbcToWallet}
-                  className="py-0.5 px-2 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-300 font-bold text-[9px] flex items-center gap-1 cursor-pointer transition-all"
-                >
-                  <span>+ Add NXBC to SafePal</span>
-                </button>
               </div>
               <p className="text-slate-200">
                 <strong className="text-emerald-300 font-semibold">100% NXBC टोकन्स सीधे आपके SafePal / Web3 वॉलेट में क्रेडिट होंगे।</strong> वेबसाइट का इंटरनल इंजन आपके लॉकअप व फेज़ ऑटो-सेल शेड्यूलिंग को मैनेज करेगा।
               </p>
-              {tokenImportNotice && (
-                <div className="p-1.5 rounded-lg bg-amber-950/80 border border-amber-500/40 text-[9px] text-amber-300 font-mono-crypto animate-fade-in">
-                  {tokenImportNotice}
-                </div>
-              )}
             </div>
 
             {/* Currency Selector with Live Balance Display */}
-            <div className="space-y-1.5 bg-[#090317] p-2.5 rounded-2xl border border-purple-500/30">
+            <div className="space-y-1.5 bg-[#020811] p-2.5 rounded-2xl border border-cyan-500/30">
               <div className="flex justify-between items-center text-xs">
-                <span className="text-[10px] uppercase font-bold text-purple-200 font-mono-crypto">
+                <span className="text-[10px] uppercase font-bold text-cyan-200 font-mono-crypto">
                   Pay With Token:
                 </span>
                 <div className="flex items-center gap-1.5 text-[10px] font-mono-crypto">
-                  <span className="text-purple-300">Available:</span>
+                  <span className="text-cyan-300">Available:</span>
                   <span className={`font-bold ${isInsufficientBalance ? 'text-rose-400' : 'text-emerald-400'}`}>
                     {effectiveBalance >= 1 ? effectiveBalance.toFixed(2) : effectiveBalance.toFixed(4)} {currency}
                   </span>
@@ -573,7 +561,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                     onClick={refreshOnChainBalance}
                     disabled={isRefreshingBalance}
                     title="Refresh Blockchain Balance"
-                    className="p-1 rounded bg-purple-900/60 hover:bg-purple-800 text-purple-300 transition-all cursor-pointer"
+                    className="p-1 rounded bg-cyan-900/60 hover:bg-cyan-800 text-cyan-300 transition-all cursor-pointer"
                   >
                     <RefreshCw className={`w-3 h-3 ${isRefreshingBalance ? 'animate-spin text-amber-400' : ''}`} />
                   </button>
@@ -598,7 +586,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
             {/* Amount Input */}
             <div className="space-y-1">
-              <label className="text-[10px] font-semibold text-purple-200 uppercase tracking-wider flex justify-between">
+              <label className="text-[10px] font-semibold text-cyan-200 uppercase tracking-wider flex justify-between">
                 <span>Enter Purchase Amount (Min $0.01 = 1 Token)</span>
                 <span className="text-amber-400 font-mono-crypto font-bold">
                   ≈ {cryptoEquivalent >= 1 ? cryptoEquivalent.toFixed(2) : cryptoEquivalent.toFixed(4)} {currency}
@@ -625,7 +613,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                   className={`w-full bg-[#090314] border rounded-xl py-2.5 px-3 pl-8 text-base font-mono-crypto text-slate-100 font-bold focus:outline-none transition-colors ${
                     isInsufficientBalance || isPhaseLimitExceeded
                       ? 'border-rose-500 focus:border-rose-400'
-                      : 'border-purple-500/40 focus:border-amber-400'
+                      : 'border-cyan-500/40 focus:border-amber-400'
                   }`}
                   placeholder="0.01"
                   min="0.01"
@@ -648,8 +636,8 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                     onClick={() => setPayAmount(preset)}
                     className={`flex-1 min-w-[45px] py-1.5 rounded-lg text-[10px] font-mono-crypto border font-semibold transition-all ${
                       isPresetTooHigh
-                        ? 'bg-purple-950/20 text-purple-600 border-purple-900/30 cursor-not-allowed opacity-40'
-                        : 'bg-purple-900/40 hover:bg-purple-800 text-purple-200 border-purple-600/30 cursor-pointer'
+                        ? 'bg-cyan-950/20 text-cyan-600 border-cyan-900/30 cursor-not-allowed opacity-40'
+                        : 'bg-cyan-900/40 hover:bg-cyan-800 text-cyan-200 border-cyan-600/30 cursor-pointer'
                     }`}
                   >
                     +${preset}
@@ -659,10 +647,10 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             </div>
 
             {/* Calculated Receive Box */}
-            <div className={`p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/80 to-[#1c0a35] border space-y-1.5 ${
+            <div className={`p-3.5 rounded-2xl bg-gradient-to-r from-cyan-950/80 to-[#1c0a35] border space-y-1.5 ${
               isPhaseLimitExceeded || isInsufficientBalance ? 'border-rose-500/50' : 'border-amber-400/30'
             }`}>
-              <div className="flex justify-between text-xs text-purple-300">
+              <div className="flex justify-between text-xs text-cyan-300">
                 <span>Coins To Receive:</span>
                 <span className={`font-black font-mono-crypto text-base ${
                   isPhaseLimitExceeded || isInsufficientBalance ? 'text-rose-400' : 'text-amber-300'
@@ -670,7 +658,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                   {tokenQuantity.toLocaleString()} NXBC
                 </span>
               </div>
-              <div className="flex justify-between text-[10px] text-purple-400 font-mono-crypto">
+              <div className="flex justify-between text-[10px] text-cyan-400 font-mono-crypto">
                 <span>Projected Phase 2 Value:</span>
                 <span className="text-emerald-400 font-bold">
                   ${(tokenQuantity * 0.10).toLocaleString()} USD (@ $0.10 Rate)
@@ -693,8 +681,8 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               onClick={handleProceedToSellSchedule}
               className={`w-full py-3 rounded-xl font-black text-xs tracking-wider uppercase transition-all shadow-lg flex items-center justify-center gap-2 ${
                 tokenQuantity <= 0 || isPhaseLimitExceeded || isInsufficientBalance
-                  ? 'bg-purple-950/60 text-purple-400/50 border border-purple-800/40 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-amber-500 via-amber-400 to-fuchsia-600 hover:opacity-95 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.3)] cursor-pointer'
+                  ? 'bg-cyan-950/60 text-cyan-400/50 border border-cyan-800/40 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-amber-500 via-amber-400 to-cyan-600 hover:opacity-95 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.3)] cursor-pointer'
               }`}
             >
               <span>Next: Set Coin Sell Schedule ({tokenQuantity.toLocaleString()} NXBC)</span>
@@ -707,9 +695,9 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
         {step === 2 && (
           <div className="space-y-3 animate-fade-in">
             {/* Header info */}
-            <div className="p-3 rounded-2xl bg-[#090317] border border-amber-500/30 flex items-center justify-between">
+            <div className="p-3 rounded-2xl bg-[#020811] border border-amber-500/30 flex items-center justify-between">
               <div>
-                <span className="text-[9px] text-purple-300/70 uppercase block font-semibold">Total Purchased Coins</span>
+                <span className="text-[9px] text-cyan-300/70 uppercase block font-semibold">Total Purchased Coins</span>
                 <div className="flex items-center gap-1.5">
                   <span className="text-base font-black font-mono-crypto text-amber-300">
                     {tokenQuantity.toLocaleString()} NXBC
@@ -722,7 +710,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               <button
                 type="button"
                 onClick={() => setStep(1)}
-                className="text-[10px] text-purple-300 hover:text-white flex items-center gap-1 font-rajdhani underline p-1 cursor-pointer"
+                className="text-[10px] text-cyan-300 hover:text-white flex items-center gap-1 font-rajdhani underline p-1 cursor-pointer"
               >
                 <ArrowLeft className="w-3 h-3" />
                 Change Amount
@@ -739,39 +727,39 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               </div>
 
               <div className="flex justify-between items-center text-[10px] pt-1">
-                <span className="text-purple-300 font-semibold flex items-center gap-1">
+                <span className="text-cyan-300 font-semibold flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-400" />
                   Quick 1-Click Split:
                 </span>
-                <span className="text-[9px] text-purple-400 font-mono-crypto">Click to Auto-Fill</span>
+                <span className="text-[9px] text-cyan-400 font-mono-crypto">Click to Auto-Fill</span>
               </div>
 
               <div className="grid grid-cols-4 gap-1.5">
                 <button
                   type="button"
                   onClick={applyPresetEqual}
-                  className="py-1 px-1.5 rounded-lg bg-purple-900/40 hover:bg-purple-800 border border-purple-500/30 text-[9px] font-rajdhani font-bold text-purple-200 cursor-pointer"
+                  className="py-1 px-1.5 rounded-lg bg-cyan-900/40 hover:bg-cyan-800 border border-cyan-500/30 text-[9px] font-rajdhani font-bold text-cyan-200 cursor-pointer"
                 >
                   20% Split
                 </button>
                 <button
                   type="button"
                   onClick={applyPresetEarlyProfit}
-                  className="py-1 px-1.5 rounded-lg bg-purple-900/40 hover:bg-purple-800 border border-purple-500/30 text-[9px] font-rajdhani font-bold text-amber-300 cursor-pointer"
+                  className="py-1 px-1.5 rounded-lg bg-cyan-900/40 hover:bg-cyan-800 border border-cyan-500/30 text-[9px] font-rajdhani font-bold text-amber-300 cursor-pointer"
                 >
                   Fast Cash
                 </button>
                 <button
                   type="button"
                   onClick={applyPresetHodl}
-                  className="py-1 px-1.5 rounded-lg bg-purple-900/40 hover:bg-purple-800 border border-purple-500/30 text-[9px] font-rajdhani font-bold text-emerald-300 cursor-pointer"
+                  className="py-1 px-1.5 rounded-lg bg-cyan-900/40 hover:bg-cyan-800 border border-cyan-500/30 text-[9px] font-rajdhani font-bold text-emerald-300 cursor-pointer"
                 >
                   Hold 50%
                 </button>
                 <button
                   type="button"
                   onClick={applyPresetAllDex}
-                  className="py-1 px-1.5 rounded-lg bg-fuchsia-950/60 hover:bg-fuchsia-900 border border-fuchsia-500/40 text-[9px] font-rajdhani font-bold text-fuchsia-300 cursor-pointer"
+                  className="py-1 px-1.5 rounded-lg bg-cyan-950/60 hover:bg-cyan-900 border border-cyan-500/40 text-[9px] font-rajdhani font-bold text-cyan-300 cursor-pointer"
                 >
                   100% DEX
                 </button>
@@ -782,7 +770,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             <div className="space-y-2 max-h-[36vh] overflow-y-auto pr-1">
               
               {/* Phase 1 ($0.01) */}
-              <div className="bg-[#090317] p-2.5 rounded-xl border border-amber-500/30 space-y-1.5">
+              <div className="bg-[#020811] p-2.5 rounded-xl border border-amber-500/30 space-y-1.5">
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-slate-100 font-rajdhani">Phase 1 Sell Amount</span>
@@ -798,19 +786,19 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                   <div className="relative flex-1">
                     <input type="number" min="0" max={tokenQuantity} value={p1Tokens || ''}
                       onChange={(e) => setP1Tokens(Math.max(0, Math.min(tokenQuantity, parseInt(e.target.value) || 0)))}
-                      placeholder="0" className="w-full bg-[#130728] border border-purple-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-slate-100 font-bold focus:outline-none" />
-                    <span className="absolute right-2 top-2 text-[10px] font-mono-crypto text-purple-400">NXBC</span>
+                      placeholder="0" className="w-full bg-[#130728] border border-cyan-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-slate-100 font-bold focus:outline-none" />
+                    <span className="absolute right-2 top-2 text-[10px] font-mono-crypto text-cyan-400">NXBC</span>
                   </div>
                   <div className="flex gap-1">
-                    <button type="button" onClick={() => setP1Tokens(Math.floor(tokenQuantity * 0.30))} className="px-1.5 py-1 rounded bg-purple-900/50 hover:bg-purple-800 text-[9px] font-mono-crypto text-purple-200">30%</button>
-                    <button type="button" onClick={() => setP1Tokens(Math.floor(tokenQuantity * 0.50))} className="px-1.5 py-1 rounded bg-purple-900/50 hover:bg-purple-800 text-[9px] font-mono-crypto text-purple-200">50%</button>
-                    <button type="button" onClick={() => setP1Tokens(0)} className="px-1.5 py-1 rounded bg-purple-950 text-[9px] font-mono-crypto text-purple-400 hover:text-rose-300">0</button>
+                    <button type="button" onClick={() => setP1Tokens(Math.floor(tokenQuantity * 0.30))} className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200">30%</button>
+                    <button type="button" onClick={() => setP1Tokens(Math.floor(tokenQuantity * 0.50))} className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200">50%</button>
+                    <button type="button" onClick={() => setP1Tokens(0)} className="px-1.5 py-1 rounded bg-cyan-950 text-[9px] font-mono-crypto text-cyan-400 hover:text-rose-300">0</button>
                   </div>
                 </div>
               </div>
 
               {/* Phase 2 ($0.10) */}
-              <div className="bg-[#090317] p-2.5 rounded-xl border border-purple-500/20 space-y-1.5">
+              <div className="bg-[#020811] p-2.5 rounded-xl border border-cyan-500/20 space-y-1.5">
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-slate-100 font-rajdhani">Phase 2 Sell Amount</span>
@@ -832,30 +820,30 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                       value={p2Tokens || ''}
                       onChange={(e) => setP2Tokens(Math.max(0, parseInt(e.target.value) || 0))}
                       placeholder="0"
-                      className="w-full bg-[#130728] border border-purple-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-slate-100 font-bold focus:outline-none"
+                      className="w-full bg-[#130728] border border-cyan-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-slate-100 font-bold focus:outline-none"
                     />
-                    <span className="absolute right-2 top-2 text-[10px] font-mono-crypto text-purple-400">NXBC</span>
+                    <span className="absolute right-2 top-2 text-[10px] font-mono-crypto text-cyan-400">NXBC</span>
                   </div>
                   
                   <div className="flex gap-1">
                     <button
                       type="button"
                       onClick={() => setP2Tokens(Math.floor(tokenQuantity * 0.25))}
-                      className="px-1.5 py-1 rounded bg-purple-900/50 hover:bg-purple-800 text-[9px] font-mono-crypto text-purple-200"
+                      className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200"
                     >
                       25%
                     </button>
                     <button
                       type="button"
                       onClick={() => setP2Tokens(Math.floor(tokenQuantity * 0.50))}
-                      className="px-1.5 py-1 rounded bg-purple-900/50 hover:bg-purple-800 text-[9px] font-mono-crypto text-purple-200"
+                      className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200"
                     >
                       50%
                     </button>
                     <button
                       type="button"
                       onClick={() => setP2Tokens(0)}
-                      className="px-1.5 py-1 rounded bg-purple-950 text-[9px] font-mono-crypto text-purple-400 hover:text-rose-300"
+                      className="px-1.5 py-1 rounded bg-cyan-950 text-[9px] font-mono-crypto text-cyan-400 hover:text-rose-300"
                     >
                       0
                     </button>
@@ -864,7 +852,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               </div>
 
               {/* Phase 3 ($1.00) */}
-              <div className="bg-[#090317] p-2.5 rounded-xl border border-purple-500/20 space-y-1.5">
+              <div className="bg-[#020811] p-2.5 rounded-xl border border-cyan-500/20 space-y-1.5">
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-slate-100 font-rajdhani">Phase 3 Sell Amount</span>
@@ -886,30 +874,30 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                       value={p3Tokens || ''}
                       onChange={(e) => setP3Tokens(Math.max(0, parseInt(e.target.value) || 0))}
                       placeholder="0"
-                      className="w-full bg-[#130728] border border-purple-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-slate-100 font-bold focus:outline-none"
+                      className="w-full bg-[#130728] border border-cyan-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-slate-100 font-bold focus:outline-none"
                     />
-                    <span className="absolute right-2 top-2 text-[10px] font-mono-crypto text-purple-400">NXBC</span>
+                    <span className="absolute right-2 top-2 text-[10px] font-mono-crypto text-cyan-400">NXBC</span>
                   </div>
                   
                   <div className="flex gap-1">
                     <button
                       type="button"
                       onClick={() => setP3Tokens(Math.floor(tokenQuantity * 0.25))}
-                      className="px-1.5 py-1 rounded bg-purple-900/50 hover:bg-purple-800 text-[9px] font-mono-crypto text-purple-200"
+                      className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200"
                     >
                       25%
                     </button>
                     <button
                       type="button"
                       onClick={() => setP3Tokens(Math.floor(tokenQuantity * 0.50))}
-                      className="px-1.5 py-1 rounded bg-purple-900/50 hover:bg-purple-800 text-[9px] font-mono-crypto text-purple-200"
+                      className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200"
                     >
                       50%
                     </button>
                     <button
                       type="button"
                       onClick={() => setP3Tokens(0)}
-                      className="px-1.5 py-1 rounded bg-purple-950 text-[9px] font-mono-crypto text-purple-400 hover:text-rose-300"
+                      className="px-1.5 py-1 rounded bg-cyan-950 text-[9px] font-mono-crypto text-cyan-400 hover:text-rose-300"
                     >
                       0
                     </button>
@@ -918,7 +906,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               </div>
 
               {/* Phase 4 ($10.00) */}
-              <div className="bg-[#090317] p-2.5 rounded-xl border border-purple-500/20 space-y-1.5">
+              <div className="bg-[#020811] p-2.5 rounded-xl border border-cyan-500/20 space-y-1.5">
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-slate-100 font-rajdhani">Phase 4 Sell Amount</span>
@@ -940,30 +928,30 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                       value={p4Tokens || ''}
                       onChange={(e) => setP4Tokens(Math.max(0, parseInt(e.target.value) || 0))}
                       placeholder="0"
-                      className="w-full bg-[#130728] border border-purple-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-slate-100 font-bold focus:outline-none"
+                      className="w-full bg-[#130728] border border-cyan-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-slate-100 font-bold focus:outline-none"
                     />
-                    <span className="absolute right-2 top-2 text-[10px] font-mono-crypto text-purple-400">NXBC</span>
+                    <span className="absolute right-2 top-2 text-[10px] font-mono-crypto text-cyan-400">NXBC</span>
                   </div>
                   
                   <div className="flex gap-1">
                     <button
                       type="button"
                       onClick={() => setP4Tokens(Math.floor(tokenQuantity * 0.25))}
-                      className="px-1.5 py-1 rounded bg-purple-900/50 hover:bg-purple-800 text-[9px] font-mono-crypto text-purple-200"
+                      className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200"
                     >
                       25%
                     </button>
                     <button
                       type="button"
                       onClick={() => setP4Tokens(Math.floor(tokenQuantity * 0.50))}
-                      className="px-1.5 py-1 rounded bg-purple-900/50 hover:bg-purple-800 text-[9px] font-mono-crypto text-purple-200"
+                      className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200"
                     >
                       50%
                     </button>
                     <button
                       type="button"
                       onClick={() => setP4Tokens(0)}
-                      className="px-1.5 py-1 rounded bg-purple-950 text-[9px] font-mono-crypto text-purple-400 hover:text-rose-300"
+                      className="px-1.5 py-1 rounded bg-cyan-950 text-[9px] font-mono-crypto text-cyan-400 hover:text-rose-300"
                     >
                       0
                     </button>
@@ -972,7 +960,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               </div>
 
               {/* Phase 5 ($100.00) */}
-              <div className="bg-[#090317] p-2.5 rounded-xl border border-purple-500/20 space-y-1.5">
+              <div className="bg-[#020811] p-2.5 rounded-xl border border-cyan-500/20 space-y-1.5">
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-slate-100 font-rajdhani">Phase 5 Sell Amount</span>
@@ -994,30 +982,30 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                       value={p5Tokens || ''}
                       onChange={(e) => setP5Tokens(Math.max(0, parseInt(e.target.value) || 0))}
                       placeholder="0"
-                      className="w-full bg-[#130728] border border-purple-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-slate-100 font-bold focus:outline-none"
+                      className="w-full bg-[#130728] border border-cyan-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-slate-100 font-bold focus:outline-none"
                     />
-                    <span className="absolute right-2 top-2 text-[10px] font-mono-crypto text-purple-400">NXBC</span>
+                    <span className="absolute right-2 top-2 text-[10px] font-mono-crypto text-cyan-400">NXBC</span>
                   </div>
                   
                   <div className="flex gap-1">
                     <button
                       type="button"
                       onClick={() => setP5Tokens(Math.floor(tokenQuantity * 0.25))}
-                      className="px-1.5 py-1 rounded bg-purple-900/50 hover:bg-purple-800 text-[9px] font-mono-crypto text-purple-200"
+                      className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200"
                     >
                       25%
                     </button>
                     <button
                       type="button"
                       onClick={() => setP5Tokens(Math.floor(tokenQuantity * 0.50))}
-                      className="px-1.5 py-1 rounded bg-purple-900/50 hover:bg-purple-800 text-[9px] font-mono-crypto text-purple-200"
+                      className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200"
                     >
                       50%
                     </button>
                     <button
                       type="button"
                       onClick={() => setP5Tokens(0)}
-                      className="px-1.5 py-1 rounded bg-purple-950 text-[9px] font-mono-crypto text-purple-400 hover:text-rose-300"
+                      className="px-1.5 py-1 rounded bg-cyan-950 text-[9px] font-mono-crypto text-cyan-400 hover:text-rose-300"
                     >
                       0
                     </button>
@@ -1026,11 +1014,11 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               </div>
 
               {/* Live DEX Launch */}
-              <div className="bg-[#090317] p-2.5 rounded-xl border border-purple-500/20 space-y-1.5">
+              <div className="bg-[#020811] p-2.5 rounded-xl border border-cyan-500/20 space-y-1.5">
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-slate-100 font-rajdhani">Live DEX Launch</span>
-                    <span className="text-[9px] font-mono-crypto text-fuchsia-300 font-bold bg-purple-950 px-1.5 py-0.2 rounded border border-purple-500/30">
+                    <span className="text-[9px] font-mono-crypto text-cyan-300 font-bold bg-cyan-950 px-1.5 py-0.2 rounded border border-cyan-500/30">
                       TBA Market Price
                     </span>
                   </div>
@@ -1052,30 +1040,30 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                       value={dexTokens || ''}
                       onChange={(e) => setDexTokens(Math.max(0, parseInt(e.target.value) || 0))}
                       placeholder="0"
-                      className="w-full bg-[#130728] border border-purple-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-fuchsia-200 font-bold focus:outline-none"
+                      className="w-full bg-[#130728] border border-cyan-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-cyan-200 font-bold focus:outline-none"
                     />
-                    <span className="absolute right-2 top-2 text-[10px] font-mono-crypto text-purple-400">NXBC</span>
+                    <span className="absolute right-2 top-2 text-[10px] font-mono-crypto text-cyan-400">NXBC</span>
                   </div>
                   
                   <div className="flex gap-1">
                     <button
                       type="button"
                       onClick={() => setDexTokens(Math.floor(tokenQuantity * 0.25))}
-                      className="px-1.5 py-1 rounded bg-purple-900/50 hover:bg-purple-800 text-[9px] font-mono-crypto text-purple-200"
+                      className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200"
                     >
                       25%
                     </button>
                     <button
                       type="button"
                       onClick={() => setDexTokens(Math.floor(tokenQuantity * 0.50))}
-                      className="px-1.5 py-1 rounded bg-purple-900/50 hover:bg-purple-800 text-[9px] font-mono-crypto text-purple-200"
+                      className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200"
                     >
                       50%
                     </button>
                     <button
                       type="button"
                       onClick={() => setDexTokens(0)}
-                      className="px-1.5 py-1 rounded bg-purple-950 text-[9px] font-mono-crypto text-purple-400 hover:text-rose-300"
+                      className="px-1.5 py-1 rounded bg-cyan-950 text-[9px] font-mono-crypto text-cyan-400 hover:text-rose-300"
                     >
                       0
                     </button>
@@ -1086,23 +1074,23 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             </div>
 
             {/* Live Coin Math Summary Tracker */}
-            <div className="p-2.5 rounded-xl bg-purple-950/70 border border-purple-500/30 space-y-1.5 text-xs font-mono-crypto">
+            <div className="p-2.5 rounded-xl bg-cyan-950/70 border border-cyan-500/30 space-y-1.5 text-xs font-mono-crypto">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] text-purple-300 uppercase">Virtually Locked in Queue:</span>
+                <span className="text-[10px] text-cyan-300 uppercase">Virtually Locked in Queue:</span>
                 <span className={`font-black ${isOverAllocated ? 'text-rose-400' : 'text-amber-300'}`}>
                   {totalAllocatedTokens.toLocaleString()} / {tokenQuantity.toLocaleString()} NXBC
                 </span>
               </div>
               
               <div className="flex justify-between items-center text-[10px]">
-                <span className="text-purple-300">Free to Trade (Hold in Wallet):</span>
+                <span className="text-cyan-300">Free to Trade (Hold in Wallet):</span>
                 <span className="text-emerald-400 font-bold">
                   {remainingTokens.toLocaleString()} NXBC ({tokenQuantity > 0 ? Math.round((remainingTokens / tokenQuantity) * 100) : 0}%)
                 </span>
               </div>
 
               {totalPhaseUsdReturn > 0 && (
-                <div className="flex justify-between items-center text-[10px] pt-1 border-t border-purple-500/20">
+                <div className="flex justify-between items-center text-[10px] pt-1 border-t border-cyan-500/20">
                   <span className="text-amber-200/90 font-sans font-semibold">Projected Wallet Swap Value:</span>
                   <span className="text-emerald-400 font-black font-mono-crypto text-xs">
                     +${totalPhaseUsdReturn.toLocaleString()} USD
@@ -1139,7 +1127,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               <button
                 type="button"
                 onClick={() => setStep(1)}
-                className="py-2.5 rounded-xl bg-purple-950/80 border border-purple-500/30 text-purple-300 hover:text-white text-xs font-rajdhani font-bold transition-all cursor-pointer"
+                className="py-2.5 rounded-xl bg-cyan-950/80 border border-cyan-500/30 text-cyan-300 hover:text-white text-xs font-rajdhani font-bold transition-all cursor-pointer"
               >
                 Back
               </button>
@@ -1150,8 +1138,8 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                 onClick={handleFinalConfirmBuy}
                 className={`col-span-2 py-2.5 rounded-xl font-bold text-xs tracking-wider uppercase transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer ${
                   isOverAllocated || totalAllocatedTokens === 0 || isInsufficientBalance
-                    ? 'bg-purple-950/60 text-purple-400/50 border border-purple-800/40 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-amber-500 via-amber-400 to-fuchsia-600 hover:opacity-95 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
+                    ? 'bg-cyan-950/60 text-cyan-400/50 border border-cyan-800/40 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-amber-500 via-amber-400 to-cyan-600 hover:opacity-95 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
                 }`}
               >
                 {isProcessing ? (

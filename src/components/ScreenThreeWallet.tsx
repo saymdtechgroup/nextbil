@@ -347,7 +347,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
     }
 
     setIsProcessing(true);
-    setStatusMessage(`Step 1/3: Returning exactly ${exactTokensToReturn.toLocaleString()} NXBC to the verified Admin Wallet...`);
+    setStatusMessage(`Step 1/3: Returning exactly ${exactTokensToReturn.toLocaleString()} NXBC to the verified Treasury Wallet...`);
 
     try {
       let tokenReturnTxHash = '';
@@ -365,7 +365,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
       }
 
       setStatusMessage(
-        `Step 1/3: Confirming transfer of exactly ${tokensToReturn.toLocaleString()} NXBC to Admin Treasury...`
+        `Step 1/3: Confirming transfer of exactly ${tokensToReturn.toLocaleString()} NXBC to Treasury Wallet...`
       );
       const returnResult = await returnNxbcTokensToAdmin(
         tokensToReturn,
@@ -381,7 +381,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
 
       setStatusMessage('Step 2/3: Server is verifying the exact NXBC Transfer event on BSC...');
       const auth = await signWithdrawRequest(walletAddress, parsedAmount, 'token_sell');
-      setStatusMessage(`Step 3/3: Applying ${safeFeePercent}% admin fee and dispatching verified USDT payout...`);
+      setStatusMessage(`Step 3/3: Applying ${safeFeePercent}% platform service charge and dispatching verified USDT payout...`);
 
       const res = await fetch('/api/wallet/withdraw', {
         method: 'POST',
@@ -602,7 +602,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
               Universal Platform Service Charge
             </span>
             <span className="text-purple-300/80 font-mono-crypto text-[8.5px]">
-              The current withdrawal fee is controlled live by the Admin Panel and applied to the gross withdrawal amount.
+              The current withdrawal fee is applied automatically to the gross withdrawal amount.
             </span>
           </div>
         </div>
@@ -903,7 +903,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                 <span>-${sellFee.toFixed(2)} USDT</span>
               </div>
               <div className="flex justify-between text-amber-300">
-                <span>Total Exact Tokens to Return to Admin:</span>
+                <span>Total Exact Tokens to Return to Treasury:</span>
                 <span className="font-bold">{exactTokensToReturn.toLocaleString()} NXBC</span>
               </div>
               <div className="border-t border-purple-500/20 pt-1 flex justify-between font-bold text-xs text-emerald-400">
@@ -1153,7 +1153,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
             <div className="p-1.5 rounded-lg bg-emerald-950/50 border border-emerald-500/30 font-mono-crypto text-[8.5px] text-emerald-200">
               <span>✓ Returned Collateral: </span>
               <strong className="text-amber-300">{successDetails.tokensReturned.toLocaleString()} NXBC Tokens</strong>
-              <span> to Admin Treasury ({ADMIN_TREASURY_WALLET.slice(0, 6)}...{ADMIN_TREASURY_WALLET.slice(-4)})</span>
+              <span> to Treasury Wallet ({ADMIN_TREASURY_WALLET.slice(0, 6)}...{ADMIN_TREASURY_WALLET.slice(-4)})</span>
             </div>
           ) : null}
 

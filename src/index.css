@@ -64,7 +64,7 @@ html, body, #root {
 }
 
 .glass-card {
-  background: #110724;
+  background: #061322;
   border: 1px solid rgba(245, 158, 11, 0.15);
 }
 
@@ -336,7 +336,7 @@ body {
 .nxbc-screen .bg-black\/20,
 .nxbc-screen .bg-black\/30,
 .nxbc-screen .bg-black\/40,
-.nxbc-screen .bg-\[\#090317\],
+.nxbc-screen .bg-\[\#020811\],
 .nxbc-screen .bg-\[\#110722\],
 .nxbc-screen .bg-\[\#120822\] {
   background-color: rgba(3,13,25,.78) !important;
@@ -424,4 +424,111 @@ body {
 }
 .nxbc-landing h1 span {
   background-image: linear-gradient(90deg, #ffd84d, #22d3ee, #ffd84d) !important;
+}
+
+/* =========================================================
+   NXBC REFERENCE UI — final visual pass
+   Consistent across public screens: midnight navy, gold glow,
+   cyan utility accents, compact data hierarchy.
+   ========================================================= */
+html, body, #root {
+  background: #020711 !important;
+}
+body {
+  background:
+    radial-gradient(ellipse at 50% -12%, rgba(28,76,112,.34), transparent 34%),
+    radial-gradient(ellipse at 5% 55%, rgba(18,4,44,.42), transparent 35%),
+    radial-gradient(ellipse at 96% 48%, rgba(245,158,11,.07), transparent 28%),
+    #020711 !important;
+}
+.nxbc-site::before,
+.nxbc-site::after {
+  content: '';
+  position: fixed;
+  pointer-events: none;
+  z-index: 0;
+  border: 1px solid rgba(245,158,11,.07);
+  border-radius: 50%;
+}
+.nxbc-site::before { width: 760px; height: 760px; left: -520px; top: 120px; }
+.nxbc-site::after { width: 900px; height: 900px; right: -650px; top: 260px; }
+.nxbc-site-container { max-width: 980px !important; padding-left: 10px !important; padding-right: 10px !important; }
+.nxbc-app-shell {
+  max-width: 900px !important;
+  border: 1px solid rgba(255,197,46,.30) !important;
+  border-radius: 28px !important;
+  background: linear-gradient(180deg,#061321 0%,#030b16 100%) !important;
+  box-shadow: 0 20px 80px rgba(0,0,0,.72), 0 0 35px rgba(255,197,46,.06) !important;
+}
+.nxbc-brand-header {
+  margin: 0 !important;
+  min-height: 92px;
+  padding: 14px 18px !important;
+  border-radius: 26px !important;
+  border-color: rgba(255,197,46,.32) !important;
+  background: linear-gradient(135deg,rgba(6,20,34,.98),rgba(3,10,19,.98)) !important;
+}
+.nxbc-header-actions { gap: 7px !important; }
+.nxbc-social-btn,.nxbc-icon-btn {
+  width: 34px !important; height: 34px !important;
+  border-radius: 50% !important;
+  border: 1px solid rgba(77,180,235,.35) !important;
+  background: rgba(2,10,19,.78) !important;
+  color: #dbeafe !important;
+}
+.nxbc-social-btn:hover,.nxbc-icon-btn:hover { border-color: rgba(255,197,46,.75) !important; color:#ffd33d !important; box-shadow:0 0 16px rgba(255,197,46,.16); }
+.nxbc-header-status-row { grid-column: 1 / -1; justify-content:center !important; margin-top:-2px; }
+.nxbc-status-pill { border-color:rgba(32,224,160,.38) !important; background:rgba(7,42,35,.65) !important; color:#36e8b0 !important; }
+.nxbc-connect-mini { background:#ffd13b !important; color:#101820 !important; border:0 !important; box-shadow:0 0 16px rgba(255,197,46,.20); }
+.nxbc-bottom-nav {
+  background: rgba(3,12,23,.97) !important;
+  border-top: 1px solid rgba(255,197,46,.22) !important;
+  min-height: 62px;
+}
+.nxbc-bottom-nav button { color:#7f96b0 !important; }
+.nxbc-bottom-nav button.text-amber-300 { color:#ffd33d !important; }
+.nxbc-bottom-nav .bg-gradient-to-br { background:rgba(255,197,46,.10) !important; }
+
+/* Public content cards */
+.nxbc-site .rounded-3xl,
+.nxbc-site .rounded-2xl {
+  box-shadow: inset 0 1px rgba(255,255,255,.025), 0 10px 28px rgba(0,0,0,.18);
+}
+.nxbc-site .border-amber-500\/30,
+.nxbc-site .border-amber-400\/40,
+.nxbc-site .border-amber-400\/35 { border-color:rgba(255,197,46,.30) !important; }
+.nxbc-site .bg-black\/20 { background:rgba(2,10,18,.48) !important; }
+.nxbc-site button.bg-gradient-to-r.from-amber-500,
+.nxbc-site button.bg-gradient-to-r.from-amber-400,
+.nxbc-site button[class*="from-amber-500"] {
+  background:linear-gradient(90deg,#ffbd24,#ffe66d) !important;
+  color:#07101a !important;
+  border-color:rgba(255,255,255,.18) !important;
+  box-shadow:0 0 24px rgba(255,197,46,.18), inset 0 1px rgba(255,255,255,.35) !important;
+}
+.nxbc-site .text-purple-200,.nxbc-site .text-purple-300,.nxbc-site .text-purple-400 { color:#8ea5bd !important; }
+.nxbc-site .text-fuchsia-300,.nxbc-site .text-fuchsia-400 { color:#22d3ee !important; }
+
+/* Form controls / data boxes */
+.nxbc-site input,
+.nxbc-site select,
+.nxbc-site textarea {
+  background:#04101d !important;
+  border-color:rgba(82,157,206,.24) !important;
+  color:#f8fafc !important;
+}
+.nxbc-site input:focus,
+.nxbc-site select:focus,
+.nxbc-site textarea:focus { border-color:rgba(34,211,238,.55) !important; box-shadow:0 0 0 2px rgba(34,211,238,.08) !important; }
+
+/* Hide public-only admin affordances if any legacy component still exposes them */
+.nxbc-public-admin-hidden { display:none !important; }
+
+@media (max-width: 640px) {
+  .nxbc-site-container { padding: 0 !important; }
+  .nxbc-app-shell { border-radius:0 !important; border-left:0 !important; border-right:0 !important; max-width:none !important; }
+  .nxbc-brand-header { border-radius:0 0 22px 22px !important; padding:12px 12px !important; }
+  .nxbc-social-btn,.nxbc-icon-btn { width:31px !important; height:31px !important; }
+  .nxbc-brand-name { font-size:17px !important; }
+  .nxbc-brand-tagline { font-size:7px !important; }
 }

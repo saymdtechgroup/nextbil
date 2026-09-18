@@ -1576,7 +1576,6 @@ export default function App() {
                   totalInvestedUsd={totalInvestedUsd}
                   minMlmQualifyUsd={systemConfig.minMlmQualifyUsd || 100}
                   onResetAllData={handleResetAllData}
-                  onOpenAdmin={() => setShowSecretAdminPage(true)}
                 />
               )}
             </div>
@@ -1594,13 +1593,13 @@ export default function App() {
             
             {/* Context Headline for the 3 Interconnected Screens */}
             <div className="text-center mb-6 max-w-2xl mx-auto">
-              <span className="text-[11px] font-mono-crypto px-3 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-fuchsia-600/20 text-amber-300 border border-amber-400/30 uppercase tracking-widest inline-block mb-1.5">
+              <span className="text-[11px] font-mono-crypto px-3 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-cyan-600/20 text-amber-300 border border-amber-400/30 uppercase tracking-widest inline-block mb-1.5">
                 3 Interconnected Ecosystem Modules
               </span>
               <h2 className="text-xl sm:text-2xl font-black text-slate-100 font-rajdhani uppercase tracking-wide">
                 {systemConfig.tokenSymbol} Community Presale Platform
               </h2>
-              <p className="text-xs text-purple-200/70">
+              <p className="text-xs text-cyan-200/70">
                 Synchronized live state: Define future sell percentages on Screen 1 &bull; Track the 6-box sell schedule on Screen 2 &bull; Execute instant smart-contract withdrawal on Screen 3.
               </p>
             </div>
@@ -1686,7 +1685,7 @@ export default function App() {
               <DeviceFrame
                 screenNumber={3}
                 screenTitle="Screen 3: Instant Withdrawal"
-                badgeText="Hot Multi-Sig"
+                badgeText="Secure Wallet"
                 badgeColor="purple"
                 url="nxbc.network/wallet"
                 isHero={false}

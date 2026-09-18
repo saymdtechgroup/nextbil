@@ -37,20 +37,20 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
             className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all duration-200 relative group ${
               isActive
                 ? 'text-amber-300 font-semibold'
-                : 'text-purple-300/60 hover:text-purple-200'
+                : 'text-cyan-300/60 hover:text-cyan-200'
             }`}
           >
             {/* Active Top Glowing Indicator */}
             {isActive && (
-              <div className="absolute -top-2 w-8 h-[2px] bg-gradient-to-r from-amber-400 via-fuchsia-500 to-amber-400 rounded-full shadow-[0_0_8px_#f59e0b]" />
+              <div className="absolute -top-2 w-8 h-[2px] bg-gradient-to-r from-amber-400 via-cyan-500 to-amber-400 rounded-full shadow-[0_0_8px_#f59e0b]" />
             )}
 
             {/* Icon with glowing backdrop when active */}
             <div
               className={`p-1.5 rounded-xl transition-all ${
                 isActive
-                  ? 'bg-gradient-to-br from-amber-500/20 to-fuchsia-600/20 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                  : 'group-hover:bg-purple-900/30'
+                  ? 'bg-gradient-to-br from-amber-500/20 to-cyan-600/20 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+                  : 'group-hover:bg-cyan-900/30'
               }`}
             >
               <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.3]' : 'stroke-[1.8]'}`} />

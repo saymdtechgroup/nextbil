@@ -136,7 +136,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
               <div className="text-base font-black font-mono-crypto text-slate-100">
                 {trustStats.totalTokensSold.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               </div>
-              <div className="text-[8px] text-purple-300/60 mt-0.5">On-chain</div>
+              <div className="text-[8px] text-cyan-300/60 mt-0.5">On-chain</div>
             </div>
 
             <div className="rounded-xl bg-black/20 border border-emerald-400/10 p-2.5">
@@ -170,10 +170,10 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
           <span className="text-[10px] text-slate-400 font-rajdhani uppercase tracking-wider block mb-1">Total Earnings</span>
           <span className="text-2xl font-black font-mono-crypto text-emerald-400 block">${totalEarningUsdt.toFixed(2)}</span>
         </div>
-        <div className="bg-gradient-to-br from-[#130722] to-[#0a0312] p-4 rounded-2xl border border-white/5 relative overflow-hidden group hover:border-fuchsia-500/30 transition-colors">
-          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity"><Activity className="w-12 h-12 text-fuchsia-400" /></div>
+        <div className="bg-gradient-to-br from-[#130722] to-[#0a0312] p-4 rounded-2xl border border-white/5 relative overflow-hidden group hover:border-cyan-500/30 transition-colors">
+          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity"><Activity className="w-12 h-12 text-cyan-400" /></div>
           <span className="text-[10px] text-slate-400 font-rajdhani uppercase tracking-wider block mb-1">Total Withdrawn</span>
-          <span className="text-2xl font-black font-mono-crypto text-fuchsia-400 block">${totalWithdrawnUsdt.toFixed(2)}</span>
+          <span className="text-2xl font-black font-mono-crypto text-cyan-400 block">${totalWithdrawnUsdt.toFixed(2)}</span>
         </div>
       </div>
 

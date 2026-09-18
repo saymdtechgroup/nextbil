@@ -201,15 +201,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               <span className="text-[10px] font-mono-crypto">{showValues ? 'Hide' : 'Show'}</span>
             </button>
 
-            {onOpenBuyModal && (
-              <button
-                onClick={onOpenBuyModal}
-                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold font-rajdhani uppercase text-xs tracking-wider shadow-md transition-all flex items-center gap-1.5 active:scale-95"
-              >
-                <Zap className="w-3.5 h-3.5 fill-current" />
-                <span>Add Tokens</span>
-              </button>
-            )}
+
           </div>
         </div>
 
