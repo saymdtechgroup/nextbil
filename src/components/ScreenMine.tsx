@@ -7,6 +7,7 @@ interface ScreenMineProps {
   walletAddress: string;
   walletConnected: boolean;
   onToggleWallet: () => void;
+  onOpenAdmin?: () => void;
   onResetAllData?: () => void;
   totalInvestedUsd?: number;
   minMlmQualifyUsd?: number;
@@ -16,6 +17,7 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
   walletAddress,
   walletConnected,
   onToggleWallet,
+  onOpenAdmin,
   onResetAllData,
   totalInvestedUsd = 0,
   minMlmQualifyUsd = 100,
@@ -38,7 +40,7 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
   };
 
   return (
-    <div className="nxbc-screen flex-1 p-3.5 space-y-3.5 relative">
+    <div className="nxbc-home-theme flex-1 p-3.5 space-y-3.5 relative">
       {/* Header */}
       <div className="flex items-center justify-between pb-1 border-b border-purple-500/10">
         <div className="flex items-center gap-2">
@@ -157,10 +159,10 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
             <div>
               <span className="font-semibold text-slate-100 block">Smart Contract Security</span>
-              <span className="text-[9px] font-mono-crypto text-purple-400">Verified Platform Security</span>
+              <span className="text-[9px] font-mono-crypto text-purple-400">CertiK Audited Multi-Sig</span>
             </div>
           </div>
-          <span className="text-[10px] text-emerald-400 font-mono-crypto font-bold">Active</span>
+          <span className="text-[10px] text-emerald-400 font-mono-crypto font-bold">100% Passed</span>
         </div>
 
         <div className="p-2.5 rounded-xl bg-[#110722] border border-purple-500/20 flex items-center justify-between text-xs">

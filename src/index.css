@@ -149,41 +149,27 @@ html, body, #root {
 }
 
 
-/* NXBC reference home surface */
-.nxbc-screen { font-family: 'Outfit', sans-serif; }
-.nxbc-screen button { -webkit-tap-highlight-color: transparent; }
-@media (max-width: 420px) {
-  .nxbc-screen { padding-left: .65rem; padding-right: .65rem; }
+/* Shared Home-page visual language for Assets, Withdraw, Team and Mine screens. */
+.nxbc-home-theme {
+  background: linear-gradient(180deg, #110726 0%, #090317 52%, #0d051e 100%);
+  color: #f8fafc;
+  border-radius: 1rem;
 }
 
-
-/* Unified NXBC theme surface for every dashboard screen. */
-.nxbc-theme {
-  --nxbc-bg: #06111d;
-  --nxbc-panel: #071426;
-  --nxbc-cyan: #67e8f9;
-  --nxbc-gold: #fbbf24;
-  --nxbc-border: rgba(103, 232, 249, .18);
-  background: radial-gradient(circle at 50% -10%, rgba(34, 211, 238, .08), transparent 34%), #020914;
+.nxbc-home-theme [class~="bg-[#110722]"] {
+  background-color: #110726 !important;
 }
 
-.nxbc-theme .nxbc-bottom-nav {
-  background: linear-gradient(180deg, rgba(5, 17, 30, .96), rgba(3, 10, 20, .99));
-  border-top: 1px solid rgba(103, 232, 249, .2);
-  box-shadow: 0 -8px 30px rgba(0, 0, 0, .35);
+.nxbc-home-theme [class~="bg-[#090317]"] {
+  background-color: #090317 !important;
 }
 
-.nxbc-theme .nxbc-screen {
-  color: #e2f7ff;
+.nxbc-home-theme [class~="border-purple-500/20"],
+.nxbc-home-theme [class~="border-purple-500/10"] {
+  border-color: rgba(245, 158, 11, 0.16) !important;
 }
 
-/* Keep the home banner flush with the bottom of the home content on small screens. */
-@media (max-width: 640px) {
-  .nxbc-home-banner { margin-bottom: 0 !important; display: block; }
-}
-
-/* Mobile layout: keep the home banner as the final home section and prevent horizontal overflow. */
-@media (max-width: 640px) {
-  .nxbc-screen { width: 100%; max-width: 100%; overflow-x: hidden; }
-  .nxbc-home-banner { order: 999; margin-top: .75rem; margin-bottom: 0 !important; }
+.nxbc-home-theme [class~="text-fuchsia-300"],
+.nxbc-home-theme [class~="text-fuchsia-400"] {
+  color: #fbbf24 !important;
 }

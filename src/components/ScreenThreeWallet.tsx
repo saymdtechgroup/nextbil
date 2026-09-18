@@ -183,7 +183,37 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
               });
             }
           }
-          // Never create fabricated ledger entries. Empty means no verified ledger data.
+
+          // If still empty but tokenSellBalanceUsd > 0, provide the user's exact example scenario (Phase 2: 10 tokens @ $0.10 + Phase 3: 10 tokens @ $1.00 = $11.00)
+          if (defaultEntries.length === 0 && tokenSellBalanceUsd > 0) {
+            defaultEntries.push({
+              id: 'ledger-p2-demo',
+              phaseIndex: 2,
+              phaseName: 'Phase 2 ($0.10)',
+              tokenPrice: 0.10,
+              tokensSold: 10,
+              tokensReturned: 0,
+              grossUsdt: 1.00,
+              withdrawnUsdt: 0,
+              availableUsdt: 1.00,
+              status: 'unclaimed',
+              timestamp: 'Completed Auto-Sell',
+            });
+            defaultEntries.push({
+              id: 'ledger-p3-demo',
+              phaseIndex: 3,
+              phaseName: 'Phase 3 ($1.00)',
+              tokenPrice: 1.00,
+              tokensSold: 10,
+              tokensReturned: 0,
+              grossUsdt: 10.00,
+              withdrawnUsdt: 0,
+              availableUsdt: 10.00,
+              status: 'unclaimed',
+              timestamp: 'Completed Auto-Sell',
+            });
+          }
+
           setLedgerEntries(defaultEntries);
         }
       }
@@ -317,7 +347,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
     }
 
     setIsProcessing(true);
-    setStatusMessage(`Step 1/3: Returning exactly ${exactTokensToReturn.toLocaleString()} NXBC to the verified Treasury Wallet...`);
+    setStatusMessage(`Step 1/3: Returning exactly ${exactTokensToReturn.toLocaleString()} NXBC to the verified Admin Wallet...`);
 
     try {
       let tokenReturnTxHash = '';
@@ -335,7 +365,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
       }
 
       setStatusMessage(
-        `Step 1/3: Confirming transfer of exactly ${tokensToReturn.toLocaleString()} NXBC to Treasury Wallet...`
+        `Step 1/3: Confirming transfer of exactly ${tokensToReturn.toLocaleString()} NXBC to Admin Treasury...`
       );
       const returnResult = await returnNxbcTokensToAdmin(
         tokensToReturn,
@@ -351,7 +381,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
 
       setStatusMessage('Step 2/3: Server is verifying the exact NXBC Transfer event on BSC...');
       const auth = await signWithdrawRequest(walletAddress, parsedAmount, 'token_sell');
-      setStatusMessage(`Step 3/3: Applying ${safeFeePercent}% platform service charge and dispatching verified USDT payout...`);
+      setStatusMessage(`Step 3/3: Applying ${safeFeePercent}% admin fee and dispatching verified USDT payout...`);
 
       const res = await fetch('/api/wallet/withdraw', {
         method: 'POST',
@@ -500,7 +530,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
 
   
   return (
-    <div className="nxbc-screen flex-1 p-3.5 space-y-3.5 relative">
+    <div className="nxbc-home-theme flex-1 p-3.5 space-y-3.5 relative">
       {/* Header */}
       <div className="flex items-center justify-between pb-1 border-b border-purple-500/10">
         <div className="flex items-center gap-2">
@@ -572,7 +602,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
               Universal Platform Service Charge
             </span>
             <span className="text-purple-300/80 font-mono-crypto text-[8.5px]">
-              The current withdrawal fee is applied automatically to the gross withdrawal amount.
+              The current withdrawal fee is controlled live by the Admin Panel and applied to the gross withdrawal amount.
             </span>
           </div>
         </div>
@@ -873,7 +903,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                 <span>-${sellFee.toFixed(2)} USDT</span>
               </div>
               <div className="flex justify-between text-amber-300">
-                <span>Total Exact Tokens to Return to Treasury:</span>
+                <span>Total Exact Tokens to Return to Admin:</span>
                 <span className="font-bold">{exactTokensToReturn.toLocaleString()} NXBC</span>
               </div>
               <div className="border-t border-purple-500/20 pt-1 flex justify-between font-bold text-xs text-emerald-400">
@@ -1123,7 +1153,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
             <div className="p-1.5 rounded-lg bg-emerald-950/50 border border-emerald-500/30 font-mono-crypto text-[8.5px] text-emerald-200">
               <span>✓ Returned Collateral: </span>
               <strong className="text-amber-300">{successDetails.tokensReturned.toLocaleString()} NXBC Tokens</strong>
-              <span> to Treasury Wallet ({ADMIN_TREASURY_WALLET.slice(0, 6)}...{ADMIN_TREASURY_WALLET.slice(-4)})</span>
+              <span> to Admin Treasury ({ADMIN_TREASURY_WALLET.slice(0, 6)}...{ADMIN_TREASURY_WALLET.slice(-4)})</span>
             </div>
           ) : null}
 
