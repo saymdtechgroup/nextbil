@@ -16,8 +16,8 @@ import {
   Settings,
   Wallet,
   Youtube,
-  Facebook,
   Send,
+  MoreVertical,
 } from 'lucide-react';
 import {
   AllocationState,
@@ -47,7 +47,6 @@ import { MatrixPlanModal } from './components/MatrixPlanModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
 import { SecretAdminPage } from './components/SecretAdminPage';
 import { GoldCoinGraphic } from './components/GoldCoinGraphic';
-import { NXBCBrandHeader } from './components/NXBCBrandHeader';
 import {
   fetchOnChainTokenBalance,
   USDT_CONTRACT,
@@ -70,6 +69,7 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('single');
   const [activeSingleScreen, setActiveSingleScreen] = useState<ActiveScreen>('home');
   const [showSecretAdminPage, setShowSecretAdminPage] = useState<boolean>(false);
+  const [showHomeQuickMenu, setShowHomeQuickMenu] = useState(false);
 
   // Core State: 6-Phase Sequential Roadmap & Live Status (Admin Managed & Persisted)
   const [phases, setPhases] = useState<PhaseConfig[]>(INITIAL_PHASES);
@@ -1468,28 +1468,55 @@ export default function App() {
   }
 
   return (
-    <div className="nxbc-site min-h-screen text-slate-100 relative font-['Outfit',sans-serif] selection:bg-[#f59e0b] selection:text-black">
+    <div className="min-h-screen bg-[#020914] text-slate-100 relative font-['Outfit',sans-serif] selection:bg-[#f59e0b] selection:text-black">
       {/* Background with Dark Analytical Graphs, Candlesticks & 3D Gold Coins */}
       <AnalyticalBackground />
 
       {/* Main Foreground Container */}
-      <div className="nxbc-site-container relative z-10 w-full max-w-7xl mx-auto px-1 sm:px-4 py-2 sm:py-6 flex flex-col min-h-screen">
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-1 sm:px-4 py-2 sm:py-6 flex flex-col min-h-screen">
         
+        {/* NXBC APP HEADER — compact reference style */}
+        <header className="relative z-40 mb-2 sm:mb-3 rounded-[20px] border border-amber-400/25 bg-[linear-gradient(135deg,rgba(5,17,30,.96),rgba(7,13,24,.94))] shadow-[0_0_28px_rgba(245,158,11,.08)] px-3 py-2.5 sm:px-4 sm:py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <GoldCoinGraphic size="sm" glow={true} animated={false} />
+              <div className="min-w-0">
+                <div className="text-[19px] sm:text-[22px] font-black tracking-wide text-amber-300 font-cinzel leading-none">{systemConfig.tokenSymbol || 'NXBC'}</div>
+                <div className="text-[7px] sm:text-[8px] tracking-[0.16em] text-slate-200 font-rajdhani uppercase mt-0.5">Build Today • Change Tomorrow</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button type="button" aria-label="X" title="X" className="w-9 h-9 rounded-full flex items-center justify-center bg-black/30 border border-slate-500/40 text-white text-lg hover:border-amber-300/60 transition-colors">𝕏</button>
+              <button type="button" aria-label="YouTube" title="YouTube" className="w-9 h-9 rounded-full flex items-center justify-center bg-red-500/10 border border-red-400/25 text-red-400 hover:border-red-300/60 transition-colors"><Youtube size={17} /></button>
+              <button type="button" aria-label="Telegram" title="Telegram" className="w-9 h-9 rounded-full flex items-center justify-center bg-cyan-500/10 border border-cyan-400/25 text-cyan-300 hover:border-cyan-200/60 transition-colors"><Send size={17} /></button>
+              <div className="relative">
+                <button type="button" aria-label="More" title="More" onClick={() => setShowHomeQuickMenu(v => !v)} className={`w-9 h-9 rounded-full flex items-center justify-center border transition-colors ${showHomeQuickMenu ? 'bg-amber-400/15 border-amber-300/70 text-amber-300' : 'bg-black/30 border-amber-400/30 text-slate-200 hover:border-amber-300/60'}`}><MoreVertical size={19} /></button>
+                {showHomeQuickMenu && (
+                  <div className="absolute right-0 top-11 w-40 rounded-2xl border border-amber-400/25 bg-[#071426]/98 backdrop-blur-xl shadow-2xl p-1.5">
+                    {[['home','Home'],['assets','Assets'],['team','Team'],['withdraw','Withdraw'],['mine','Mine']].map(([id,label]) => (
+                      <button key={id} type="button" onClick={() => { setActiveSingleScreen(id as ActiveScreen); setShowHomeQuickMenu(false); }} className="w-full text-left px-3 py-2 rounded-xl text-xs font-rajdhani font-bold text-slate-200 hover:bg-amber-400/10 hover:text-amber-300">{label}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/25 text-[8px] font-black uppercase tracking-wider text-emerald-300 whitespace-nowrap"><span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" /> BSC Mainnet Live</span>
+              <span className="w-5 sm:w-8 h-px bg-white/15 shrink-0" />
+              {walletConnected && walletAddress ? <span className="text-[9px] sm:text-[10px] font-mono-crypto text-slate-300 truncate">{walletAddress.slice(0,6)}...{walletAddress.slice(-4)}</span> : <button type="button" onClick={() => setWalletModalOpen(true)} className="text-[9px] sm:text-[10px] font-rajdhani font-bold text-amber-300">Connect Wallet</button>}
+            </div>
+            {systemConfig.presalePaused && <span className="text-[8px] px-2 py-1 rounded-full bg-rose-600 text-white">PAUSED</span>}
+          </div>
+        </header>
+
         {/* Dynamic View Rendering: Single Full Mobile Screen (Default) OR Trio Multi-Screen Grid */}
         {viewMode === 'single' ? (
           /* PURE FULL-WIDTH MOBILE SCREEN APPLICATION INTERFACE */
-          <div className="nxbc-app-shell flex-1 flex flex-col w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto rounded-2xl sm:rounded-[32px] overflow-hidden relative my-0 sm:my-2">
-            <NXBCBrandHeader
-              tokenSymbol={systemConfig.tokenSymbol || 'NXBC'}
-              presalePaused={!!systemConfig.presalePaused}
-              walletConnected={walletConnected}
-              walletAddress={walletAddress}
-              onOpenWallet={() => setWalletModalOpen(true)}
-            />
+          <div className="flex-1 flex flex-col w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto bg-gradient-to-b from-[#061323] via-[#050c18] to-[#06111d] rounded-2xl sm:rounded-[32px] border border-amber-500/25 shadow-[0_15px_60px_rgba(0,0,0,0.8)] overflow-hidden relative my-0 sm:my-2">
             
             {/* Native Mobile App Header Bar Removed as per user request */}
-
-
 
 
             {/* Mobile Screen Body Content */}
@@ -1508,6 +1535,7 @@ export default function App() {
                   onSimulateExternalBuy={handleSimulateExternalBuy}
                   onResetPhases={handleResetPhases}
                   onViewFIFO={() => setActiveSingleScreen('assets')}
+                  onNavigate={setActiveSingleScreen}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
                   totalEarningUsdt={totalEarningUsdt}
@@ -1576,6 +1604,7 @@ export default function App() {
                   totalInvestedUsd={totalInvestedUsd}
                   minMlmQualifyUsd={systemConfig.minMlmQualifyUsd || 100}
                   onResetAllData={handleResetAllData}
+                  onOpenAdmin={() => setShowSecretAdminPage(true)}
                 />
               )}
             </div>
@@ -1593,13 +1622,13 @@ export default function App() {
             
             {/* Context Headline for the 3 Interconnected Screens */}
             <div className="text-center mb-6 max-w-2xl mx-auto">
-              <span className="text-[11px] font-mono-crypto px-3 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-cyan-600/20 text-amber-300 border border-amber-400/30 uppercase tracking-widest inline-block mb-1.5">
+              <span className="text-[11px] font-mono-crypto px-3 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-fuchsia-600/20 text-amber-300 border border-amber-400/30 uppercase tracking-widest inline-block mb-1.5">
                 3 Interconnected Ecosystem Modules
               </span>
               <h2 className="text-xl sm:text-2xl font-black text-slate-100 font-rajdhani uppercase tracking-wide">
                 {systemConfig.tokenSymbol} Community Presale Platform
               </h2>
-              <p className="text-xs text-cyan-200/70">
+              <p className="text-xs text-purple-200/70">
                 Synchronized live state: Define future sell percentages on Screen 1 &bull; Track the 6-box sell schedule on Screen 2 &bull; Execute instant smart-contract withdrawal on Screen 3.
               </p>
             </div>
@@ -1632,6 +1661,7 @@ export default function App() {
                     setViewMode('single');
                     setActiveSingleScreen('assets');
                   }}
+                  onNavigate={(screen) => { setViewMode('single'); setActiveSingleScreen(screen); }}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
                   nxbcBalance={nxbcBalance}
@@ -1685,7 +1715,7 @@ export default function App() {
               <DeviceFrame
                 screenNumber={3}
                 screenTitle="Screen 3: Instant Withdrawal"
-                badgeText="Secure Wallet"
+                badgeText="Hot Multi-Sig"
                 badgeColor="purple"
                 url="nxbc.network/wallet"
                 isHero={false}
