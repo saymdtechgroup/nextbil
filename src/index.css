@@ -155,3 +155,33 @@ html, body, #root {
 @media (max-width: 420px) {
   .nxbc-screen { padding-left: .65rem; padding-right: .65rem; }
 }
+
+
+/* NXBC unified visual system: deep navy + cyan + gold across every dashboard screen. */
+.nxbc-app-shell {
+  --nxbc-bg: #020914;
+  --nxbc-panel: #071426;
+  --nxbc-gold: #fbbf24;
+  --nxbc-cyan: #22d3ee;
+  --nxbc-line: rgba(245, 158, 11, .20);
+  background: radial-gradient(circle at 50% -10%, rgba(34,211,238,.08), transparent 34%),
+              linear-gradient(180deg, #020914 0%, #061323 48%, #020914 100%) !important;
+}
+.nxbc-app-shell .rounded-2xl,
+.nxbc-app-shell .rounded-3xl {
+  scrollbar-color: rgba(245,158,11,.45) transparent;
+}
+.nxbc-bottom-nav {
+  border-top: 1px solid rgba(245,158,11,.22);
+  background: linear-gradient(180deg, rgba(7,20,38,.97), rgba(3,10,20,.99));
+}
+/* The Home screen ends directly on its movement banner—no artificial bottom gap. */
+.nxbc-home-screen,
+.nxbc-home-screen > :last-child {
+  margin-bottom: 0 !important;
+}
+@media (max-width: 640px) {
+  .nxbc-app-shell .nxbc-bottom-nav {
+    padding-bottom: max(.5rem, env(safe-area-inset-bottom));
+  }
+}

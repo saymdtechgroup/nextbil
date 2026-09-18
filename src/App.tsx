@@ -1042,7 +1042,6 @@ export default function App() {
     }
   };
 
-  // Helper to easily simulate 100% phase completion for sequential demo
   
   const handleSimulateExternalBuy = (amount: number) => {
     if (import.meta.env.PROD) return;
@@ -1468,7 +1467,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#020914] text-slate-100 relative font-['Outfit',sans-serif] selection:bg-[#f59e0b] selection:text-black">
+    <div className="nxbc-app-shell min-h-screen bg-[#020914] text-slate-100 relative font-['Outfit',sans-serif] selection:bg-[#f59e0b] selection:text-black">
       {/* Background with Dark Analytical Graphs, Candlesticks & 3D Gold Coins */}
       <AnalyticalBackground />
 
@@ -1520,7 +1519,7 @@ export default function App() {
 
 
             {/* Mobile Screen Body Content */}
-            <div className="flex-1 pb-2 min-h-[520px] flex flex-col">
+            <div className={`flex-1 min-h-[520px] flex flex-col ${activeSingleScreen === 'home' ? 'pb-0' : 'pb-2'}`}>
               {activeSingleScreen === 'home' && (
                 <ScreenOneAcquisition
                   allocation={allocation}
@@ -1609,12 +1608,15 @@ export default function App() {
               )}
             </div>
 
-            {/* Docked Mobile Bottom Navigation Bar */}
-            <BottomNavBar
-              idPrefix="full-mobile-nav"
-              activeScreen={activeSingleScreen}
-              onSelectScreen={setActiveSingleScreen}
-            />
+            {/* Home is intentionally distraction-free: hide the mobile navbar only on Home.
+                All other app screens keep the bottom navigation visible. */}
+            {activeSingleScreen !== 'home' && (
+              <BottomNavBar
+                idPrefix="full-mobile-nav"
+                activeScreen={activeSingleScreen}
+                onSelectScreen={setActiveSingleScreen}
+              />
+            )}
           </div>
         ) : (
           /* TRIPLE SCREEN PANORAMIC SHOWCASE (3 Screens Side-by-Side) */
