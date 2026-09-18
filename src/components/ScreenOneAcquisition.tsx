@@ -172,7 +172,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
       </div>
 
       {/* GLOBAL MOVEMENT BANNER */}
-      <div className="sticky bottom-0 z-20 mt-0 overflow-hidden rounded-[16px] border border-amber-400/20 bg-[#06101d] shadow-[0_0_24px_rgba(245,158,11,0.08)]">
+      <div className="nxbc-home-banner fixed bottom-0 left-0 right-0 z-50 w-full overflow-hidden rounded-none border border-amber-400/20 bg-[#06101d] shadow-[0_0_24px_rgba(245,158,11,0.08)] md:static md:rounded-[16px]">
         <img src={bannerImage} alt="NXBC — A Stronger Tomorrow Builds Here — Join the Global Movement" className="block w-full h-auto object-cover" loading="eager" />
       </div>
     </div>
