@@ -27,7 +27,6 @@ interface ScreenOneAcquisitionProps {
 export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   allocation,
   phases,
-  sellQueue,
   onOpenBuyModal,
   onNavigate,
 }) => {
@@ -73,7 +72,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   const go = (screen: ActiveScreen) => onNavigate?.(screen);
 
   return (
-    <div className="nxbc-screen w-full max-w-xl mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3">
+    <div className="nxbc-screen flex flex-col w-full max-w-xl mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3 pb-0">
       {/* VERIFIED PRESALE ACTIVITY */}
       <section className="relative overflow-hidden rounded-[22px] border border-amber-400/30 bg-[radial-gradient(circle_at_82%_8%,rgba(16,185,129,0.08),transparent_28%),linear-gradient(135deg,#081426_0%,#07101c_60%,#120b19_100%)] shadow-[0_0_28px_rgba(245,158,11,0.08)]">
         <div className="relative p-3.5 sm:p-4">
@@ -124,51 +123,6 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
         </div>
       </section>
 
-      {/* LIVE FIFO LINE — database/API data only, never placeholder entries */}
-      <section className="nxbc-fifo-panel relative overflow-hidden rounded-[22px] border border-cyan-400/25 bg-[linear-gradient(135deg,#071b2a_0%,#07101d_65%,#10152a_100%)] shadow-[0_0_28px_rgba(34,211,238,0.08)]">
-        <div className="relative p-3.5 sm:p-4">
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <div>
-              <div className="text-[14px] sm:text-[16px] font-black font-rajdhani uppercase tracking-[0.08em] text-cyan-200">Live FIFO Line</div>
-              <p className="text-[8px] sm:text-[9px] text-slate-300/80 font-mono-crypto mt-0.5">Real queue positions • wallet addresses masked</p>
-            </div>
-            <span className="px-2.5 py-1 rounded-full bg-cyan-400/10 border border-cyan-300/25 text-[8px] font-black uppercase tracking-wider text-cyan-200">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse mr-1" />Live
-            </span>
-          </div>
-          {sellQueue && sellQueue.length > 0 ? (
-            <div className="space-y-2">
-              {sellQueue.slice(0, 5).map((entry, index) => {
-                const wallet = String(entry.userId || 'Unknown');
-                const maskedWallet = wallet.length > 12 ? `${wallet.slice(0, 6)}…${wallet.slice(-4)}` : wallet;
-                const remaining = Math.max(0, Number(entry.tokensRequested || 0) - Number(entry.tokensSold || 0));
-                return (
-                  <div key={entry.id || `${entry.phaseNumber}-${index}`} className="flex items-center gap-2 rounded-[15px] border border-white/10 bg-[#050b16]/70 px-2.5 py-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-300/10 text-sm font-black text-cyan-200">#{index + 1}</div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-[10px] sm:text-[11px] font-mono-crypto text-slate-100">{maskedWallet}</span>
-                        <span className="shrink-0 text-[8px] font-bold uppercase text-cyan-200">P{entry.phaseNumber}</span>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between gap-2 text-[8px] text-slate-400 font-mono-crypto">
-                        <span>Queue #{index + 1}</span>
-                        <span>{remaining.toLocaleString()} NXBC pending</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              {sellQueue.length > 5 && <p className="text-center text-[8px] text-slate-400 font-mono-crypto">+{sellQueue.length - 5} more verified queue entries</p>}
-            </div>
-          ) : (
-            <div className="rounded-[15px] border border-dashed border-cyan-300/20 bg-[#050b16]/50 px-3 py-5 text-center">
-              <div className="text-[12px] font-black font-rajdhani uppercase tracking-wider text-slate-200">FIFO line is currently empty</div>
-              <p className="mt-1 text-[9px] text-slate-400 font-mono-crypto">Live orders will appear here after verified API data is available.</p>
-            </div>
-          )}
-        </div>
-      </section>
-
       {/* CURRENT PHASE */}
       <section className="relative overflow-hidden rounded-[22px] border border-amber-400/30 bg-[radial-gradient(circle_at_80%_15%,rgba(245,158,11,0.07),transparent_25%),linear-gradient(135deg,#071426_0%,#09101c_65%,#151109_100%)] shadow-[0_0_28px_rgba(245,158,11,0.07)]">
         <div className="relative p-3.5 sm:p-4">
@@ -213,7 +167,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
       </div>
 
       {/* GLOBAL MOVEMENT BANNER */}
-      <div className="nxbc-home-banner overflow-hidden rounded-[16px] border border-amber-400/20 bg-[#06101d] shadow-[0_0_24px_rgba(245,158,11,0.08)]">
+      <div className="sticky bottom-0 z-20 mt-0 overflow-hidden rounded-[16px] border border-amber-400/20 bg-[#06101d] shadow-[0_0_24px_rgba(245,158,11,0.08)]">
         <img src={bannerImage} alt="NXBC — A Stronger Tomorrow Builds Here — Join the Global Movement" className="block w-full h-auto object-cover" loading="eager" />
       </div>
     </div>
