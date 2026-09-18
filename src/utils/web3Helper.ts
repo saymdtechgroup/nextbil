@@ -1,3 +1,4 @@
+import { ethers } from "ethers";
 
 const waitWithTimeout = (promise: Promise<any>, ms: number) => {
     return Promise.race([
@@ -5,38 +6,15 @@ const waitWithTimeout = (promise: Promise<any>, ms: number) => {
         new Promise((resolve) => setTimeout(() => resolve({ status: -1, timeout: true }), ms))
     ]);
 };
-import { ethers } from "ethers";
+
 // Web3 Utility Helpers for BSC Mainnet Token Balances and Strict On-Chain Receipt Verification
 
 
-export const NXBC_TOKEN_CONTRACT = '0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1'; // UPDATED TOKEN
-export const NXBC_PRESALE_CONTRACT = '0x4Bc1a2f057FF9a036b8C27a90f7C7F403dC85cae'; // UPDATED CONTRACT
+export const NXBC_TOKEN_CONTRACT = '0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1';
+export const NXBC_PRESALE_CONTRACT = '0xc3D352668b555E2d9E3F1c0BEf324675e46B3923'; // UPDATED CONTRACT
 export const NXBC_CONTRACT = NXBC_TOKEN_CONTRACT; // Standard token import points to the actual BEP-20 token
 export const USDT_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
 export const ADMIN_TREASURY_WALLET = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261';
-
-/** Build the exact short-lived withdrawal authorization message expected by the server. */
-export function buildWithdrawMessage(walletAddress: string, amountUsdt: number, walletType: string, timestamp: number) {
-  return `Authorize withdrawal\nWallet: ${walletAddress.toLowerCase()}\nAmount: ${amountUsdt} USDT\nType: ${walletType}\nTimestamp: ${timestamp}`;
-}
-
-/** Ask the connected wallet to sign a withdrawal request. The server verifies the recovered address. */
-export async function signWithdrawRequest(
-  walletAddress: string,
-  amountUsdt: number,
-  walletType: string,
-): Promise<{ signature: string; timestamp: number }> {
-  const eth =
-    (typeof window !== 'undefined' && ((window as any).trustwallet?.ethereum || (window as any).ethereum || (window as any).binancew3w?.ethereum || (window as any).okxwallet)) || null;
-  if (!eth?.request) throw new Error('Web3 wallet not detected. Please connect your wallet.');
-  const timestamp = Date.now();
-  const message = buildWithdrawMessage(walletAddress, amountUsdt, walletType, timestamp);
-  const signature = await eth.request({
-    method: 'personal_sign',
-    params: [message, walletAddress],
-  });
-  return { signature, timestamp };
-}
 
 const BSC_RPCS = [
   'https://bsc-dataseed1.binance.org/',
@@ -366,7 +344,7 @@ export async function executeSmartContractBuy(
   }
 
   try {
-    const provider = new ethers.BrowserProvider(ethProvider);
+    const provider = new ethers.BrowserProvider(ethProvider, 'any');
     const signer = await provider.getSigner();
     
     // Strict network check - Force user to switch to BSC
@@ -420,7 +398,7 @@ export async function executeSmartContractBuy(
     const presaleContract = new ethers.Contract(
       NXBC_PRESALE_CONTRACT,
       [
-        "function buyTokens(uint256 usdtAmount) external"
+        "function buyTokens(uint256 nxbusdAmount, address sponsor) external"
       ],
       signer
     );
@@ -436,7 +414,7 @@ export async function executeSmartContractBuy(
     
     // The new contract only takes usdtAmount
     // Adding explicit gas limit because sometimes estimateGas fails on BSC with tokens
-    const buyTx = await presaleContract.buyTokens(amountWei, {
+    const buyTx = await presaleContract.buyTokens(amountWei, spAddress, {
       gasLimit: 300000 
     });
     
@@ -454,3 +432,39 @@ export async function executeSmartContractBuy(
     return { success: false, error: err?.reason || err?.message || 'Transaction failed or rejected by user' };
   }
 }
+
+export function buildWithdrawMessage(
+  walletAddress: string,
+  amountUsdt: number,
+  walletType: string,
+  timestamp: number
+): string {
+  return `Authorize withdrawal\nWallet: ${walletAddress.toLowerCase()}\nAmount: ${amountUsdt} USDT\nType: ${walletType}\nTimestamp: ${timestamp}`;
+}
+
+export async function signWithdrawRequest(
+  walletAddress: string,
+  amountUsdt: number,
+  walletType: string = 'mlm'
+): Promise<{ signature: string; timestamp: number }> {
+  const timestamp = Date.now();
+  const message = buildWithdrawMessage(walletAddress, amountUsdt, walletType, timestamp);
+
+  if (typeof window !== 'undefined') {
+    const eth =
+      (window as any).trustwallet?.ethereum ||
+      (window as any).ethereum ||
+      (window as any).binancew3w?.ethereum ||
+      (window as any).okxwallet;
+
+    if (eth) {
+      const provider = new ethers.BrowserProvider(eth);
+      const signer = await provider.getSigner();
+      const signature = await signer.signMessage(message);
+      return { signature, timestamp };
+    }
+  }
+
+  throw new Error('Web3 wallet not detected for signature authorization');
+}
+
