@@ -181,3 +181,9 @@ html, body, #root {
 @media (max-width: 640px) {
   .nxbc-home-banner { margin-bottom: 0 !important; display: block; }
 }
+
+/* Mobile layout: keep the home banner as the final home section and prevent horizontal overflow. */
+@media (max-width: 640px) {
+  .nxbc-screen { width: 100%; max-width: 100%; overflow-x: hidden; }
+  .nxbc-home-banner { order: 999; margin-top: .75rem; margin-bottom: 0 !important; }
+}
