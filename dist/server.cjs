@@ -320,7 +320,7 @@ async function verifyPresalePurchaseOnChain(params) {
   const adminWallet = (process.env.PRESALE_RECEIVING_WALLET || DEFAULT_ADMIN_WALLET).toLowerCase();
   const presaleAddress = (process.env.NXBC_PRESALE_CONTRACT_ADDRESS || process.env.NXBC_PRESALE_CONTRACT || DEFAULT_PRESALE_ADDRESS).toLowerCase();
   const iface = new import_ethers.ethers.Interface(["event Transfer(address indexed from, address indexed to, uint256 value)"]);
-  const usdtRaw = import_ethers.ethers.parseUnits(Number(usdtAmount).toFixed(6), 18);
+  const usdtRaw = import_ethers.ethers.parseUnits(Number(usdtAmount).toFixed(18), 18);
   const nxbcRaw = import_ethers.ethers.parseUnits(Number(nxbcAmount).toFixed(18), 18);
   let usdtPaid = false;
   let nxbcDelivered = false;
@@ -700,12 +700,55 @@ async function finalizeConfirmedPurchase(user, tokenAmount, amountUsdt, phaseInd
   }
   return { newInvested, isNowMlmQualified };
 }
+var DIRECT_INVITE_TTL_MS = 24 * 60 * 60 * 1e3;
+var DIRECT_INVITE_PREFIX = "NXBC-DM-";
+var hashDirectInvite = (token) => (0, import_crypto.createHash)("sha256").update(token).digest("hex");
+async function ensureDirectBuyerTables() {
+  await db.execute(import_drizzle_orm2.sql`CREATE TABLE IF NOT EXISTS direct_buyer_invites (id SERIAL PRIMARY KEY, seller_user_id INTEGER NOT NULL REFERENCES users(id), sell_order_id INTEGER NOT NULL REFERENCES sell_orders(id), phase_number INTEGER NOT NULL, token_hash TEXT NOT NULL UNIQUE, claimed_by_wallet TEXT, used_at TIMESTAMP, expires_at TIMESTAMP NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT NOW())`);
+  await db.execute(import_drizzle_orm2.sql`CREATE INDEX IF NOT EXISTS direct_buyer_invites_order_idx ON direct_buyer_invites (sell_order_id)`);
+}
+async function createDirectBuyerInvite(sellerUserId, sellOrderId) {
+  const order = await db.query.sellOrders.findFirst({ where: (0, import_drizzle_orm2.eq)(sellOrders.id, sellOrderId) });
+  if (!order || Number(order.userId) !== Number(sellerUserId)) throw new Error("Sale order not found or not owned by this wallet.");
+  if (Number(order.phaseNumber) < 2 || Number(order.phaseNumber) > 5) throw new Error("Direct Buyer Match is available only for Phase 2 to Phase 5.");
+  if (!["open", "partially_filled"].includes(String(order.status)) || Number(order.remainingTokens || 0) <= 0) throw new Error("This sale order is no longer open.");
+  const token = DIRECT_INVITE_PREFIX + (0, import_crypto.randomBytes)(24).toString("hex");
+  const expiresAt = new Date(Date.now() + DIRECT_INVITE_TTL_MS);
+  await db.execute(import_drizzle_orm2.sql`UPDATE direct_buyer_invites SET expires_at = NOW() WHERE sell_order_id=${sellOrderId} AND used_at IS NULL AND expires_at > NOW()`);
+  await db.execute(import_drizzle_orm2.sql`INSERT INTO direct_buyer_invites (seller_user_id,sell_order_id,phase_number,token_hash,expires_at) VALUES (${sellerUserId},${sellOrderId},${Number(order.phaseNumber)},${hashDirectInvite(token)},${expiresAt})`);
+  return { token, expiresAt, phaseNumber: Number(order.phaseNumber), remainingTokens: Number(order.remainingTokens || 0) };
+}
+async function matchDirectBuyerFirst(params) {
+  const share = Math.max(0, Number(params.buyerTokenAmount) * 0.2);
+  if (share <= 0 || !params.inviteToken) return { matched: 0, unmatched: share, match: null, inviteUsed: false };
+  await ensureDirectBuyerTables();
+  const rows = await db.execute(import_drizzle_orm2.sql`SELECT * FROM direct_buyer_invites WHERE token_hash=${hashDirectInvite(params.inviteToken)} LIMIT 1`);
+  const invite = rows.rows?.[0] || rows[0];
+  if (!invite || invite.used_at || new Date(invite.expires_at).getTime() <= Date.now()) return { matched: 0, unmatched: share, match: null, inviteUsed: false };
+  const buyer = String(params.buyerWallet || "").toLowerCase();
+  if (String(invite.claimed_by_wallet || "") && String(invite.claimed_by_wallet).toLowerCase() !== buyer) return { matched: 0, unmatched: share, match: null, inviteUsed: false };
+  if (Number(invite.phase_number) !== Number(params.phaseNumber) || Number(invite.seller_user_id) === Number(params.buyerUserId)) return { matched: 0, unmatched: share, match: null, inviteUsed: false };
+  const order = await db.query.sellOrders.findFirst({ where: (0, import_drizzle_orm2.eq)(sellOrders.id, Number(invite.sell_order_id)) });
+  if (!order || Number(order.userId) !== Number(invite.seller_user_id) || !["open", "partially_filled"].includes(String(order.status))) return { matched: 0, unmatched: share, match: null, inviteUsed: false };
+  const remaining = Math.max(0, Number(order.remainingTokens || 0)), filled = Math.min(share, remaining), price = Number(order.tokenPrice || 0);
+  if (filled <= 0 || !Number.isFinite(price) || price <= 0) return { matched: 0, unmatched: share, match: null, inviteUsed: false };
+  const nextRemaining = Math.max(0, remaining - filled), nextStatus = nextRemaining <= 1e-12 ? "completed" : "partially_filled", grossUsdt = filled * price;
+  await db.update(sellOrders).set({ remainingTokens: nextRemaining, status: nextStatus }).where((0, import_drizzle_orm2.eq)(sellOrders.id, order.id));
+  const seller = await db.query.users.findFirst({ where: (0, import_drizzle_orm2.eq)(users.id, order.userId) });
+  if (seller) {
+    await db.update(users).set({ totalEarnedUsdt: Number(seller.totalEarnedUsdt || 0) + grossUsdt, availableUsdt: Number(seller.availableUsdt || 0) + grossUsdt, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm2.eq)(users.id, seller.id));
+    await db.insert(tokenSellLedgers).values({ userId: seller.id, walletAddress: seller.walletAddress, phaseIndex: order.phaseNumber, phaseName: `Phase ${order.phaseNumber}`, tokenPrice: price, tokensSold: filled, tokensReturned: 0, grossUsdt, withdrawnUsdt: 0, serviceFeeUsdt: 0, status: "unclaimed" });
+  }
+  await db.execute(import_drizzle_orm2.sql`UPDATE direct_buyer_invites SET claimed_by_wallet=${buyer}, used_at=NOW() WHERE id=${Number(invite.id)} AND used_at IS NULL`);
+  return { matched: filled, unmatched: Math.max(0, share - filled), inviteUsed: true, match: { orderId: order.id, sellerUserId: order.userId, phaseNumber: order.phaseNumber, tokensSold: filled, tokenPrice: price, grossUsdt, remainingOrderTokens: nextRemaining, status: nextStatus } };
+}
 async function matchVerifiedBuyerToPhaseQueue(params) {
   const userShareTokens = Math.max(0, params.buyerTokenAmount * 0.2);
   const adminShareTokens = Math.max(0, params.buyerTokenAmount - userShareTokens);
-  if (userShareTokens <= 0) return { userShareTokens: 0, adminShareTokens, unmatchedUserShareTokens: 0, matches: [] };
+  if (userShareTokens <= 0) return { userShareTokens: 0, adminShareTokens, unmatchedUserShareTokens: 0, matches: [], directMatch: null };
+  const direct = await matchDirectBuyerFirst({ buyerUserId: params.buyerUserId, buyerWallet: params.buyerWallet || "", phaseNumber: params.phaseNumber, buyerTokenAmount: params.buyerTokenAmount, inviteToken: params.directBuyerInviteToken });
+  let remainingBuyerUserShare = direct.unmatched;
   const orders = await db.select().from(sellOrders).where((0, import_drizzle_orm2.and)((0, import_drizzle_orm2.eq)(sellOrders.phaseNumber, params.phaseNumber), (0, import_drizzle_orm2.inArray)(sellOrders.status, ["open", "partially_filled"]))).orderBy((0, import_drizzle_orm2.asc)(sellOrders.createdAt), (0, import_drizzle_orm2.asc)(sellOrders.priority));
-  let remainingBuyerUserShare = userShareTokens;
   const matches = [];
   for (const order of orders) {
     if (remainingBuyerUserShare <= 1e-12) break;
@@ -814,6 +857,7 @@ async function verifyPendingPresalePurchases() {
       await finalizeConfirmedPurchase(user, Number(txRecord.tokenAmount), Number(txRecord.amountUsdt), Number(txRecord.phaseIndex || 1));
       await matchVerifiedBuyerToPhaseQueue({
         buyerUserId: user.id,
+        buyerWallet: user.walletAddress,
         phaseNumber: Number(txRecord.phaseIndex || 1),
         buyerTokenAmount: Number(txRecord.tokenAmount)
       });
@@ -824,16 +868,24 @@ async function verifyPendingPresalePurchases() {
   }
 }
 async function startServer() {
+  try {
+    await ensureDirectBuyerTables();
+  } catch (e) {
+    console.error("[DIRECT MATCH] table initialization failed:", e);
+  }
   const app = (0, import_express.default)();
   const PORT = 3e3;
   app.use(import_express.default.json());
   app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-    if (req.method === "OPTIONS") {
-      return res.sendStatus(200);
+    const allowedOrigin = String(process.env.CORS_ORIGIN || "").trim();
+    const requestOrigin = String(req.headers.origin || "");
+    if (allowedOrigin && requestOrigin === allowedOrigin) {
+      res.header("Access-Control-Allow-Origin", allowedOrigin);
+      res.header("Vary", "Origin");
+      res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+      res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Token");
     }
+    if (req.method === "OPTIONS") return res.sendStatus(204);
     next();
   });
   app.get("/api/health", async (req, res) => {
@@ -1295,12 +1347,22 @@ async function startServer() {
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
-      const userTxs = await db.select().from(transactions).where((0, import_drizzle_orm2.eq)(transactions.userId, user.id)).orderBy((0, import_drizzle_orm2.desc)(transactions.createdAt)).limit(10);
-      const userEarnings = await db.select().from(levelEarnings).where((0, import_drizzle_orm2.eq)(levelEarnings.beneficiaryId, user.id)).orderBy((0, import_drizzle_orm2.desc)(levelEarnings.createdAt)).limit(10);
+      const userTxs = await db.select().from(transactions).where((0, import_drizzle_orm2.eq)(transactions.userId, user.id)).orderBy((0, import_drizzle_orm2.desc)(transactions.createdAt)).limit(100);
+      const userEarnings = await db.select().from(levelEarnings).where((0, import_drizzle_orm2.eq)(levelEarnings.beneficiaryId, user.id)).orderBy((0, import_drizzle_orm2.desc)(levelEarnings.createdAt)).limit(100);
+      const earningTotals = await db.execute(import_drizzle_orm2.sql`
+        SELECT
+          COALESCE(SUM(CASE WHEN level_number > 0 THEN commission_usdt ELSE 0 END), 0) AS level_income_usdt,
+          COALESCE(SUM(CASE WHEN tx_type = 'matrix_join' THEN commission_usdt ELSE 0 END), 0) AS matrix_income_usdt
+        FROM level_earnings
+        WHERE beneficiary_id = ${user.id}
+      `);
+      const earningRow = earningTotals?.rows?.[0] || {};
       res.json({
         user,
         transactions: userTxs,
-        earnings: userEarnings
+        earnings: userEarnings,
+        levelIncomeUsdt: Number(earningRow.level_income_usdt || 0),
+        matrixIncomeUsdt: Number(earningRow.matrix_income_usdt || 0)
       });
     } catch (error) {
       console.error("Error in /api/users/:walletAddress:", error);
@@ -1435,7 +1497,7 @@ async function startServer() {
   });
   app.post("/api/presale/buy", async (req, res) => {
     try {
-      const { walletAddress, amountUsdt, tokenAmount, tokenPrice, phaseIndex, txHash } = req.body;
+      const { walletAddress, amountUsdt, tokenAmount, tokenPrice, phaseIndex, txHash, directBuyerInviteToken } = req.body;
       if (!walletAddress || !amountUsdt || !tokenAmount) {
         return res.status(400).json({ error: "Missing required purchase fields" });
       }
@@ -1533,8 +1595,10 @@ async function startServer() {
       );
       const fifoSettlement = await matchVerifiedBuyerToPhaseQueue({
         buyerUserId: user.id,
+        buyerWallet: normalizedAddress,
         phaseNumber: Number(activePhase.phaseNumber || phaseIndex || 1),
-        buyerTokenAmount: Number(tokenAmount)
+        buyerTokenAmount: Number(tokenAmount),
+        directBuyerInviteToken: typeof directBuyerInviteToken === "string" ? directBuyerInviteToken : void 0
       });
       let tokenDispatchTxHash = txHash;
       const hotWalletDispatchEnabled = process.env.ENABLE_HOT_WALLET_DISPATCH === "true";
@@ -1746,6 +1810,32 @@ async function startServer() {
     } catch (error) {
       console.error("Error fetching personal sale orders:", error);
       res.status(500).json({ error: "Failed to load sale orders." });
+    }
+  });
+  app.post("/api/presale/direct-buyer/invite", async (req, res) => {
+    try {
+      const walletAddress = String(req.body?.walletAddress || "").toLowerCase(), orderId = Number(req.body?.orderId);
+      if (!/^0x[a-f0-9]{40}$/.test(walletAddress) || !Number.isInteger(orderId)) return res.status(400).json({ error: "Valid wallet address and order ID are required." });
+      const user = await db.query.users.findFirst({ where: (0, import_drizzle_orm2.eq)(users.walletAddress, walletAddress) });
+      if (!user) return res.status(404).json({ error: "User not found." });
+      await ensureDirectBuyerTables();
+      const invite = await createDirectBuyerInvite(user.id, orderId);
+      const proto = String(req.get("x-forwarded-proto") || req.protocol || "https").split(",")[0];
+      const base = `${proto}://${req.get("host")}`;
+      res.json({ success: true, inviteToken: invite.token, expiresAt: invite.expiresAt, phaseNumber: invite.phaseNumber, remainingTokens: invite.remainingTokens, shareUrl: `${base}/?directBuyer=${encodeURIComponent(invite.token)}` });
+    } catch (error) {
+      res.status(400).json({ error: error.message || "Could not create Direct Buyer Match invite." });
+    }
+  });
+  app.get("/api/presale/direct-buyer/invite/:token", async (req, res) => {
+    try {
+      await ensureDirectBuyerTables();
+      const rows = await db.execute(import_drizzle_orm2.sql`SELECT i.phase_number,i.sell_order_id,i.expires_at,i.used_at,o.remaining_tokens,o.token_price,u.wallet_address FROM direct_buyer_invites i JOIN sell_orders o ON o.id=i.sell_order_id JOIN users u ON u.id=i.seller_user_id WHERE i.token_hash=${hashDirectInvite(String(req.params.token || ""))} LIMIT 1`);
+      const row = rows.rows?.[0] || rows[0];
+      if (!row || row.used_at || new Date(row.expires_at).getTime() <= Date.now()) return res.status(404).json({ error: "Invite is expired or already used." });
+      res.json({ success: true, phaseNumber: Number(row.phase_number), remainingTokens: Number(row.remaining_tokens || 0), tokenPrice: Number(row.token_price || 0), sellerWalletMasked: `${String(row.wallet_address).slice(0, 6)}...${String(row.wallet_address).slice(-4)}`, expiresAt: row.expires_at });
+    } catch {
+      res.status(400).json({ error: "Invalid Direct Buyer Match invite." });
     }
   });
   app.post("/api/presale/allocation", async (req, res) => {
@@ -2002,6 +2092,58 @@ async function startServer() {
     } catch (error) {
       console.error("Error in /api/presale/config:", error);
       res.status(500).json({ success: false, error: "Failed to load presale configuration." });
+    }
+  });
+  app.get("/api/presale/trust-stats", async (_req, res) => {
+    try {
+      const result = await db.execute(import_drizzle_orm2.sql`
+        SELECT
+          COALESCE(SUM(token_amount), 0) AS total_tokens_sold,
+          COALESCE(SUM(amount_usdt), 0) AS total_usdt_received,
+          COUNT(*) AS completed_purchases
+        FROM transactions
+        WHERE type = 'buy_presale'
+          AND status = 'completed'
+      `);
+      const row = result?.rows?.[0] || {};
+      const completedPurchases = Number(row.completed_purchases || 0);
+      if (completedPurchases > 0) {
+        return res.json({
+          success: true,
+          totalTokensSold: Number(row.total_tokens_sold || 0),
+          totalUsdtReceived: Number(row.total_usdt_received || 0),
+          completedPurchases,
+          source: "verified_transactions",
+          verified: true
+        });
+      }
+      const phaseRow = await db.query.systemConfigs.findFirst({
+        where: (0, import_drizzle_orm2.eq)(systemConfigs.key, "phases")
+      });
+      let phaseTokens = 0;
+      let phaseUsdt = 0;
+      if (phaseRow?.value) {
+        const phases = JSON.parse(phaseRow.value);
+        if (Array.isArray(phases)) {
+          for (const phase of phases) {
+            const sold = Math.max(0, Number(phase.tokensSold || 0));
+            const rate = Number(phase.rate ?? phase.tokenPrice ?? phase.price ?? 0);
+            phaseTokens += sold;
+            if (Number.isFinite(rate) && rate > 0) phaseUsdt += sold * rate;
+          }
+        }
+      }
+      return res.json({
+        success: true,
+        totalTokensSold: phaseTokens,
+        totalUsdtReceived: phaseUsdt,
+        completedPurchases: 0,
+        source: "phase_config_fallback",
+        verified: false
+      });
+    } catch (error) {
+      console.error("Error in /api/presale/trust-stats:", error);
+      res.status(500).json({ success: false, error: "Failed to load presale statistics." });
     }
   });
   app.get("/api/admin/configs", async (req, res) => {
