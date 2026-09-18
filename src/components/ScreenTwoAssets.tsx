@@ -118,29 +118,47 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
 
   return (
     <div className="nxbc-home-theme flex-1 p-3.5 space-y-3.5 relative">
-      {/* Assets Header Bar */}
-      <div className="flex items-center justify-between pb-1 border-b border-purple-500/10">
-        <div className="flex items-center gap-2">
-          <div className="p-1 rounded-lg bg-amber-500/20 text-amber-300">
-            <PieChart className="w-4 h-4" />
+      {/* Assets Header Bar — Home theme, with a distinct portfolio command-center look */}
+      <div className="relative overflow-hidden rounded-2xl border border-amber-400/25 bg-gradient-to-r from-[#120827] via-[#0a1426] to-[#071b25] p-3 shadow-[0_0_28px_rgba(245,158,11,0.08)]">
+        <div className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-amber-400/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-16 left-1/3 h-32 w-32 rounded-full bg-cyan-400/10 blur-3xl" />
+        <div className="relative flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="rounded-xl border border-amber-300/30 bg-amber-400/10 p-2 text-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.12)]">
+              <PieChart className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="mb-0.5 flex items-center gap-1.5">
+                <span className="text-[8px] font-mono-crypto uppercase tracking-[0.22em] text-cyan-300/80">NXBC / COMMAND CENTER</span>
+                <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-1.5 py-0.5 text-[7px] font-mono-crypto text-emerald-300">LIVE</span>
+              </div>
+              <h1 className="truncate text-sm font-black uppercase tracking-wider text-slate-100 font-rajdhani">Asset Portfolio</h1>
+              <p className="text-[9px] text-purple-200/70 font-mono-crypto">Your allocation, milestones & FIFO visibility</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xs font-bold text-slate-100 font-rajdhani uppercase tracking-wider">
-              Asset Portfolio & Schedule
-            </h1>
-            <p className="text-[9px] text-purple-300/70 font-mono-crypto">
-              Real-Time Phase Allocation
-            </p>
+          <button
+            onClick={() => setShowValues(!showValues)}
+            className="shrink-0 rounded-xl border border-purple-400/25 bg-[#090317]/70 p-2 text-purple-200 transition-all hover:border-amber-300/60 hover:text-amber-300"
+            title="Toggle Privacy"
+            aria-label="Toggle portfolio value visibility"
+          >
+            {showValues ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4 text-amber-400" />}
+          </button>
+        </div>
+        <div className="relative mt-3 grid grid-cols-3 gap-2">
+          <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[0.04] px-2 py-1.5">
+            <div className="text-[7px] uppercase tracking-wider text-cyan-200/60 font-mono-crypto">Holdings</div>
+            <div className="mt-0.5 text-[10px] font-bold text-cyan-200 font-mono-crypto">{showValues ? `${totalTokens.toLocaleString()}` : '••••'}</div>
+          </div>
+          <div className="rounded-xl border border-amber-400/15 bg-amber-400/[0.04] px-2 py-1.5">
+            <div className="text-[7px] uppercase tracking-wider text-amber-200/60 font-mono-crypto">Milestones</div>
+            <div className="mt-0.5 text-[10px] font-bold text-amber-200 font-mono-crypto">06 VECTORS</div>
+          </div>
+          <div className="rounded-xl border border-fuchsia-400/15 bg-fuchsia-400/[0.04] px-2 py-1.5">
+            <div className="text-[7px] uppercase tracking-wider text-fuchsia-200/60 font-mono-crypto">Visibility</div>
+            <div className="mt-0.5 text-[10px] font-bold text-fuchsia-200 font-mono-crypto">{showValues ? 'UNLOCKED' : 'PRIVATE'}</div>
           </div>
         </div>
-
-        <button
-          onClick={() => setShowValues(!showValues)}
-          className="p-1.5 rounded-lg bg-purple-950/60 border border-purple-500/20 text-purple-300 hover:text-amber-300 transition-colors"
-          title="Toggle Privacy"
-        >
-          {showValues ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5 text-amber-400" />}
-        </button>
       </div>
 
       {/* Portfolio Quick Overview Banner */}
