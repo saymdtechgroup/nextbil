@@ -69,7 +69,12 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   const nextPhase = activePhase ? phases.find((p) => p.phaseNumber === (activePhase.phaseNumber ?? 1) + 1) : undefined;
   const projectTotalSupply = 70_000_000;
 
-  const go = (screen: ActiveScreen) => onNavigate?.(screen);
+  const go = (screen: ActiveScreen) => {
+    // Home shortcut navigation: delegate to App's single-screen router.
+    if (typeof onNavigate === 'function') {
+      onNavigate(screen);
+    }
+  };
 
   return (
     <div className="nxbc-screen flex flex-col w-full max-w-xl mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3 pb-0">
@@ -160,14 +165,14 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
 
       {/* FOUR WORKING SHORTCUTS */}
       <div className="grid grid-cols-4 gap-2">
-        <button type="button" onClick={() => go('assets')} className="rounded-[15px] border border-cyan-400/30 bg-[#071426]/85 p-2.5 sm:p-3 text-center shadow-[0_0_18px_rgba(34,211,238,0.05)] hover:border-cyan-300/60 transition-all active:scale-[0.98]"><WalletCards className="mx-auto w-6 h-6 sm:w-7 sm:h-7 text-cyan-300 mb-1.5" /><span className="text-[10px] sm:text-[12px] font-rajdhani font-bold text-slate-100">Assets</span></button>
-        <button type="button" onClick={() => go('team')} className="rounded-[15px] border border-purple-400/30 bg-[#0c0920]/85 p-2.5 sm:p-3 text-center shadow-[0_0_18px_rgba(168,85,247,0.05)] hover:border-purple-300/60 transition-all active:scale-[0.98]"><UsersRound className="mx-auto w-6 h-6 sm:w-7 sm:h-7 text-purple-300 mb-1.5" /><span className="text-[10px] sm:text-[12px] font-rajdhani font-bold text-slate-100">Team</span></button>
-        <button type="button" onClick={() => go('withdraw')} className="rounded-[15px] border border-emerald-400/30 bg-[#071a18]/70 p-2.5 sm:p-3 text-center shadow-[0_0_18px_rgba(16,185,129,0.05)] hover:border-emerald-300/60 transition-all active:scale-[0.98]"><Download className="mx-auto w-6 h-6 sm:w-7 sm:h-7 text-emerald-300 mb-1.5" /><span className="text-[10px] sm:text-[12px] font-rajdhani font-bold text-slate-100">Withdraw</span></button>
-        <button type="button" onClick={() => go('mine')} className="rounded-[15px] border border-amber-400/30 bg-[#171207]/70 p-2.5 sm:p-3 text-center shadow-[0_0_18px_rgba(245,158,11,0.05)] hover:border-amber-300/60 transition-all active:scale-[0.98]"><UserRound className="mx-auto w-6 h-6 sm:w-7 sm:h-7 text-amber-300 mb-1.5" /><span className="text-[10px] sm:text-[12px] font-rajdhani font-bold text-slate-100">Mine</span></button>
+        <button type="button" aria-label="Open Assets" data-home-shortcut="assets" onClick={() => go('assets')} className="rounded-[15px] border border-cyan-400/30 bg-[#071426]/85 p-2.5 sm:p-3 text-center shadow-[0_0_18px_rgba(34,211,238,0.05)] hover:border-cyan-300/60 transition-all active:scale-[0.98]"><WalletCards className="mx-auto w-6 h-6 sm:w-7 sm:h-7 text-cyan-300 mb-1.5" /><span className="text-[10px] sm:text-[12px] font-rajdhani font-bold text-slate-100">Assets</span></button>
+        <button type="button" aria-label="Open Team" data-home-shortcut="team" onClick={() => go('team')} className="rounded-[15px] border border-purple-400/30 bg-[#0c0920]/85 p-2.5 sm:p-3 text-center shadow-[0_0_18px_rgba(168,85,247,0.05)] hover:border-purple-300/60 transition-all active:scale-[0.98]"><UsersRound className="mx-auto w-6 h-6 sm:w-7 sm:h-7 text-purple-300 mb-1.5" /><span className="text-[10px] sm:text-[12px] font-rajdhani font-bold text-slate-100">Team</span></button>
+        <button type="button" aria-label="Open Withdraw" data-home-shortcut="withdraw" onClick={() => go('withdraw')} className="rounded-[15px] border border-emerald-400/30 bg-[#071a18]/70 p-2.5 sm:p-3 text-center shadow-[0_0_18px_rgba(16,185,129,0.05)] hover:border-emerald-300/60 transition-all active:scale-[0.98]"><Download className="mx-auto w-6 h-6 sm:w-7 sm:h-7 text-emerald-300 mb-1.5" /><span className="text-[10px] sm:text-[12px] font-rajdhani font-bold text-slate-100">Withdraw</span></button>
+        <button type="button" aria-label="Open Mine" data-home-shortcut="mine" onClick={() => go('mine')} className="rounded-[15px] border border-amber-400/30 bg-[#171207]/70 p-2.5 sm:p-3 text-center shadow-[0_0_18px_rgba(245,158,11,0.05)] hover:border-amber-300/60 transition-all active:scale-[0.98]"><UserRound className="mx-auto w-6 h-6 sm:w-7 sm:h-7 text-amber-300 mb-1.5" /><span className="text-[10px] sm:text-[12px] font-rajdhani font-bold text-slate-100">Mine</span></button>
       </div>
 
       {/* GLOBAL MOVEMENT BANNER */}
-      <div className="home-mobile-banner z-50 mt-0 overflow-hidden rounded-[16px] border border-amber-400/20 bg-[#06101d] shadow-[0_0_24px_rgba(245,158,11,0.08)]">
+      <div className="sticky bottom-0 z-20 mt-0 overflow-hidden rounded-[16px] border border-amber-400/20 bg-[#06101d] shadow-[0_0_24px_rgba(245,158,11,0.08)]">
         <img src={bannerImage} alt="NXBC — A Stronger Tomorrow Builds Here — Join the Global Movement" className="block w-full h-auto object-cover" loading="eager" />
       </div>
     </div>
