@@ -2,19 +2,16 @@ import React, { useState, useEffect } from 'react';
 import {
   Wallet,
   ArrowDownToLine,
-  ArrowRightLeft,
   ShieldCheck,
   CheckCircle2,
   Clock,
   Zap,
   RefreshCw,
-  Copy,
   Lock,
   AlertCircle,
   Coins,
   Sparkles,
   Layers,
-  PlusCircle,
   TrendingUp,
   Percent,
   ArrowUpRight,
@@ -27,10 +24,7 @@ import {
 } from 'lucide-react';
 import { Transaction, AllocationState, TokenSellLedgerItem } from '../types/crypto';
 import {
-  NXBC_CONTRACT,
-  
   ADMIN_TREASURY_WALLET,
-  addTokenToWallet,
   returnNxbcTokensToAdmin,
   signWithdrawRequest,
 } from '../utils/web3Helper';
@@ -101,8 +95,6 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
     phaseBreakdown?: Array<{ phaseIndex: number; phaseName: string; tokensToReturn: number; grossDeducted: number }>;
   } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [copied, setCopied] = useState<boolean>(false);
-  const [tokenImportNotice, setTokenImportNotice] = useState<string | null>(null);
 
   // Fetch or Synchronize Phase-by-Phase Token Sell Ledger for Connected Wallet
   const fetchLedger = async () => {
@@ -516,194 +508,114 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
     }
   };
 
-  const copyAddress = () => {
-    navigator.clipboard.writeText(walletAddress || '');
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleAddNxbcToTrustWallet = async () => {
-    const res = await addTokenToWallet(NXBC_CONTRACT, 'NXBC', 18);
-    setTokenImportNotice(res.message || 'Token import triggered in wallet.');
-    setTimeout(() => setTokenImportNotice(null), 5000);
-  };
-
-  
   return (
-    <div className="nxbc-home-theme flex-1 p-3.5 space-y-3.5 relative">
-      {/* Header */}
-      <div className="flex items-center justify-between pb-1 border-b border-purple-500/10">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-fuchsia-500/20 text-fuchsia-300">
-            <Wallet className="w-4 h-4" />
+    <div className="nxbc-screen flex flex-col w-full max-w-xl mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3 pb-0">
+      {/* 1. Header Hero Bar */}
+      <section className="relative overflow-hidden rounded-[22px] border border-amber-400/30 bg-[radial-gradient(circle_at_82%_8%,rgba(16,185,129,0.08),transparent_28%),linear-gradient(135deg,#081426_0%,#07101c_60%,#120b19_100%)] shadow-[0_0_28px_rgba(245,158,11,0.08)] p-3.5 sm:p-4">
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-10 h-10 shrink-0 rounded-[14px] bg-amber-400/10 border border-amber-300/25 flex items-center justify-center">
+              <Wallet className="w-5.5 h-5.5 text-amber-300" strokeWidth={2.1} />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-[13px] sm:text-[15px] font-black font-rajdhani uppercase tracking-[0.08em] text-amber-300 truncate">
+                Multi-Wallet Settlement & Withdrawal
+              </h1>
+              <p className="text-[8px] sm:text-[9px] text-slate-300/80 font-mono-crypto mt-0.5 truncate">
+                {safeFeePercent}% Service Fee • Verified Smart Settlement & Collateral Return
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xs font-bold text-slate-100 font-rajdhani uppercase tracking-wider">
-              Multi-Wallet Settlement & Withdrawal
-            </h1>
-            <p className="text-[9px] text-purple-300/70 font-mono-crypto">
-              {safeFeePercent}% Service Fee • Phase-by-Phase Return Ledger
-            </p>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowLedgerDrawer(!showLedgerDrawer)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-400/10 hover:bg-amber-400/20 border border-amber-400/30 text-[9px] font-mono-crypto text-amber-300 cursor-pointer transition-all"
+            >
+              <Database className="w-3.5 h-3.5 text-amber-400" />
+              <span>Audit Ledger</span>
+            </button>
+            <div className="flex items-center gap-1.5 bg-emerald-400/10 border border-emerald-400/30 px-2.5 py-1 rounded-full text-[9px] text-emerald-300 font-mono-crypto font-bold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>BEP-20 Instant</span>
+            </div>
           </div>
         </div>
+      </section>
 
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setShowLedgerDrawer(!showLedgerDrawer)}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-900/60 hover:bg-purple-800/80 border border-purple-400/40 text-[9px] font-mono-crypto text-purple-200 cursor-pointer transition-all"
-          >
-            <Database className="w-3 h-3 text-amber-400" />
-            <span>Audit Ledger</span>
-          </button>
-          <div className="flex items-center gap-1.5 bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 rounded-full text-[9px] text-emerald-300 font-mono-crypto">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            BEP-20 Instant
-          </div>
-        </div>
-      </div>
-
-      {/* Trust Wallet 1-Click Custom Token Importer Bar */}
-      <div className="rounded-xl bg-[#110722] border border-purple-500/25 p-2.5 flex items-center justify-between">
-        <div>
-          <span className="text-[10px] font-bold text-amber-300 font-rajdhani uppercase block">
-            Add Custom Tokens to Trust Wallet
-          </span>
-          <span className="text-[8.5px] text-purple-300/70 font-mono-crypto">
-            Display your NXBC Coins directly in your wallet
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={handleAddNxbcToTrustWallet}
-            className="px-2 py-1 rounded-lg bg-fuchsia-500/20 hover:bg-fuchsia-500/30 border border-fuchsia-400/40 text-fuchsia-200 text-[9px] font-bold font-mono-crypto flex items-center gap-1 cursor-pointer transition-all active:scale-95"
-          >
-            <PlusCircle className="w-3 h-3 text-fuchsia-400" />
-            <span>+ NXBC</span>
-          </button>
-          
-        </div>
-      </div>
-
-      {tokenImportNotice && (
-        <div className="p-2 rounded-xl bg-purple-950 border border-purple-400/40 text-[9.5px] text-purple-200 flex items-center gap-1.5">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span>{tokenImportNotice}</span>
-        </div>
-      )}
-
-      {/* Global Dynamic Service Fee Policy Banner */}
-      <div className="rounded-xl bg-purple-950/40 border border-purple-500/30 p-2.5 flex items-center justify-between text-[9.5px]">
-        <div className="flex items-center gap-2">
-          <div className="p-1 rounded-md bg-amber-500/20 text-amber-300 font-bold font-mono-crypto text-xs">
+      {/* 2. Global Dynamic Service Fee Policy Banner */}
+      <section className="rounded-[18px] bg-[#050b16]/75 border border-white/10 p-2.5 sm:p-3 flex items-center justify-between text-[9.5px]">
+        <div className="flex items-center gap-2.5">
+          <div className="px-2 py-1 rounded-lg bg-amber-400/10 border border-amber-400/30 text-amber-300 font-bold font-mono-crypto text-xs">
             {safeFeePercent}%
           </div>
           <div>
-            <span className="font-bold text-slate-100 font-rajdhani uppercase block">
+            <span className="font-bold text-slate-100 font-rajdhani uppercase tracking-wider block text-[11px]">
               Universal Platform Service Charge
             </span>
-            <span className="text-purple-300/80 font-mono-crypto text-[8.5px]">
-              The current withdrawal fee is controlled live by the Admin Panel and applied to the gross withdrawal amount.
+            <span className="text-slate-400 font-mono-crypto text-[8.5px]">
+              Dynamic fee live-controlled by smart contracts, applied directly to gross withdrawal amount.
             </span>
           </div>
         </div>
-        <div className="text-right">
-          <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40 font-mono-crypto text-[8.5px] font-bold">
+        <div className="text-right shrink-0">
+          <span className="px-2.5 py-1 rounded-full bg-emerald-400/10 text-emerald-300 border border-emerald-400/30 font-mono-crypto text-[8.5px] font-bold">
             Auto-Deducted
           </span>
         </div>
-      </div>
-
-      {/* Destination Web3 Wallet Card */}
-      <div className="rounded-xl bg-[#110722] border border-purple-500/25 p-3 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-purple-900/60 border border-purple-400/30 flex items-center justify-center text-amber-300">
-            <Zap className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-slate-100 font-rajdhani uppercase">
-                Destination Trust Wallet
-              </span>
-              <span className="text-[9px] font-mono-crypto px-1.5 py-0.2 rounded bg-purple-950 text-purple-300 border border-purple-700/50">
-                USDT (BEP-20)
-              </span>
-            </div>
-            <button
-              onClick={copyAddress}
-              className="text-[10px] font-mono-crypto text-purple-300/80 hover:text-amber-300 flex items-center gap-1 mt-0.5"
-            >
-              <span>
-                {walletConnected && walletAddress
-                  ? `${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}`
-                  : 'Connect Wallet to Receive Withdrawals'}
-              </span>
-              {walletConnected && <Copy className="w-3 h-3" />}
-              {copied && <span className="text-[8px] text-emerald-400">Copied!</span>}
-            </button>
-          </div>
-        </div>
-
-        <button
-          onClick={onToggleWallet}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-bold font-mono-crypto border transition-all cursor-pointer ${
-            walletConnected
-              ? 'bg-rose-950/50 border-rose-500/40 text-rose-300 hover:bg-rose-900/60'
-              : 'bg-amber-500/20 border-amber-400/50 text-amber-300 hover:bg-amber-500/30'
-          }`}
-        >
-          <ArrowRightLeft className="w-3.5 h-3.5" />
-          <span>{walletConnected ? 'Disconnect' : 'Connect'}</span>
-        </button>
-      </div>
+      </section>
 
       {/* ========================================================================= */}
-      {/* 2 DISTINCT DEDICATED WALLETS SELECTOR TAB                                 */}
+      {/* 3. 2 DISTINCT DEDICATED WALLETS SELECTOR TAB                              */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-[#090314] border border-purple-500/25">
+      <div className="grid grid-cols-2 gap-2 p-1.5 rounded-[18px] bg-[#050b16]/85 border border-white/10">
         {/* Tab 1: Token Auto-Sell Settlement Wallet */}
         <button
+          type="button"
           onClick={() => {
             setActiveTab('token_sell');
             setErrorMessage(null);
           }}
-          className={`py-2.5 px-2 rounded-xl text-center transition-all cursor-pointer ${
+          className={`py-2.5 px-2 rounded-[14px] text-center transition-all cursor-pointer ${
             activeTab === 'token_sell'
-              ? 'bg-gradient-to-r from-amber-600/30 via-purple-900/50 to-amber-600/20 border-2 border-amber-400 text-slate-100 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
-              : 'bg-transparent text-purple-300/60 hover:text-purple-200 border border-transparent'
+              ? 'bg-gradient-to-r from-amber-500/20 via-[#071426] to-amber-500/15 border-2 border-amber-400 text-white shadow-[0_0_15px_rgba(245,158,11,0.2)]'
+              : 'bg-transparent text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
-          <div className="flex items-center justify-center gap-1 text-[10px] font-bold uppercase font-rajdhani">
+          <div className="flex items-center justify-center gap-1.5 text-[10.5px] font-bold uppercase font-rajdhani">
             <Coins className="w-3.5 h-3.5 text-amber-400" />
             <span>Token Sell Wallet</span>
           </div>
-          <span className="text-xs font-black font-mono-crypto text-amber-300 block mt-0.5">
+          <span className="text-sm font-black font-mono-crypto text-amber-300 block mt-0.5">
             ${effectiveTokenSellBalance.toFixed(2)} USDT
           </span>
-          <span className="text-[7.5px] font-mono-crypto text-purple-300/70 block">
+          <span className="text-[7.5px] font-mono-crypto text-slate-400 block">
             Auto-Sell Proceeds Only
           </span>
         </button>
 
         {/* Tab 2: MLM & Referral Earnings Wallet */}
         <button
+          type="button"
           onClick={() => {
             setActiveTab('mlm');
             setErrorMessage(null);
           }}
-          className={`py-2.5 px-2 rounded-xl text-center transition-all cursor-pointer ${
+          className={`py-2.5 px-2 rounded-[14px] text-center transition-all cursor-pointer ${
             activeTab === 'mlm'
-              ? 'bg-gradient-to-r from-fuchsia-600/30 via-purple-900/50 to-fuchsia-600/20 border-2 border-fuchsia-400 text-slate-100 shadow-[0_0_15px_rgba(217,70,239,0.2)]'
-              : 'bg-transparent text-purple-300/60 hover:text-purple-200 border border-transparent'
+              ? 'bg-gradient-to-r from-emerald-500/20 via-[#071426] to-emerald-500/15 border-2 border-emerald-400 text-white shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+              : 'bg-transparent text-slate-400 hover:text-slate-200 border border-transparent'
           }`}
         >
-          <div className="flex items-center justify-center gap-1 text-[10px] font-bold uppercase font-rajdhani">
-            <Layers className="w-3.5 h-3.5 text-fuchsia-400" />
+          <div className="flex items-center justify-center gap-1.5 text-[10.5px] font-bold uppercase font-rajdhani">
+            <Layers className="w-3.5 h-3.5 text-emerald-400" />
             <span>MLM Earnings Wallet</span>
           </div>
-          <span className="text-xs font-black font-mono-crypto text-fuchsia-300 block mt-0.5">
+          <span className="text-sm font-black font-mono-crypto text-emerald-400 block mt-0.5">
             ${mlmBalanceUsd.toFixed(2)} USDT
           </span>
-          <span className="text-[7.5px] font-mono-crypto text-purple-300/70 block">
+          <span className="text-[7.5px] font-mono-crypto text-slate-400 block">
             Level + Direct + Matrix
           </span>
         </button>
@@ -713,30 +625,27 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
       {/* WALLET 1: TOKEN AUTO-SELL SETTLEMENT GATEWAY (WITH PHASE LEDGER & DYNAMIC FEE) */}
       {/* ========================================================================= */}
       {activeTab === 'token_sell' && (
-        <div className="rounded-2xl bg-gradient-to-b from-[#1b0c34] to-[#0f051e] border-2 border-amber-400/70 p-3.5 space-y-3 shadow-[0_0_25px_rgba(245,158,11,0.15)] relative">
+        <div className="relative overflow-hidden rounded-[22px] border border-amber-400/30 bg-[radial-gradient(circle_at_80%_15%,rgba(245,158,11,0.07),transparent_25%),linear-gradient(135deg,#071426_0%,#09101c_65%,#151109_100%)] shadow-[0_0_28px_rgba(245,158,11,0.07)] p-3.5 sm:p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="p-1 rounded bg-amber-500/20 text-amber-300">
+              <div className="p-1 rounded-lg bg-amber-400/10 border border-amber-400/30 text-amber-300">
                 <Coins className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-xs font-black text-slate-100 font-rajdhani uppercase tracking-wider text-amber-300">
+                <h2 className="text-xs font-black text-white font-rajdhani uppercase tracking-wider text-amber-300">
                   TOKEN AUTO-SELL SETTLEMENT WALLET
                 </h2>
-                <p className="text-[8.5px] text-purple-300/80 font-mono-crypto">
-                  Phase Auto-Sell Proceeds • {safeFeePercent}% Service Fee • Phase-by-Phase Return
+                <p className="text-[8.5px] text-slate-400 font-mono-crypto">
+                  Phase Auto-Sell Proceeds • {safeFeePercent}% Service Fee • FIFO Collateral Return
                 </p>
               </div>
             </div>
-            <span className="text-[8.5px] font-mono-crypto px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/40">
-              Strict Asset Ledger
-            </span>
           </div>
 
-          {/* Balance Hero */}
-          <div className="p-3 rounded-xl bg-[#090314] border border-amber-500/30 flex items-center justify-between">
+          {/* Balance Hero Box */}
+          <div className="p-3 rounded-[18px] bg-[#050b16]/75 border border-amber-400/20 flex items-center justify-between">
             <div>
-              <span className="text-[9px] text-purple-300/70 uppercase font-mono-crypto block">
+              <span className="text-[8.5px] text-slate-400 uppercase font-mono-crypto block">
                 Withdrawable Token Sell Revenue
               </span>
               <div className="flex items-center gap-1 mt-0.5">
@@ -747,7 +656,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
               </div>
             </div>
             <div className="text-right">
-              <span className="text-[8.5px] text-purple-300/70 font-mono-crypto block">Total Tokens Sold:</span>
+              <span className="text-[8.5px] text-slate-400 font-mono-crypto block">Total Tokens Sold:</span>
               <span className="text-xs font-bold text-emerald-400 font-mono-crypto">
                 {totalSoldTokens.toLocaleString()} NXBC
               </span>
@@ -757,8 +666,8 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
           {/* ========================================================================= */}
           {/* PHASE-BY-PHASE INTERNAL LEDGER SUMMARY TABLE                              */}
           {/* ========================================================================= */}
-          <div className="p-2.5 rounded-xl bg-[#120524] border border-amber-500/35 space-y-2 text-[9px]">
-            <div className="flex items-center justify-between border-b border-purple-500/20 pb-1.5">
+          <div className="p-3 rounded-[16px] bg-[#050b16]/85 border border-amber-400/25 space-y-2 text-[9px]">
+            <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
               <div className="flex items-center gap-1.5 text-amber-300 font-bold font-mono-crypto">
                 <Database className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span>Phase-Wise Auto-Sell & Return Ledger</span>
@@ -769,7 +678,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
             </div>
 
             {ledgerEntries.length === 0 ? (
-              <div className="p-2 text-center text-[8.5px] font-mono-crypto text-purple-300/60">
+              <div className="p-2 text-center text-[8.5px] font-mono-crypto text-slate-400">
                 No active phase auto-sell sales recorded yet. Once tokens are sold in P2–P5, they will appear here with exact return collateral.
               </div>
             ) : (
@@ -780,20 +689,20 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                   return (
                     <div
                       key={entry.id}
-                      className={`p-2 rounded-lg border flex items-center justify-between font-mono-crypto text-[8.5px] ${
+                      className={`p-2 rounded-xl border flex items-center justify-between font-mono-crypto text-[8.5px] ${
                         isClaimed
-                          ? 'bg-purple-950/20 border-purple-800/30 opacity-60'
-                          : 'bg-purple-950/60 border-amber-500/25'
+                          ? 'bg-[#050b16]/40 border-white/5 opacity-60'
+                          : 'bg-[#081426]/70 border-amber-400/20'
                       }`}
                     >
                       <div>
                         <div className="flex items-center gap-1.5">
                           <span className="font-bold text-slate-200">{entry.phaseName}</span>
-                          <span className="text-[7.5px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          <span className="text-[7.5px] px-1.5 py-0.2 rounded bg-amber-400/10 text-amber-300 border border-amber-400/30">
                             @{entry.tokenPrice.toFixed(2)} USDT
                           </span>
                         </div>
-                        <span className="text-purple-300/70 block text-[7.5px] mt-0.5">
+                        <span className="text-slate-400 block text-[7.5px] mt-0.5">
                           Sold: <strong className="text-amber-300">{entry.tokensSold} NXBC</strong> → Gross:{' '}
                           <strong className="text-emerald-400">${entry.grossUsdt.toFixed(2)} USDT</strong>
                         </span>
@@ -802,12 +711,12 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                       <div className="text-right">
                         <span
                           className={`font-bold block ${
-                            isClaimed ? 'text-purple-400' : 'text-emerald-400'
+                            isClaimed ? 'text-slate-400' : 'text-emerald-400'
                           }`}
                         >
                           ${avail.toFixed(2)} Available
                         </span>
-                        <span className="text-[7.5px] text-purple-300/80 block">
+                        <span className="text-[7.5px] text-slate-400 block">
                           Return Collateral: {entry.tokensSold} NXBC
                         </span>
                       </div>
@@ -820,7 +729,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
 
           {/* Amount Input */}
           <div className="space-y-1">
-            <label className="text-[10px] font-semibold text-purple-200/80 uppercase tracking-wider flex justify-between">
+            <label className="text-[10px] font-semibold text-slate-300 uppercase tracking-wider flex justify-between">
               <span>Withdraw Amount (USDT)</span>
               <span
                 className={`font-mono-crypto font-bold ${
@@ -839,11 +748,11 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                   setErrorMessage(null);
                 }}
                 disabled={effectiveTokenSellBalance <= 0}
-                className={`w-full bg-[#090314] border rounded-xl py-2 px-3 pl-8 text-sm font-mono-crypto font-bold focus:outline-none focus:ring-1 ${
+                className={`w-full bg-[#050b16]/90 border rounded-xl py-2 px-3 pl-8 text-sm font-mono-crypto font-bold focus:outline-none focus:ring-1 ${
                   parseFloat(tokenSellWithdrawAmount) > effectiveTokenSellBalance &&
                   parseFloat(tokenSellWithdrawAmount) > 0
                     ? 'border-rose-500/60 text-rose-300 focus:ring-rose-500'
-                    : 'border-amber-500/40 focus:border-amber-400 text-slate-100 focus:ring-amber-400'
+                    : 'border-amber-400/40 focus:border-amber-400 text-slate-100 focus:ring-amber-400'
                 } ${effectiveTokenSellBalance <= 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
                 placeholder="0.00"
                 min="0"
@@ -858,9 +767,9 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                   setTokenSellWithdrawAmount(effectiveTokenSellBalance.toFixed(2));
                   setErrorMessage(null);
                 }}
-                className={`absolute right-2 px-2 py-0.5 rounded-lg border text-[9px] font-mono-crypto font-bold ${
+                className={`absolute right-2 px-2.5 py-1 rounded-lg border text-[9px] font-mono-crypto font-bold ${
                   effectiveTokenSellBalance > 0
-                    ? 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-400/40 text-amber-300 cursor-pointer'
+                    ? 'bg-amber-400/15 hover:bg-amber-400/25 border-amber-400/40 text-amber-300 cursor-pointer'
                     : 'bg-slate-800/40 border-slate-700 text-slate-500 cursor-not-allowed'
                 }`}
               >
@@ -871,18 +780,18 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
 
           {/* Live Dynamic Settlement Breakdown & Exact Return Receipt */}
           {grossSellAmount > 0 && (
-            <div className="p-2.5 rounded-xl bg-[#090314] border border-amber-500/35 space-y-1.5 font-mono-crypto text-[9.5px]">
-              <div className="flex items-center justify-between border-b border-purple-500/20 pb-1">
+            <div className="p-3 rounded-[16px] bg-[#050b16]/90 border border-amber-400/30 space-y-1.5 font-mono-crypto text-[9.5px]">
+              <div className="flex items-center justify-between border-b border-white/10 pb-1">
                 <span className="font-bold text-amber-300 text-[10px]">Settlement & Return Calculation</span>
                 <span className="text-emerald-400 text-[8.5px]">Verified Internal Ledger</span>
               </div>
 
               {/* Phase Breakdown List */}
               {calculatedSettlement.breakdown.length > 0 && (
-                <div className="p-1.5 rounded-lg bg-purple-950/40 border border-purple-500/20 space-y-1 text-[8px]">
-                  <span className="text-purple-300/80 font-bold block">Phase Source Breakdown:</span>
+                <div className="p-2 rounded-xl bg-amber-400/5 border border-amber-400/20 space-y-1 text-[8.5px]">
+                  <span className="text-slate-300 font-bold block">Phase Source Breakdown:</span>
                   {calculatedSettlement.breakdown.map((b, idx) => (
-                    <div key={idx} className="flex justify-between text-purple-200">
+                    <div key={idx} className="flex justify-between text-slate-300">
                       <span>
                         • {b.phaseName}: ${b.grossDeducted.toFixed(2)} USDT
                       </span>
@@ -894,7 +803,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                 </div>
               )}
 
-              <div className="flex justify-between text-purple-300/80 pt-0.5">
+              <div className="flex justify-between text-slate-300 pt-0.5">
                 <span>Gross Withdrawal Request:</span>
                 <span className="text-slate-100 font-bold">${grossSellAmount.toFixed(2)} USDT</span>
               </div>
@@ -906,7 +815,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                 <span>Total Exact Tokens to Return to Admin:</span>
                 <span className="font-bold">{exactTokensToReturn.toLocaleString()} NXBC</span>
               </div>
-              <div className="border-t border-purple-500/20 pt-1 flex justify-between font-bold text-xs text-emerald-400">
+              <div className="border-t border-white/10 pt-1 flex justify-between font-bold text-xs text-emerald-400">
                 <span>Net USDT Dispatched to Trust Wallet:</span>
                 <span>${sellNet.toFixed(2)} USDT</span>
               </div>
@@ -928,8 +837,8 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
               effectiveTokenSellBalance <= 0 ||
               grossSellAmount <= 0 ||
               grossSellAmount > effectiveTokenSellBalance
-                ? 'bg-purple-950/60 text-purple-400/50 border border-purple-800/40 cursor-not-allowed shadow-none'
-                : 'bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-[0_4px_15px_rgba(245,158,11,0.3)] transform active:scale-98 cursor-pointer'
+                ? 'bg-[#050b16]/70 text-slate-500 border border-white/10 cursor-not-allowed shadow-none'
+                : 'bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.25)] transform active:scale-98 cursor-pointer'
             }`}
           >
             {isProcessing ? (
@@ -938,7 +847,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                 <span>{statusMessage || 'PROCESSING SETTLEMENT...'}</span>
               </span>
             ) : effectiveTokenSellBalance <= 0 ? (
-              <span className="flex items-center gap-1.5 text-purple-400/80">
+              <span className="flex items-center gap-1.5 text-slate-400">
                 <Lock className="w-3.5 h-3.5" />
                 <span>NO WITHDRAWABLE TOKEN SELL BALANCE ($0.00)</span>
               </span>
@@ -958,56 +867,56 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
       {/* WALLET 2: MLM & COMMUNITY EARNINGS GATEWAY (WITH DYNAMIC FEE)                 */}
       {/* ========================================================================= */}
       {activeTab === 'mlm' && (
-        <div className="rounded-2xl bg-gradient-to-b from-[#200936] to-[#0f041d] border-2 border-fuchsia-400/70 p-3.5 space-y-3 shadow-[0_0_25px_rgba(217,70,239,0.15)] relative">
+        <div className="relative overflow-hidden rounded-[22px] border border-emerald-400/30 bg-[radial-gradient(circle_at_82%_8%,rgba(16,185,129,0.08),transparent_28%),linear-gradient(135deg,#081426_0%,#07101c_60%,#0a1d17_100%)] shadow-[0_0_28px_rgba(16,185,129,0.08)] p-3.5 sm:p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="p-1 rounded bg-fuchsia-500/20 text-fuchsia-300">
+              <div className="p-1 rounded-lg bg-emerald-400/10 border border-emerald-400/30 text-emerald-300">
                 <Layers className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-xs font-black text-slate-100 font-rajdhani uppercase tracking-wider text-fuchsia-300">
+                <h2 className="text-xs font-black text-white font-rajdhani uppercase tracking-wider text-emerald-300">
                   MLM & COMMUNITY EARNINGS WALLET
                 </h2>
-                <p className="text-[8.5px] text-purple-300/80 font-mono-crypto">
+                <p className="text-[8.5px] text-slate-400 font-mono-crypto">
                   Direct Referral (10%) + 10-Level Unilevel + Matrix 2x10 • {safeFeePercent}% Service Fee
                 </p>
               </div>
             </div>
-            <span className="text-[8.5px] font-mono-crypto px-2 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-400/40">
+            <span className="text-[8.5px] font-mono-crypto px-2 py-0.5 rounded-full bg-emerald-400/10 text-emerald-300 border border-emerald-400/30 font-bold">
               Community Income
             </span>
           </div>
 
           {/* Balance Hero */}
-          <div className="p-3 rounded-xl bg-[#090314] border border-fuchsia-500/30 flex items-center justify-between">
+          <div className="p-3 rounded-[18px] bg-[#050b16]/75 border border-emerald-400/25 flex items-center justify-between">
             <div>
-              <span className="text-[9px] text-purple-300/70 uppercase font-mono-crypto block">
+              <span className="text-[8.5px] text-slate-400 uppercase font-mono-crypto block">
                 Available MLM Affiliate Earnings
               </span>
               <div className="flex items-center gap-1 mt-0.5">
-                <span className="text-2xl font-black font-mono-crypto magenta-gradient-text">
+                <span className="text-2xl font-black font-mono-crypto text-emerald-400">
                   ${mlmBalanceUsd.toFixed(2)}
                 </span>
-                <span className="text-xs font-bold text-fuchsia-300 font-mono-crypto">USDT</span>
+                <span className="text-xs font-bold text-emerald-300 font-mono-crypto">USDT</span>
               </div>
             </div>
             <div className="text-right space-y-0.5">
-              <span className="text-[8px] text-purple-300/70 font-mono-crypto block">
+              <span className="text-[8px] text-slate-400 font-mono-crypto block">
                 Level: <strong className="text-amber-300">${levelIncomeUsd.toFixed(2)}</strong>
               </span>
-              <span className="text-[8px] text-purple-300/70 font-mono-crypto block">
-                Matrix: <strong className="text-fuchsia-300">${matrixIncomeUsd.toFixed(2)}</strong>
+              <span className="text-[8px] text-slate-400 font-mono-crypto block">
+                Matrix: <strong className="text-emerald-400">${matrixIncomeUsd.toFixed(2)}</strong>
               </span>
             </div>
           </div>
 
           {/* Amount Input */}
           <div className="space-y-1">
-            <label className="text-[10px] font-semibold text-purple-200/80 uppercase tracking-wider flex justify-between">
+            <label className="text-[10px] font-semibold text-slate-300 uppercase tracking-wider flex justify-between">
               <span>Withdraw Amount (USDT)</span>
               <span
                 className={`font-mono-crypto font-bold ${
-                  mlmBalanceUsd > 0 ? 'text-fuchsia-400' : 'text-slate-400'
+                  mlmBalanceUsd > 0 ? 'text-emerald-400' : 'text-slate-400'
                 }`}
               >
                 Available: ${mlmBalanceUsd.toFixed(2)}
@@ -1022,17 +931,17 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                   setErrorMessage(null);
                 }}
                 disabled={mlmBalanceUsd <= 0}
-                className={`w-full bg-[#090314] border rounded-xl py-2 px-3 pl-8 text-sm font-mono-crypto font-bold focus:outline-none focus:ring-1 ${
+                className={`w-full bg-[#050b16]/90 border rounded-xl py-2 px-3 pl-8 text-sm font-mono-crypto font-bold focus:outline-none focus:ring-1 ${
                   parseFloat(mlmWithdrawAmount) > mlmBalanceUsd && parseFloat(mlmWithdrawAmount) > 0
                     ? 'border-rose-500/60 text-rose-300 focus:ring-rose-500'
-                    : 'border-fuchsia-500/40 focus:border-fuchsia-400 text-slate-100 focus:ring-fuchsia-400'
+                    : 'border-emerald-400/40 focus:border-emerald-400 text-slate-100 focus:ring-emerald-400'
                 } ${mlmBalanceUsd <= 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
                 placeholder="0.00"
                 min="0"
                 max={mlmBalanceUsd}
                 step="0.01"
               />
-              <span className="absolute left-3 text-fuchsia-400 font-bold font-mono-crypto">$</span>
+              <span className="absolute left-3 text-emerald-400 font-bold font-mono-crypto">$</span>
               <button
                 type="button"
                 disabled={mlmBalanceUsd <= 0}
@@ -1040,9 +949,9 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                   setMlmWithdrawAmount(mlmBalanceUsd.toFixed(2));
                   setErrorMessage(null);
                 }}
-                className={`absolute right-2 px-2 py-0.5 rounded-lg border text-[9px] font-mono-crypto font-bold ${
+                className={`absolute right-2 px-2.5 py-1 rounded-lg border text-[9px] font-mono-crypto font-bold ${
                   mlmBalanceUsd > 0
-                    ? 'bg-fuchsia-500/20 hover:bg-fuchsia-500/30 border-fuchsia-400/40 text-fuchsia-300 cursor-pointer'
+                    ? 'bg-emerald-400/15 hover:bg-emerald-400/25 border-emerald-400/40 text-emerald-300 cursor-pointer'
                     : 'bg-slate-800/40 border-slate-700 text-slate-500 cursor-not-allowed'
                 }`}
               >
@@ -1053,8 +962,8 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
 
           {/* Live Breakdown Receipt Card */}
           {grossMlmAmount > 0 && (
-            <div className="p-2.5 rounded-xl bg-[#090314] border border-fuchsia-500/25 space-y-1 font-mono-crypto text-[9.5px]">
-              <div className="flex justify-between text-purple-300/80">
+            <div className="p-3 rounded-[16px] bg-[#050b16]/90 border border-emerald-400/25 space-y-1 font-mono-crypto text-[9.5px]">
+              <div className="flex justify-between text-slate-300">
                 <span>Gross MLM Withdrawal:</span>
                 <span className="text-slate-100 font-bold">${grossMlmAmount.toFixed(2)} USDT</span>
               </div>
@@ -1062,7 +971,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                 <span>Platform Service Fee ({safeFeePercent}%):</span>
                 <span>-${mlmFee.toFixed(2)} USDT</span>
               </div>
-              <div className="border-t border-purple-500/20 pt-1 flex justify-between font-bold text-xs text-emerald-400">
+              <div className="border-t border-white/10 pt-1 flex justify-between font-bold text-xs text-emerald-400">
                 <span>Net USDT to Trust Wallet:</span>
                 <span>${mlmNet.toFixed(2)} USDT</span>
               </div>
@@ -1084,23 +993,23 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
               mlmBalanceUsd <= 0 ||
               grossMlmAmount <= 0 ||
               grossMlmAmount > mlmBalanceUsd
-                ? 'bg-purple-950/60 text-purple-400/50 border border-purple-800/40 cursor-not-allowed shadow-none'
-                : 'bg-gradient-to-r from-fuchsia-600 via-purple-600 to-amber-500 hover:from-fuchsia-500 hover:to-amber-400 text-white shadow-[0_4px_15px_rgba(217,70,239,0.3)] transform active:scale-98 cursor-pointer'
+                ? 'bg-[#050b16]/70 text-slate-500 border border-white/10 cursor-not-allowed shadow-none'
+                : 'bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black shadow-[0_0_20px_rgba(16,185,129,0.3)] transform active:scale-98 cursor-pointer'
             }`}
           >
             {isProcessing ? (
               <span className="flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 animate-spin text-amber-300" />
+                <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
                 <span>{statusMessage || 'PROCESSING MLM PAYOUT...'}</span>
               </span>
             ) : mlmBalanceUsd <= 0 ? (
-              <span className="flex items-center gap-1.5 text-purple-400/80">
+              <span className="flex items-center gap-1.5 text-slate-400">
                 <Lock className="w-3.5 h-3.5" />
                 <span>NO WITHDRAWABLE MLM BALANCE ($0.00)</span>
               </span>
             ) : (
               <>
-                <ArrowDownToLine className="w-4 h-4 text-amber-300" />
+                <ArrowDownToLine className="w-4 h-4 text-slate-950 font-bold" />
                 <span>WITHDRAW ${mlmNet.toFixed(2)} NET USDT (MLM EARNINGS)</span>
               </>
             )}
@@ -1110,7 +1019,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
 
       {/* Error Alert Box */}
       {errorMessage && (
-        <div className="p-2.5 rounded-xl bg-rose-950/90 border border-rose-500/60 text-[10px] text-rose-200 flex items-start gap-2">
+        <div className="p-3 rounded-[16px] bg-rose-950/90 border border-rose-500/60 text-[10px] text-rose-200 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
             <span className="font-bold block text-rose-300">Withdrawal Blocked:</span>
@@ -1121,36 +1030,36 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
 
       {/* Success Notification Modal / Box */}
       {showSuccessNotification && successDetails && (
-        <div className="p-3 rounded-2xl bg-[#0a1a12] border-2 border-emerald-400/70 text-emerald-300 text-[10px] space-y-2 shadow-[0_0_25px_rgba(16,185,129,0.2)]">
+        <div className="p-3.5 rounded-[20px] bg-[#0a1a12] border-2 border-emerald-400/70 text-emerald-300 text-[10px] space-y-2.5 shadow-[0_0_28px_rgba(16,185,129,0.25)]">
           <div className="flex items-center justify-between border-b border-emerald-500/30 pb-1.5">
             <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-200">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               <span>Withdrawal Confirmed & Dispatched!</span>
             </div>
-            <span className="text-[8.5px] font-mono-crypto px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40">
+            <span className="text-[8.5px] font-mono-crypto px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40">
               {successDetails.walletType}
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-1.5 font-mono-crypto text-center text-[9px]">
-            <div className="p-1.5 rounded-lg bg-emerald-950/80 border border-emerald-500/20">
+          <div className="grid grid-cols-3 gap-2 font-mono-crypto text-center text-[9px]">
+            <div className="p-2 rounded-xl bg-emerald-950/80 border border-emerald-500/20">
               <span className="text-emerald-400/70 block text-[7.5px]">Gross Requested</span>
               <span className="font-bold text-slate-100">${successDetails.gross.toFixed(2)}</span>
             </div>
-            <div className="p-1.5 rounded-lg bg-emerald-950/80 border border-emerald-500/20">
+            <div className="p-2 rounded-xl bg-emerald-950/80 border border-emerald-500/20">
               <span className="text-rose-400/80 block text-[7.5px]">{safeFeePercent}% Service Fee</span>
               <span className="font-bold text-rose-300">-${successDetails.fee.toFixed(2)}</span>
             </div>
-            <div className="p-1.5 rounded-lg bg-emerald-950/80 border border-emerald-400/40">
+            <div className="p-2 rounded-xl bg-emerald-950/80 border border-emerald-400/40">
               <span className="text-emerald-300 block text-[7.5px]">Net USDT Dispatched</span>
-              <span className="font-black text-emerald-400 text-[10.5px]">
+              <span className="font-black text-emerald-400 text-[11px]">
                 ${successDetails.net.toFixed(2)}
               </span>
             </div>
           </div>
 
           {successDetails.tokensReturned && successDetails.tokensReturned > 0 ? (
-            <div className="p-1.5 rounded-lg bg-emerald-950/50 border border-emerald-500/30 font-mono-crypto text-[8.5px] text-emerald-200">
+            <div className="p-2 rounded-xl bg-emerald-950/50 border border-emerald-500/30 font-mono-crypto text-[8.5px] text-emerald-200">
               <span>✓ Returned Collateral: </span>
               <strong className="text-amber-300">{successDetails.tokensReturned.toLocaleString()} NXBC Tokens</strong>
               <span> to Admin Treasury ({ADMIN_TREASURY_WALLET.slice(0, 6)}...{ADMIN_TREASURY_WALLET.slice(-4)})</span>
@@ -1175,35 +1084,35 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
       )}
 
       {/* Transaction History Section */}
-      <div className="space-y-1.5">
+      <section className="rounded-[20px] bg-[linear-gradient(135deg,#081426_0%,#07101c_65%,#0d1726_100%)] border border-amber-400/25 p-3 sm:p-3.5 space-y-2">
         <div className="flex items-center justify-between px-1">
           <h3 className="text-[11px] font-bold text-slate-200 font-rajdhani uppercase tracking-wider">
             Settlement & Transaction History
           </h3>
-          <span className="text-[9px] font-mono-crypto text-purple-400">
+          <span className="text-[9px] font-mono-crypto text-amber-300">
             {pastTransactions.length} Verified Records
           </span>
         </div>
 
         <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
           {pastTransactions.length === 0 ? (
-            <div className="p-4 rounded-xl bg-[#0e061d] border border-purple-500/15 text-center text-xs text-purple-300/60 font-mono-crypto">
+            <div className="p-4 rounded-xl bg-[#050b16]/75 border border-white/10 text-center text-xs text-slate-400 font-mono-crypto">
               No transactions yet
             </div>
           ) : (
             pastTransactions.map((tx) => (
               <div
                 key={tx.id}
-                className="p-2 rounded-xl bg-[#0e061d] border border-purple-500/15 hover:border-purple-500/35 transition-colors flex items-center justify-between text-[10px]"
+                className="p-2.5 rounded-xl bg-[#050b16]/75 border border-white/10 hover:border-amber-400/30 transition-colors flex items-center justify-between text-[10px]"
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   <div
-                    className={`p-1 rounded-lg ${
+                    className={`p-1.5 rounded-lg ${
                       tx.type === 'withdrawal'
-                        ? 'bg-rose-950/60 text-rose-400'
+                        ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
                         : tx.type === 'buy'
-                        ? 'bg-amber-950/60 text-amber-400'
-                        : 'bg-emerald-950/60 text-emerald-400'
+                        ? 'bg-amber-400/10 text-amber-400 border border-amber-400/30'
+                        : 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/30'
                     }`}
                   >
                     {tx.type === 'withdrawal' ? (
@@ -1214,7 +1123,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                   </div>
                   <div>
                     <span className="font-semibold text-slate-200 block">{tx.title}</span>
-                    <span className="text-[8px] font-mono-crypto text-purple-400">
+                    <span className="text-[8px] font-mono-crypto text-slate-400">
                       {tx.timestamp} • {tx.txHash}
                     </span>
                   </div>
@@ -1237,7 +1146,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
             ))
           )}
         </div>
-      </div>
+      </section>
     </div>
   );
 };
