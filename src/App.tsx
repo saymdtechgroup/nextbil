@@ -1547,7 +1547,12 @@ export default function App() {
                   walletAddress={walletAddress}
                   totalEarningUsdt={totalEarningUsdt}
                   totalWithdrawnUsdt={totalWithdrawnUsdt}
-                />
+                
+                  onNavigate={(screen) => {
+                    setViewMode('single');
+                    setActiveSingleScreen(screen);
+                  }}
+/>
               )}
 
               {activeSingleScreen === 'assets' && (
