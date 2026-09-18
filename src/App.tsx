@@ -1510,11 +1510,37 @@ export default function App() {
           </div>
           <div className="mt-2 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/25 text-[8px] font-black uppercase tracking-wider text-emerald-300 whitespace-nowrap"><span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" /> BSC Mainnet Live</span>
-              <span className="w-5 sm:w-8 h-px bg-white/15 shrink-0" />
-              {walletConnected && walletAddress ? <span className="text-[9px] sm:text-[10px] font-mono-crypto text-slate-300 truncate">{walletAddress.slice(0,6)}...{walletAddress.slice(-4)}</span> : <button type="button" onClick={() => setWalletModalOpen(true)} className="text-[9px] sm:text-[10px] font-rajdhani font-bold text-amber-300">Connect Wallet</button>}
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/25 text-[8px] font-black uppercase tracking-wider text-emerald-300 whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" /> BSC Mainnet Live
+              </span>
             </div>
-            {systemConfig.presalePaused && <span className="text-[8px] px-2 py-1 rounded-full bg-rose-600 text-white">PAUSED</span>}
+            <div className="flex items-center gap-2 shrink-0">
+              {systemConfig.presalePaused && (
+                <span className="text-[8px] px-2 py-0.5 rounded-full bg-rose-600 text-white font-bold">
+                  PAUSED
+                </span>
+              )}
+              {walletConnected && walletAddress ? (
+                <button
+                  type="button"
+                  onClick={() => setWalletModalOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400/10 hover:bg-amber-400/20 border border-amber-400/30 text-[9px] sm:text-[10px] font-mono-crypto text-amber-300 hover:text-white transition-all cursor-pointer"
+                  title="Connected Wallet"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setWalletModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 text-[9px] sm:text-[10px] font-rajdhani font-black uppercase tracking-wider shadow-sm hover:shadow-md active:scale-95 transition-all cursor-pointer"
+                >
+                  <Wallet size={12} className="shrink-0" />
+                  <span>Connect Wallet</span>
+                </button>
+              )}
+            </div>
           </div>
         </header>
 
@@ -1547,12 +1573,7 @@ export default function App() {
                   walletAddress={walletAddress}
                   totalEarningUsdt={totalEarningUsdt}
                   totalWithdrawnUsdt={totalWithdrawnUsdt}
-                
-                  onNavigate={(screen) => {
-                    setViewMode('single');
-                    setActiveSingleScreen(screen);
-                  }}
-/>
+                />
               )}
 
               {activeSingleScreen === 'assets' && (
