@@ -173,3 +173,39 @@ html, body, #root {
 .nxbc-home-theme [class~="text-fuchsia-400"] {
   color: #fbbf24 !important;
 }
+
+
+/* Home banner: on phones it is locked to the viewport bottom so users
+   cannot scroll past it. Desktop keeps the banner in normal document flow. */
+.home-mobile-banner {
+  position: relative;
+  width: 100%;
+}
+
+@media (max-width: 639px) {
+  .home-screen-with-banner {
+    padding-bottom: calc(clamp(78px, 27vw, 112px) + env(safe-area-inset-bottom)) !important;
+  }
+
+  .home-mobile-banner {
+    position: fixed;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: min(100vw, 672px);
+    height: clamp(78px, 27vw, 112px);
+    margin: 0 !important;
+    border-radius: 14px 14px 0 0 !important;
+    overflow: hidden;
+    background: #06101d;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .home-mobile-banner img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+}
