@@ -24,7 +24,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   return (
     <div
       id={`${idPrefix}-bar`}
-      className="nxbc-bottom-nav sticky bottom-0 left-0 right-0 z-30 backdrop-blur-xl px-2 py-2 shadow-[0_-10px_35px_rgba(0,0,0,.35)] flex items-center justify-around border-t border-amber-400/20 bg-[#071426]/95"
+      className="nxbc-bottom-nav sticky bottom-0 left-0 right-0 z-30 backdrop-blur-xl px-2 py-2 shadow-2xl flex items-center justify-around"
     >
       {navItems.map((item) => {
         const Icon = item.icon;

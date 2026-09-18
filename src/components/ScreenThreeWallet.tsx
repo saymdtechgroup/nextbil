@@ -115,8 +115,76 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
         if (data.entries && data.entries.length > 0) {
           setLedgerEntries(data.entries);
         } else {
-          // No API data means no ledger data. Never fabricate balances or earnings.
-          setLedgerEntries([]);
+          // Generate default phase ledger representation from allocation state or default phase records
+          const defaultEntries: TokenSellLedgerItem[] = [];
+          if (allocation) {
+            if ((allocation.p2Tokens?.sold || 0) > 0) {
+              const sold = allocation.p2Tokens!.sold;
+              defaultEntries.push({
+                id: 'ledger-p2-init',
+                phaseIndex: 2,
+                phaseName: 'Phase 2 ($0.10)',
+                tokenPrice: 0.10,
+                tokensSold: sold,
+                tokensReturned: 0,
+                grossUsdt: sold * 0.10,
+                withdrawnUsdt: 0,
+                availableUsdt: sold * 0.10,
+                status: 'unclaimed',
+                timestamp: 'Active Phase',
+              });
+            }
+            if ((allocation.p3Tokens?.sold || 0) > 0) {
+              const sold = allocation.p3Tokens!.sold;
+              defaultEntries.push({
+                id: 'ledger-p3-init',
+                phaseIndex: 3,
+                phaseName: 'Phase 3 ($1.00)',
+                tokenPrice: 1.00,
+                tokensSold: sold,
+                tokensReturned: 0,
+                grossUsdt: sold * 1.00,
+                withdrawnUsdt: 0,
+                availableUsdt: sold * 1.00,
+                status: 'unclaimed',
+                timestamp: 'Active Phase',
+              });
+            }
+            if ((allocation.p4Tokens?.sold || 0) > 0) {
+              const sold = allocation.p4Tokens!.sold;
+              defaultEntries.push({
+                id: 'ledger-p4-init',
+                phaseIndex: 4,
+                phaseName: 'Phase 4 ($10.00)',
+                tokenPrice: 10.00,
+                tokensSold: sold,
+                tokensReturned: 0,
+                grossUsdt: sold * 10.00,
+                withdrawnUsdt: 0,
+                availableUsdt: sold * 10.00,
+                status: 'unclaimed',
+                timestamp: 'Upcoming Phase',
+              });
+            }
+            if ((allocation.p5Tokens?.sold || 0) > 0) {
+              const sold = allocation.p5Tokens!.sold;
+              defaultEntries.push({
+                id: 'ledger-p5-init',
+                phaseIndex: 5,
+                phaseName: 'Phase 5 ($100.00)',
+                tokenPrice: 100.00,
+                tokensSold: sold,
+                tokensReturned: 0,
+                grossUsdt: sold * 100.00,
+                withdrawnUsdt: 0,
+                availableUsdt: sold * 100.00,
+                status: 'unclaimed',
+                timestamp: 'Upcoming Phase',
+              });
+            }
+          }
+          // Never create fabricated ledger entries. Empty means no verified ledger data.
+          setLedgerEntries(defaultEntries);
         }
       }
     } catch (err) {

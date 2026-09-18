@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Clock, Flame, Info, ShieldCheck, UsersRound, CircleDollarSign, BarChart3, Rocket, WalletCards, Download, UserRound, ListOrdered, Radio } from 'lucide-react';
+import { Clock, Flame, Info, ShieldCheck, UsersRound, CircleDollarSign, BarChart3, Rocket, WalletCards, Download, UserRound } from 'lucide-react';
 import { AllocationState, PhaseConfig, QueueEntry, ActiveScreen } from '../types/crypto';
 import { GoldCoinGraphic } from './GoldCoinGraphic';
 import bannerImage from '../assets/images/nxbc-home-banner.png';
@@ -27,30 +27,10 @@ interface ScreenOneAcquisitionProps {
 export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   allocation,
   phases,
+  sellQueue,
   onOpenBuyModal,
   onNavigate,
 }) => {
-  const [globalFifo, setGlobalFifo] = useState<{ phaseNumber: number; totalOrders: number; totalQueuedTokens: number; orders: any[] }[]>([]);
-  const [fifoUpdatedAt, setFifoUpdatedAt] = useState<string>('');
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadGlobalFifo = async () => {
-      try {
-        const res = await fetch('/api/presale/fifo-global');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled && data.success) {
-          setGlobalFifo(Array.isArray(data.phases) ? data.phases : []);
-          setFifoUpdatedAt(data.generatedAt || '');
-        }
-      } catch {}
-    };
-    loadGlobalFifo();
-    const timer = window.setInterval(loadGlobalFifo, 10000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, []);
-
   const [trustStats, setTrustStats] = useState({
     totalTokensSold: 0,
     totalUsdtReceived: 0,
@@ -144,6 +124,51 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
         </div>
       </section>
 
+      {/* LIVE FIFO LINE — database/API data only, never placeholder entries */}
+      <section className="nxbc-fifo-panel relative overflow-hidden rounded-[22px] border border-cyan-400/25 bg-[linear-gradient(135deg,#071b2a_0%,#07101d_65%,#10152a_100%)] shadow-[0_0_28px_rgba(34,211,238,0.08)]">
+        <div className="relative p-3.5 sm:p-4">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div>
+              <div className="text-[14px] sm:text-[16px] font-black font-rajdhani uppercase tracking-[0.08em] text-cyan-200">Live FIFO Line</div>
+              <p className="text-[8px] sm:text-[9px] text-slate-300/80 font-mono-crypto mt-0.5">Real queue positions • wallet addresses masked</p>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-cyan-400/10 border border-cyan-300/25 text-[8px] font-black uppercase tracking-wider text-cyan-200">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse mr-1" />Live
+            </span>
+          </div>
+          {sellQueue && sellQueue.length > 0 ? (
+            <div className="space-y-2">
+              {sellQueue.slice(0, 5).map((entry, index) => {
+                const wallet = String(entry.userId || 'Unknown');
+                const maskedWallet = wallet.length > 12 ? `${wallet.slice(0, 6)}…${wallet.slice(-4)}` : wallet;
+                const remaining = Math.max(0, Number(entry.tokensRequested || 0) - Number(entry.tokensSold || 0));
+                return (
+                  <div key={entry.id || `${entry.phaseNumber}-${index}`} className="flex items-center gap-2 rounded-[15px] border border-white/10 bg-[#050b16]/70 px-2.5 py-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-300/10 text-sm font-black text-cyan-200">#{index + 1}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-[10px] sm:text-[11px] font-mono-crypto text-slate-100">{maskedWallet}</span>
+                        <span className="shrink-0 text-[8px] font-bold uppercase text-cyan-200">P{entry.phaseNumber}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-2 text-[8px] text-slate-400 font-mono-crypto">
+                        <span>Queue #{index + 1}</span>
+                        <span>{remaining.toLocaleString()} NXBC pending</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {sellQueue.length > 5 && <p className="text-center text-[8px] text-slate-400 font-mono-crypto">+{sellQueue.length - 5} more verified queue entries</p>}
+            </div>
+          ) : (
+            <div className="rounded-[15px] border border-dashed border-cyan-300/20 bg-[#050b16]/50 px-3 py-5 text-center">
+              <div className="text-[12px] font-black font-rajdhani uppercase tracking-wider text-slate-200">FIFO line is currently empty</div>
+              <p className="mt-1 text-[9px] text-slate-400 font-mono-crypto">Live orders will appear here after verified API data is available.</p>
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* CURRENT PHASE */}
       <section className="relative overflow-hidden rounded-[22px] border border-amber-400/30 bg-[radial-gradient(circle_at_80%_15%,rgba(245,158,11,0.07),transparent_25%),linear-gradient(135deg,#071426_0%,#09101c_65%,#151109_100%)] shadow-[0_0_28px_rgba(245,158,11,0.07)]">
         <div className="relative p-3.5 sm:p-4">
@@ -179,31 +204,6 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
         </div>
       </section>
 
-      {/* LIVE FIFO BOARD — real database data only */}
-      <section className="relative overflow-hidden rounded-[22px] border border-cyan-400/25 bg-[radial-gradient(circle_at_85%_0%,rgba(34,211,238,0.12),transparent_32%),linear-gradient(135deg,#071426_0%,#06101d_65%,#0b1224_100%)] shadow-[0_0_28px_rgba(34,211,238,0.08)]">
-        <div className="p-3.5 sm:p-4">
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-[14px] border border-cyan-300/25 bg-cyan-400/10 flex items-center justify-center"><ListOrdered className="w-5 h-5 text-cyan-300" /></div>
-              <div><h2 className="text-[14px] sm:text-[16px] font-black uppercase tracking-wider text-cyan-200 font-rajdhani">Live FIFO Line</h2><p className="text-[8px] text-slate-400 font-mono-crypto">Real active orders • First In, First Out</p></div>
-            </div>
-            <span className="flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-[8px] font-bold text-emerald-300"><Radio className="w-3 h-3 animate-pulse" /> LIVE</span>
-          </div>
-          {globalFifo.length === 0 ? (
-            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-5 text-center"><p className="text-sm font-bold text-slate-200">FIFO line is currently empty</p><p className="mt-1 text-[10px] text-slate-400">New verified sell orders will appear here automatically.</p></div>
-          ) : globalFifo.slice(0, 3).map((phase) => (
-            <div key={phase.phaseNumber} className="mb-2 last:mb-0 rounded-[16px] border border-white/10 bg-black/20 p-2.5">
-              <div className="flex items-center justify-between mb-2"><span className="text-[10px] font-black text-amber-300 uppercase">Phase {phase.phaseNumber}</span><span className="text-[9px] text-slate-400">{phase.totalOrders} orders • {Number(phase.totalQueuedTokens || 0).toLocaleString()} NXBC</span></div>
-              <div className="space-y-1.5">{phase.orders.slice(0, 5).map((order: any) => (
-                <div key={order.id} className="flex items-center gap-2 rounded-xl border border-cyan-400/10 bg-[#050b16]/70 px-2.5 py-2"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-400/10 text-[10px] font-black text-cyan-300">#{order.position}</span><div className="min-w-0 flex-1"><p className="truncate text-[10px] font-mono-crypto text-slate-200">{order.walletAddress || 'Unknown wallet'}</p><p className="text-[8px] text-slate-500">Queue position • Verified order</p></div><div className="text-right"><p className="text-[10px] font-black text-emerald-300">{Number(order.remainingTokens || 0).toLocaleString()}</p><p className="text-[8px] text-slate-500">NXBC left</p></div></div>
-              ))}</div>
-              {phase.orders.length > 5 && <p className="mt-2 text-center text-[9px] text-cyan-300">+ {phase.orders.length - 5} more orders in this phase</p>}
-            </div>
-          ))}
-          <div className="mt-2 text-[8px] text-slate-500 font-mono-crypto">Wallets are privacy-masked. {fifoUpdatedAt ? `Updated ${new Date(fifoUpdatedAt).toLocaleTimeString()}` : 'Waiting for live data.'}</div>
-        </div>
-      </section>
-
       {/* FOUR WORKING SHORTCUTS */}
       <div className="grid grid-cols-4 gap-2">
         <button type="button" onClick={() => go('assets')} className="rounded-[15px] border border-cyan-400/30 bg-[#071426]/85 p-2.5 sm:p-3 text-center shadow-[0_0_18px_rgba(34,211,238,0.05)] hover:border-cyan-300/60 transition-all active:scale-[0.98]"><WalletCards className="mx-auto w-6 h-6 sm:w-7 sm:h-7 text-cyan-300 mb-1.5" /><span className="text-[10px] sm:text-[12px] font-rajdhani font-bold text-slate-100">Assets</span></button>
@@ -213,7 +213,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
       </div>
 
       {/* GLOBAL MOVEMENT BANNER */}
-      <div className="overflow-hidden rounded-[16px] border border-amber-400/20 bg-[#06101d] shadow-[0_0_24px_rgba(245,158,11,0.08)]">
+      <div className="nxbc-home-banner overflow-hidden rounded-[16px] border border-amber-400/20 bg-[#06101d] shadow-[0_0_24px_rgba(245,158,11,0.08)]">
         <img src={bannerImage} alt="NXBC — A Stronger Tomorrow Builds Here — Join the Global Movement" className="block w-full h-auto object-cover" loading="eager" />
       </div>
     </div>
