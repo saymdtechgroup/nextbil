@@ -14,7 +14,7 @@ export interface PhaseConfig {
 }
 
 export interface AllocationState {
-  p1Percent: number;
+  p1Percent?: number;
   p2Percent: number;
   p3Percent: number;
   p4Percent: number;
@@ -90,7 +90,6 @@ export interface AdminSystemConfig {
   withdrawalFeePercent: number;
   matrixConfig: MatrixConfig;
   royaltyPoolUsd: number;
-  sellQueueSharePercent?: number;
 }
 
 export interface MatrixNode {
