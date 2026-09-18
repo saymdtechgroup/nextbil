@@ -15,6 +15,9 @@ import {
   Crown,
   Settings,
   Wallet,
+  Youtube,
+  Facebook,
+  Send,
 } from 'lucide-react';
 import {
   AllocationState,
@@ -44,6 +47,7 @@ import { MatrixPlanModal } from './components/MatrixPlanModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
 import { SecretAdminPage } from './components/SecretAdminPage';
 import { GoldCoinGraphic } from './components/GoldCoinGraphic';
+import { NXBCBrandHeader } from './components/NXBCBrandHeader';
 import {
   fetchOnChainTokenBalance,
   USDT_CONTRACT,
@@ -52,11 +56,11 @@ import {
 
 
 const INITIAL_PHASES: PhaseConfig[] = [
-  { id: 'p1', phaseNumber: 1, name: 'Phase 1', shortName: 'P1', rate: 0.01, rateLabel: '$0.01', totalSupply: 1000000, tokensSold: 0, status: 'active', multiplier: '10x Phase', unlockRequirement: 'Live Now' },
-  { id: 'p2', phaseNumber: 2, name: 'Phase 2', shortName: 'P2', rate: 0.15, rateLabel: '$0.15', totalSupply: 2000000, tokensSold: 0, status: 'upcoming', multiplier: '15x Phase', unlockRequirement: 'After P1' },
-  { id: 'p3', phaseNumber: 3, name: 'Phase 3', shortName: 'P3', rate: 0.20, rateLabel: '$0.20', totalSupply: 3000000, tokensSold: 0, status: 'upcoming', multiplier: '20x Phase', unlockRequirement: 'After P2' },
-  { id: 'p4', phaseNumber: 4, name: 'Phase 4', shortName: 'P4', rate: 0.25, rateLabel: '$0.25', totalSupply: 4000000, tokensSold: 0, status: 'upcoming', multiplier: '25x Phase', unlockRequirement: 'After P3' },
-  { id: 'p5', phaseNumber: 5, name: 'Phase 5', shortName: 'P5', rate: 0.30, rateLabel: '$0.30', totalSupply: 5000000, tokensSold: 0, status: 'upcoming', multiplier: '30x Phase', unlockRequirement: 'After P4' },
+  { id: 'p1', phaseNumber: 1, name: 'Phase 1', shortName: 'P1', rate: 0.01, rateLabel: '$0.01', totalSupply: 500000, tokensSold: 0, status: 'active', multiplier: '10x Phase', unlockRequirement: 'Live Now' },
+  { id: 'p2', phaseNumber: 2, name: 'Phase 2', shortName: 'P2', rate: 0.10, rateLabel: '$0.10', totalSupply: 2500000, tokensSold: 0, status: 'upcoming', multiplier: '15x Phase', unlockRequirement: 'After P1' },
+  { id: 'p3', phaseNumber: 3, name: 'Phase 3', shortName: 'P3', rate: 1.00, rateLabel: '$1.00', totalSupply: 7000000, tokensSold: 0, status: 'upcoming', multiplier: '20x Phase', unlockRequirement: 'After P2' },
+  { id: 'p4', phaseNumber: 4, name: 'Phase 4', shortName: 'P4', rate: 10.00, rateLabel: '$10.00', totalSupply: 19500000, tokensSold: 0, status: 'upcoming', multiplier: '25x Phase', unlockRequirement: 'After P3' },
+  { id: 'p5', phaseNumber: 5, name: 'Phase 5', shortName: 'P5', rate: 100.00, rateLabel: '$100.00', totalSupply: 40000000, tokensSold: 0, status: 'upcoming', multiplier: '30x Phase', unlockRequirement: 'After P4' },
   { id: 'dex', phaseNumber: 6, name: 'Phase 6 (DEX)', shortName: 'DEX', rate: 0.50, rateLabel: '$0.50', totalSupply: 10000000, tokensSold: 0, status: 'upcoming', multiplier: '50x Phase', unlockRequirement: 'After P5' },
 ];
 
@@ -75,21 +79,13 @@ export default function App() {
     name: 'Phase 1',
     shortName: 'P1',
     rate: 0.01,
-    totalSupply: 1000000,
+    totalSupply: 500000,
     tokensSold: 0
   };
 
 
 
-  const [userEarnings, setUserEarnings] = useState<UserEarnings>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nxbc_user_earnings');
-      if (saved) {
-        try { return JSON.parse(saved); } catch(e) {}
-      }
-    }
-    return { availableUsdt: 0, withdrawnUsdt: 0 };
-  });
+  const [userEarnings, setUserEarnings] = useState<UserEarnings>({ availableUsdt: 0, withdrawnUsdt: 0 });
 
   const [sellQueue, setSellQueue] = useState<QueueEntry[]>([]);
   
@@ -142,11 +138,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('nxbc_user_earnings', JSON.stringify(userEarnings));
-    }
-  }, [userEarnings]);
 
   // (Removed local storage effect for sellQueue)
 
@@ -164,37 +155,13 @@ export default function App() {
     }
     return '';
   });
-  const [claimableBalanceUsd, setClaimableBalanceUsd] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('nxbc_claimable_usd');
-      if (stored) return parseFloat(stored) || 0;
-    }
-    return 0;
-  });
-  const [levelIncomeUsd, setLevelIncomeUsd] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('nxbc_level_income');
-      if (stored) return parseFloat(stored) || 0;
-    }
-    return 0;
-  });
-  const [matrixIncomeUsd, setMatrixIncomeUsd] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('nxbc_matrix_income');
-      if (stored) return parseFloat(stored) || 0;
-    }
-    return 0;
-  });
+  const [claimableBalanceUsd, setClaimableBalanceUsd] = useState<number>(0);
+  const [levelIncomeUsd, setLevelIncomeUsd] = useState<number>(0);
+  const [matrixIncomeUsd, setMatrixIncomeUsd] = useState<number>(0);
   const [totalEarningUsdt, setTotalEarningUsdt] = useState<number>(0);
   const [totalWithdrawnUsdt, setTotalWithdrawnUsdt] = useState<number>(0);
 
-  const [totalInvestedUsd, setTotalInvestedUsd] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('nxbc_total_invested');
-      if (stored) return parseFloat(stored) || 0;
-    }
-    return 0;
-  });
+  const [totalInvestedUsd, setTotalInvestedUsd] = useState<number>(0);
 
   // Auto-detect injected Web3 (MetaMask / Trust Wallet / Binance Web3 / OKX)
   useEffect(() => {
@@ -394,9 +361,6 @@ export default function App() {
             }
             if (data.user.totalInvestedUsdt !== undefined && Number(data.user.totalInvestedUsdt) > 0) {
               setTotalInvestedUsd(Number(data.user.totalInvestedUsdt));
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('nxbc_total_invested', String(data.user.totalInvestedUsdt));
-              }
             }
           }
         })
@@ -410,40 +374,6 @@ export default function App() {
               const a = data.allocations;
               const totalTokens = data.totalPurchasedTokens || 0;
               
-              const localAlloc = JSON.parse(localStorage.getItem('nxbc_user_allocation') || '{}');
-              const localTxs = JSON.parse(localStorage.getItem('nxbc_transactions') || '[]');
-              const localTotalInvested = localStorage.getItem('nxbc_total_invested') || '0';
-
-              if (totalTokens === 0 && (localAlloc.totalTokensPurchased > 0 || localTxs.length > 0)) {
-                 console.log("Syncing legacy data to server...");
-                 
-                 // Reconstruct allocations payload from local storage
-                 const allocPayload = [
-                    { phaseNumber: 1, amountTokens: localAlloc.p1Tokens?.allocated || 0 },
-                    { phaseNumber: 2, amountTokens: localAlloc.p2Tokens?.allocated || 0 },
-                    { phaseNumber: 3, amountTokens: localAlloc.p3Tokens?.allocated || 0 },
-                    { phaseNumber: 4, amountTokens: localAlloc.p4Tokens?.allocated || 0 },
-                    { phaseNumber: 5, amountTokens: localAlloc.p5Tokens?.allocated || 0 },
-                    { phaseNumber: 6, amountTokens: localAlloc.dexTokens?.allocated || 0 },
-                 ].filter(x => x.amountTokens > 0);
-
-                 fetch('/api/presale/sync-legacy-data', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                       walletAddress,
-                       allocations: allocPayload,
-                       transactions: localTxs,
-                       totalInvestedUsdt: localTotalInvested
-                    })
-                 }).then(r => r.json()).then(syncRes => {
-                    console.log("Legacy sync complete:", syncRes);
-                    // Refetch from server now
-                    window.location.reload();
-                 });
-                 return; // Wait for reload
-              }
-
               setAllocation((prev) => {
 
                 const next = {
@@ -457,9 +387,6 @@ export default function App() {
                   p5Tokens: a[5] || { allocated: 0, sold: 0 },
                   dexTokens: a[6] || { allocated: 0, sold: 0 },
                 };
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('nxbc_user_allocation', JSON.stringify(next));
-                }
                 return next;
               });
             }
@@ -470,39 +397,12 @@ export default function App() {
 
   // Transactions History (Persisted in localStorage)
   
-  const [allocation, setAllocation] = useState<AllocationState>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('nxbc_user_allocation');
-      if (stored) {
-        try {
-          return JSON.parse(stored);
-        } catch (e) {}
-      }
-    }
-    return {
-      p1Percent: 0,
-      p2Percent: 0,
-      p3Percent: 0,
-      p4Percent: 0,
-      p5Percent: 0,
-      dexPercent: 0,
-      unallocatedPercent: 100,
-      totalTokensPurchased: 0,
-      isLocked: false,
-    };
+  const [allocation, setAllocation] = useState<AllocationState>({
+    p1Percent: 0, p2Percent: 20, p3Percent: 30, p4Percent: 20, p5Percent: 15, dexPercent: 15,
+    unallocatedPercent: 0, totalTokensPurchased: 0, isLocked: false, lockedTimestamp: ''
   });
 
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('nxbc_transactions');
-      if (stored) {
-        try {
-          return JSON.parse(stored);
-        } catch (e) {}
-      }
-    }
-    return [];
-  });
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   // 10-Level Referral Plan Data (Admin Managed & Persisted)
   const defaultPlanLevels: ReferralLevel[] = [
@@ -746,7 +646,14 @@ export default function App() {
         const data = await res.json();
         if (data && data.user) {
           setTotalInvestedUsd(data.user.totalInvestedUsdt || 0);
-          setClaimableBalanceUsd(data.user.availableUsdt || 0);
+          setClaimableBalanceUsd(Number(data.user.availableUsdt || 0));
+          setLevelIncomeUsd(Number(data.levelIncomeUsdt || 0));
+          setMatrixIncomeUsd(Number(data.matrixIncomeUsdt || 0));
+          setUserEarnings((prev) => ({
+            ...prev,
+            availableUsdt: Number(data.user.availableUsdt || 0),
+            withdrawnUsdt: Number(data.user.totalWithdrawnUsdt || 0),
+          }));
           // The database is authoritative for cumulative earnings and withdrawals.
           // Total earnings includes all credited income sources (MLM, matrix, token-sale
           // settlement and rewards) recorded in users.totalEarnedUsdt.
@@ -760,9 +667,6 @@ export default function App() {
           setAllocation((prev) => {
             if (Number(prev.totalTokensPurchased || 0) === dbPurchasedTokens) return prev;
             const updated = { ...prev, totalTokensPurchased: dbPurchasedTokens };
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('nxbc_user_allocation', JSON.stringify(updated));
-            }
             return updated;
           });
           
@@ -814,7 +718,6 @@ export default function App() {
     
       setUsdtBalance((prev) => {
         const next = Math.max(0, prev - usdAmount);
-        if (typeof window !== 'undefined') localStorage.setItem('nxbc_usdt_balance', next.toString());
         return next;
       });
     // Check if presale is paused by Admin
@@ -928,7 +831,6 @@ export default function App() {
 
     setAllocation(updatedAlloc);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('nxbc_user_allocation', JSON.stringify(updatedAlloc));
     }
 
 // UNIVERSAL MLM Qualification Logic (Default $100 limit applies to Level, Direct, Matrix, Ranks)
@@ -1095,7 +997,6 @@ export default function App() {
       }
     } catch (e) { console.error('Queue reorder persistence error:', e); }
     setSellQueue(newQueue);
-    if (typeof window !== 'undefined') localStorage.setItem('nxbc_sell_queue', JSON.stringify(newQueue));
 
     // Compute total fulfilled USDT based on phase rates
     let totalEarnedUsdt = 0;
@@ -1122,7 +1023,6 @@ export default function App() {
           availableUsdt: Math.max(prev.availableUsdt, totalEarnedUsdt - (prev.withdrawnUsdt || 0)),
         };
         if (typeof window !== 'undefined') {
-          localStorage.setItem('nxbc_user_earnings', JSON.stringify(updated));
         }
         return updated;
       });
@@ -1136,7 +1036,6 @@ export default function App() {
           p5Tokens: prev.p5Tokens ? { ...prev.p5Tokens, sold: p5Sold } : undefined,
         };
         if (typeof window !== 'undefined') {
-          localStorage.setItem('nxbc_user_allocation', JSON.stringify(updated));
         }
         return updated;
       });
@@ -1146,6 +1045,7 @@ export default function App() {
   // Helper to easily simulate 100% phase completion for sequential demo
   
   const handleSimulateExternalBuy = (amount: number) => {
+    if (import.meta.env.PROD) return;
     // Determine current active phase
     const activeIdx = phases.findIndex((p) => p.status === 'active');
     if (activeIdx === -1) return; // No active phase
@@ -1218,6 +1118,7 @@ export default function App() {
   };
 
   const handleSimulateFillPhase = () => {
+    if (import.meta.env.PROD) return;
     setPhases((prevPhases) => {
       const activeIdx = prevPhases.findIndex((p) => p.status === 'active');
       if (activeIdx === -1 || activeIdx >= prevPhases.length - 1) return prevPhases;
@@ -1484,7 +1385,7 @@ export default function App() {
         amountUsd: amountUsd,
         timestamp: 'Just now',
         status: 'completed',
-        txHash: txHashParam || `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
+        txHash: txHashParam || '',
       };
       setTransactions((prev) => [newTx, ...prev]);
     } else {
@@ -1495,7 +1396,6 @@ export default function App() {
 
       setClaimableBalanceUsd((prev) => {
         const next = Math.max(0, prev - amountUsd);
-        if (typeof window !== 'undefined') localStorage.setItem('nxbc_claimable_usd', next.toString());
         return next;
       });
 
@@ -1507,7 +1407,7 @@ export default function App() {
         amountUsd: amountUsd,
         timestamp: 'Just now',
         status: 'completed',
-        txHash: txHashParam || `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
+        txHash: txHashParam || '',
       };
       setTransactions((prev) => [newTx, ...prev]);
     }
@@ -1516,6 +1416,7 @@ export default function App() {
 
   // Simulate quick bonus drop
   const handleAddDemoBonus = () => {
+    if (import.meta.env.PROD) return;
     const bonus = 300;
     setClaimableBalanceUsd((prev) => prev + bonus);
     setLevelIncomeUsd((prev) => prev + bonus);
@@ -1567,67 +1468,29 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#070312] text-slate-100 relative font-['Outfit',sans-serif] selection:bg-[#f59e0b] selection:text-black">
+    <div className="nxbc-site min-h-screen text-slate-100 relative font-['Outfit',sans-serif] selection:bg-[#f59e0b] selection:text-black">
       {/* Background with Dark Analytical Graphs, Candlesticks & 3D Gold Coins */}
       <AnalyticalBackground />
 
       {/* Main Foreground Container */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-1 sm:px-4 py-2 sm:py-6 flex flex-col min-h-screen">
+      <div className="nxbc-site-container relative z-10 w-full max-w-7xl mx-auto px-1 sm:px-4 py-2 sm:py-6 flex flex-col min-h-screen">
         
-        {/* Top Header Bar */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 mb-3 sm:mb-4 border-b border-purple-500/20 bg-[#0e0720]/80 backdrop-blur-md px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl border">
-          <div className="flex items-center justify-between w-full">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-black tracking-wider text-slate-100 font-cinzel">
-                  {systemConfig.tokenSymbol}<span className="text-amber-400"> COIN</span>
-                </h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 border border-amber-400/50 text-amber-300 font-mono-crypto">
-                  PRESALE PLATFORM
-                </span>
-                {systemConfig.presalePaused && (
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-600 text-white animate-pulse">
-                    PAUSED
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-purple-200/90 mt-1.5 max-w-2xl leading-relaxed">
-                NXBC is a next-generation utility coin designed for secure, high-yield P2P trading. By participating in this exclusive presale, early adopters secure their allocation at the lowest entry prices. This provides massive growth potential, automated instant payouts via our FIFO smart contract, and guaranteed liquidity before the official Decentralized Exchange (DEX) launch.
-              </p>
-            </div>
-          </div>
-        </header>
-
         {/* Dynamic View Rendering: Single Full Mobile Screen (Default) OR Trio Multi-Screen Grid */}
         {viewMode === 'single' ? (
           /* PURE FULL-WIDTH MOBILE SCREEN APPLICATION INTERFACE */
-          <div className="flex-1 flex flex-col w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto bg-gradient-to-b from-[#110726] via-[#090317] to-[#0d051e] rounded-2xl sm:rounded-[32px] border border-amber-500/25 shadow-[0_15px_60px_rgba(0,0,0,0.8)] overflow-hidden relative my-0 sm:my-2">
+          <div className="nxbc-app-shell flex-1 flex flex-col w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto rounded-2xl sm:rounded-[32px] overflow-hidden relative my-0 sm:my-2">
+            <NXBCBrandHeader
+              tokenSymbol={systemConfig.tokenSymbol || 'NXBC'}
+              presalePaused={!!systemConfig.presalePaused}
+              walletConnected={walletConnected}
+              walletAddress={walletAddress}
+              onOpenWallet={() => setWalletModalOpen(true)}
+            />
             
             {/* Native Mobile App Header Bar Removed as per user request */}
 
 
-            {/* Quick Screen Switcher Tabs */}
-            <div className="px-3 pt-2.5 pb-1 flex items-center gap-1 overflow-x-auto no-scrollbar bg-[#090317]/80 border-b border-purple-500/10 select-none">
-              {[
-                { id: 'home', label: 'Home (Acquisition)' },
-                { id: 'assets', label: 'Assets & FIFO Queue' },
-                { id: 'team', label: '10-Level Team' },
-                { id: 'withdraw', label: 'Withdraw' },
-                { id: 'mine', label: 'Account' },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveSingleScreen(tab.id as ActiveScreen)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-rajdhani font-bold whitespace-nowrap transition-all ${
-                    activeSingleScreen === tab.id
-                      ? 'bg-gradient-to-r from-amber-500/30 to-fuchsia-600/30 text-amber-300 border border-amber-400/40 shadow-sm'
-                      : 'text-purple-300/60 hover:text-purple-200'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+
 
             {/* Mobile Screen Body Content */}
             <div className="flex-1 pb-2 min-h-[520px] flex flex-col">

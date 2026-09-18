@@ -37,6 +37,8 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
     totalTokensSold: 0,
     totalUsdtReceived: 0,
     completedPurchases: 0,
+    source: 'verified_transactions',
+    verified: true,
   });
 
   useEffect(() => {
@@ -51,6 +53,8 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
             totalTokensSold: Number(data.totalTokensSold || 0),
             totalUsdtReceived: Number(data.totalUsdtReceived || 0),
             completedPurchases: Number(data.completedPurchases || 0),
+            source: data.source || 'verified_transactions',
+            verified: data.verified !== false,
           });
         }
       } catch {}
@@ -98,34 +102,8 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   const currentFifoOrder = liveFifoOrders[0];
 
   return (
-    <div className="flex-1 px-4 py-4 space-y-4 max-w-xl mx-auto w-full">
-      {/* Header Section */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="relative flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-200 shadow-lg shadow-amber-500/20">
-            <Sparkles className="w-5 h-5 text-slate-900" />
-          </div>
-          <div>
-            <h1 className="text-sm font-black text-slate-100 uppercase tracking-widest font-rajdhani">NXBC Network</h1>
-            <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[10px] font-mono-crypto text-emerald-400/80 uppercase">BSC Mainnet</span>
-            </div>
-          </div>
-        </div>
-        
-        {walletConnected && walletAddress ? (
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-[#120822] border border-emerald-500/30 rounded-xl text-xs font-mono-crypto text-emerald-400 shadow-inner">
-            <Wallet className="w-3.5 h-3.5" />
-            <span>{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</span>
-          </div>
-        ) : (
-          <button onClick={onOpenWalletModal} className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-white text-slate-900 rounded-xl text-xs font-bold font-rajdhani uppercase transition-colors shadow-xl shadow-slate-100/10">
-            <Wallet className="w-3.5 h-3.5" />
-            Connect
-          </button>
-        )}
-      </div>
+    <div className="nxbc-screen flex-1 px-4 py-4 space-y-4 max-w-xl mx-auto w-full">
+
 
       {/* Verified Presale Trust / Treasury Card */}
       <div className="relative overflow-hidden rounded-2xl border border-amber-400/20 bg-gradient-to-br from-[#1a0d2c] via-[#10071d] to-[#08030f] shadow-[0_12px_35px_rgba(0,0,0,0.35)]">
@@ -139,39 +117,47 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
               </div>
               <div>
                 <div className="text-[10px] font-rajdhani font-bold uppercase tracking-[0.16em] text-amber-300">
-                  Verified Presale Activity
+                  Presale Activity
                 </div>
                 <div className="text-[9px] text-slate-400 font-mono-crypto">
-                  Live • Completed BSC purchases only
+                  {trustStats.verified ? 'Live • Completed BSC purchases only' : 'Live • Database phase counters'}
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/20">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[9px] font-bold text-emerald-300 uppercase tracking-wider">On-chain verified</span>
+              <span className="text-[9px] font-bold text-emerald-300 uppercase tracking-wider">{trustStats.verified ? 'On-chain verified' : 'Database total'}</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className="rounded-xl bg-black/20 border border-white/5 p-3">
-              <div className="text-[9px] text-slate-400 uppercase tracking-wider mb-1">NXBC Tokens Sold</div>
-              <div className="text-lg font-black font-mono-crypto text-slate-100">
+          <div className="nxbc-home-trust-grid grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-black/20 border border-white/5 p-2.5">
+              <div className="text-[8px] text-slate-400 uppercase tracking-wider mb-1">NXBC Sold</div>
+              <div className="text-base font-black font-mono-crypto text-slate-100">
                 {trustStats.totalTokensSold.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               </div>
-              <div className="text-[9px] text-purple-300/60 mt-0.5">Verified purchases</div>
+              <div className="text-[8px] text-purple-300/60 mt-0.5">On-chain</div>
             </div>
 
-            <div className="rounded-xl bg-black/20 border border-emerald-400/10 p-3">
-              <div className="text-[9px] text-slate-400 uppercase tracking-wider mb-1">USDT Received</div>
-              <div className="text-lg font-black font-mono-crypto text-emerald-300">
+            <div className="rounded-xl bg-black/20 border border-emerald-400/10 p-2.5">
+              <div className="text-[8px] text-slate-400 uppercase tracking-wider mb-1">USDT Received</div>
+              <div className="text-base font-black font-mono-crypto text-emerald-300">
                 ${trustStats.totalUsdtReceived.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <div className="text-[9px] text-emerald-300/50 mt-0.5">Presale treasury inflow</div>
+              <div className="text-[8px] text-emerald-300/50 mt-0.5">Treasury</div>
+            </div>
+
+            <div className="rounded-xl bg-black/20 border border-cyan-400/10 p-2.5">
+              <div className="text-[8px] text-slate-400 uppercase tracking-wider mb-1">Purchases</div>
+              <div className="text-base font-black font-mono-crypto text-cyan-300">
+                {trustStats.completedPurchases.toLocaleString()}
+              </div>
+              <div className="text-[8px] text-cyan-300/50 mt-0.5">Completed</div>
             </div>
           </div>
 
           <div className="mt-2.5 flex items-center justify-between text-[9px] text-slate-500 font-mono-crypto">
-            <span>{trustStats.completedPurchases.toLocaleString()} verified purchases</span>
+            <span>{trustStats.completedPurchases.toLocaleString()} completed purchases</span>
             <span>Updates automatically</span>
           </div>
         </div>
@@ -228,9 +214,9 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
               <span className="text-[9px] text-slate-400 uppercase font-rajdhani tracking-wider block mb-1">Phase Supply</span>
               <span className="text-sm font-black font-mono-crypto text-slate-200">{totalSupply.toLocaleString()}</span>
             </div>
-            <div className="bg-[#1a0a2e]/60 rounded-xl p-3.5 border border-amber-500/20 backdrop-blur-md">
-              <span className="text-[9px] text-amber-400/70 uppercase font-rajdhani tracking-wider block mb-1">Tokens Sold</span>
-              <span className="text-sm font-black font-mono-crypto text-amber-400">{tokensSold.toLocaleString()}</span>
+            <div className="bg-[#0b1424]/80 rounded-xl p-3.5 border border-cyan-500/15 backdrop-blur-md">
+              <span className="text-[9px] text-cyan-300/70 uppercase font-rajdhani tracking-wider block mb-1">Phase Progress</span>
+              <span className="text-sm font-black font-mono-crypto text-cyan-300">{progressPercent.toFixed(2)}%</span>
             </div>
             <div className="bg-black/40 rounded-xl p-3.5 border border-white/5 backdrop-blur-md">
               <span className="text-[9px] text-slate-400 uppercase font-rajdhani tracking-wider block mb-1">Remaining</span>
@@ -261,7 +247,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
             onClick={onOpenBuyModal} 
             className="w-full py-4 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-300 hover:from-amber-300 hover:to-yellow-200 text-slate-900 font-black text-sm uppercase font-rajdhani tracking-widest transition-all shadow-[0_0_20px_rgba(251,191,36,0.2)] hover:shadow-[0_0_30px_rgba(251,191,36,0.4)] transform hover:-translate-y-0.5 active:translate-y-0"
           >
-            Buy &amp; Allocate NXBC
+            BUY NXBC NOW
           </button>
         </div>
       </div>

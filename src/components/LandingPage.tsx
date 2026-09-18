@@ -14,7 +14,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#06010f] text-slate-200 font-sans selection:bg-fuchsia-500/30 overflow-x-hidden">
+    <div className="nxbc-landing min-h-screen bg-[#06010f] text-slate-200 font-sans selection:bg-fuchsia-500/30 overflow-x-hidden">
       {/* Dynamic Background */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute top-[-20%] left-[-10%] w-[50vw] h-[50vw] bg-amber-600/10 rounded-full blur-[120px] mix-blend-screen animate-blob" />

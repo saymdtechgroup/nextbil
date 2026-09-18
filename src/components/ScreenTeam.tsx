@@ -183,7 +183,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
   };
 
   return (
-    <div className="flex-1 p-3.5 sm:p-4 space-y-4 max-w-4xl mx-auto w-full">
+    <div className="nxbc-screen flex-1 p-3.5 sm:p-4 space-y-4 max-w-4xl mx-auto w-full">
       {/* 1. Header Bar: Community Network & Invite */}
       <div className="flex items-center justify-between pb-2 border-b border-purple-500/15">
         <div className="flex items-center gap-2.5">

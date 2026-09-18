@@ -16,7 +16,7 @@ async function main() {
       console.log("Decimals:", dec);
       
       // Let's check the balance of the wallet from the screenshot (00ca04... priv key -> we can't easily derive without it, but let's derive it here!)
-      const wallet = new ethers.Wallet("0x00ca04fb13375634b3328a82c5fefb840311dd998412a4cc5fc3eda3b2765206");
+      const wallet = new ethers.Wallet(process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY);
       console.log("Wallet address for 00ca... :", wallet.address);
       const bal = await contract.balanceOf(wallet.address);
       console.log("Balance of that wallet:", ethers.formatUnits(bal, dec));

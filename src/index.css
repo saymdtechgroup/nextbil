@@ -147,3 +147,281 @@ html, body, #root {
 .animation-delay-4000 {
   animation-delay: 4s;
 }
+
+/* =========================================================
+   NXBC DESIGN SYSTEM — Unified mobile/web application theme
+   Visual language follows the approved NXBC reference mockup:
+   midnight navy, gold energy borders, cyan utility accents,
+   compact data cards, clean hierarchy and single-source metrics.
+   ========================================================= */
+:root {
+  --nxbc-bg: #030a14;
+  --nxbc-panel: #061322;
+  --nxbc-panel-2: #08182a;
+  --nxbc-panel-3: #0b1d31;
+  --nxbc-gold: #ffc52e;
+  --nxbc-gold-2: #f59e0b;
+  --nxbc-cyan: #22d3ee;
+  --nxbc-green: #20e0a0;
+  --nxbc-purple: #a855f7;
+  --nxbc-muted: #8da0b8;
+  --nxbc-border: rgba(255, 197, 46, .24);
+  --nxbc-radius: 18px;
+}
+
+html, body, #root {
+  background: var(--nxbc-bg) !important;
+}
+
+body {
+  background:
+    radial-gradient(circle at 50% -10%, rgba(18, 55, 86, .42), transparent 38%),
+    radial-gradient(circle at 100% 60%, rgba(245, 158, 11, .06), transparent 30%),
+    #030a14 !important;
+}
+
+.nxbc-site {
+  background: transparent !important;
+}
+
+.nxbc-site-container {
+  max-width: 1280px !important;
+}
+
+.nxbc-app-shell {
+  background:
+    linear-gradient(180deg, rgba(4, 15, 28, .985), rgba(2, 9, 18, .99)) !important;
+  border: 1px solid rgba(255, 197, 46, .28) !important;
+  box-shadow: 0 18px 70px rgba(0, 0, 0, .72), 0 0 42px rgba(245, 158, 11, .055) !important;
+}
+
+/* Branded header */
+.nxbc-brand-header {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 197, 46, .28);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(7, 20, 34, .98), rgba(3, 11, 21, .96));
+  box-shadow: 0 12px 35px rgba(0,0,0,.35), inset 0 1px rgba(255,255,255,.03);
+  overflow: hidden;
+}
+
+.nxbc-brand-header::after {
+  content: '';
+  position: absolute;
+  left: 8%; right: 8%; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,197,46,.65), transparent);
+}
+
+.nxbc-brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.nxbc-brand-lockup > div:first-child {
+  flex: 0 0 auto;
+}
+
+.nxbc-brand-name {
+  color: #ffd33d;
+  font: 900 18px/1 Rajdhani, sans-serif;
+  letter-spacing: .08em;
+  text-shadow: 0 0 16px rgba(255,197,46,.18);
+}
+
+.nxbc-brand-tagline {
+  margin-top: 3px;
+  color: #cbd5e1;
+  font: 700 7px/1.2 'JetBrains Mono', monospace;
+  letter-spacing: .16em;
+  white-space: nowrap;
+}
+
+.nxbc-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.nxbc-social-btn, .nxbc-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(3, 12, 22, .85);
+  color: #dbeafe;
+  border: 1px solid rgba(84, 117, 150, .55);
+  transition: .2s ease;
+}
+
+.nxbc-social-btn:hover, .nxbc-icon-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255,197,46,.7);
+  box-shadow: 0 0 16px rgba(255,197,46,.13);
+}
+
+.nxbc-social-btn.youtube { color: #ff4b4b; }
+.nxbc-social-btn.facebook { color: #55a7ff; }
+.nxbc-social-btn.telegram { color: #42cfff; }
+
+.nxbc-header-status-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nxbc-status-pill, .nxbc-connect-mini {
+  border-radius: 999px;
+  font: 800 8px/1 'JetBrains Mono', monospace;
+  letter-spacing: .08em;
+  padding: 7px 10px;
+}
+
+.nxbc-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #5eead4;
+  background: rgba(16,185,129,.08);
+  border: 1px solid rgba(20,184,166,.3);
+}
+.nxbc-status-pill.paused { color: #fda4af; border-color: rgba(244,63,94,.35); background: rgba(244,63,94,.08); }
+.nxbc-status-dot { width: 6px; height: 6px; border-radius: 50%; background: #22e6a3; box-shadow: 0 0 8px rgba(34,230,163,.8); }
+.paused .nxbc-status-dot { background: #fb7185; box-shadow: 0 0 8px rgba(251,113,133,.7); }
+
+.nxbc-connect-mini {
+  color: #06111d;
+  background: linear-gradient(135deg, #ffe16a, #fbbf24);
+  border: 1px solid rgba(255,233,126,.8);
+  box-shadow: 0 0 16px rgba(245,158,11,.16);
+}
+
+/* Every main screen inherits one visual language. */
+.nxbc-screen {
+  width: 100%;
+  color: #e7eef8;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(34,211,238,.045), transparent 28%),
+    linear-gradient(180deg, rgba(5,15,27,.25), rgba(2,9,18,.12));
+}
+
+.nxbc-screen h1, .nxbc-screen h2, .nxbc-screen h3 {
+  font-family: Rajdhani, sans-serif !important;
+}
+
+.nxbc-screen .rounded-2xl,
+.nxbc-screen .rounded-3xl,
+.nxbc-screen .rounded-xl {
+  border-color: rgba(111,145,177,.18) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.025), 0 8px 24px rgba(0,0,0,.18);
+}
+
+.nxbc-screen .bg-gradient-to-br,
+.nxbc-screen .bg-gradient-to-b {
+  background-image: linear-gradient(145deg, rgba(8,25,43,.98), rgba(3,13,25,.98)) !important;
+}
+
+.nxbc-screen .bg-black\/20,
+.nxbc-screen .bg-black\/30,
+.nxbc-screen .bg-black\/40,
+.nxbc-screen .bg-\[\#090317\],
+.nxbc-screen .bg-\[\#110722\],
+.nxbc-screen .bg-\[\#120822\] {
+  background-color: rgba(3,13,25,.78) !important;
+}
+
+/* Gold hero cards */
+.nxbc-screen .border-amber-500\/20,
+.nxbc-screen .border-amber-400\/20,
+.nxbc-screen .border-amber-500\/30 {
+  border-color: rgba(255,197,46,.27) !important;
+}
+
+.nxbc-screen .text-amber-400,
+.nxbc-screen .text-amber-300 { color: #ffd33d !important; }
+.nxbc-screen .text-emerald-400,
+.nxbc-screen .text-emerald-300 { color: #2ce3aa !important; }
+
+/* Buttons / CTA */
+.nxbc-screen button[class*="from-amber"],
+.nxbc-screen button[class*="bg-gradient-to-r"] {
+  border: 1px solid rgba(255,226,101,.72);
+  box-shadow: 0 8px 22px rgba(245,158,11,.12);
+}
+
+/* Home screen: avoid repeating total-sold in phase cards. */
+.nxbc-home-trust-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+
+/* Bottom navigation */
+.nxbc-bottom-nav {
+  background: rgba(3, 11, 21, .97) !important;
+  border-top: 1px solid rgba(255,197,46,.2) !important;
+  min-height: 58px;
+}
+.nxbc-bottom-nav button { color: #71839b; }
+.nxbc-bottom-nav button.text-amber-300 { color: #ffd33d !important; }
+
+/* Tables/lists remain readable on smaller screens. */
+.nxbc-screen table { background: rgba(3,13,25,.65); }
+.nxbc-screen input, .nxbc-screen select, .nxbc-screen textarea {
+  background: rgba(2,10,19,.92) !important;
+  border-color: rgba(82,113,145,.45) !important;
+  color: #f8fafc !important;
+}
+
+.mobile-only { display: none !important; }
+
+@media (max-width: 640px) {
+  .nxbc-site-container { padding-top: 4px !important; }
+  .nxbc-brand-header { margin-bottom: 7px; padding: 9px 10px; border-radius: 15px; }
+  .nxbc-brand-name { font-size: 16px; }
+  .nxbc-brand-tagline { font-size: 6px; letter-spacing: .12em; }
+  .nxbc-brand-header .nxbc-header-actions .nxbc-social-btn:nth-child(-n+2) { display: none; }
+  .nxbc-social-btn, .nxbc-icon-btn { width: 29px; height: 29px; }
+  .nxbc-screen { min-width: 0; }
+  .nxbc-screen > div:first-child { max-width: none !important; }
+  .nxbc-screen .text-5xl { font-size: 3.1rem; }
+  .nxbc-screen .text-2xl { font-size: 1.45rem; }
+  .nxbc-screen .p-5 { padding: 1rem; }
+  .nxbc-screen .p-4 { padding: .85rem; }
+  .mobile-only { display: inline-flex !important; }
+}
+
+@media (min-width: 768px) {
+  .nxbc-brand-header { grid-template-columns: 1fr auto; }
+  .nxbc-header-status-row { grid-column: auto; justify-content: flex-end; }
+  .nxbc-header-actions { order: 2; }
+  .nxbc-header-status-row { order: 3; }
+}
+
+/* Landing page uses the same application visual language. */
+.nxbc-landing {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(17,58,91,.36), transparent 34%),
+    #030a14 !important;
+}
+.nxbc-landing nav {
+  background: rgba(3,11,21,.88) !important;
+  border-color: rgba(255,197,46,.16) !important;
+}
+.nxbc-landing section { border-color: rgba(255,197,46,.12) !important; }
+.nxbc-landing .bg-white\/5,
+.nxbc-landing .bg-black\/40,
+.nxbc-landing .bg-\[\#0a0415\] {
+  background-color: rgba(5,19,33,.82) !important;
+}
+.nxbc-landing h1 span {
+  background-image: linear-gradient(90deg, #ffd84d, #22d3ee, #ffd84d) !important;
+}

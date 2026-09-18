@@ -530,7 +530,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
 
   
   return (
-    <div className="flex-1 p-3.5 space-y-3.5 relative">
+    <div className="nxbc-screen flex-1 p-3.5 space-y-3.5 relative">
       {/* Header */}
       <div className="flex items-center justify-between pb-1 border-b border-purple-500/10">
         <div className="flex items-center gap-2">

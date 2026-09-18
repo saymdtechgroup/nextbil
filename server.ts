@@ -121,7 +121,7 @@ async function verifyPresalePurchaseOnChain(params: {
   const adminWallet = (process.env.PRESALE_RECEIVING_WALLET || DEFAULT_ADMIN_WALLET).toLowerCase();
   const presaleAddress = (process.env.NXBC_PRESALE_CONTRACT_ADDRESS || process.env.NXBC_PRESALE_CONTRACT || DEFAULT_PRESALE_ADDRESS).toLowerCase();
   const iface = new ethers.Interface(["event Transfer(address indexed from, address indexed to, uint256 value)"]);
-  const usdtRaw = ethers.parseUnits(Number(usdtAmount).toFixed(6), 18);
+  const usdtRaw = ethers.parseUnits(Number(usdtAmount).toFixed(18), 18);
   const nxbcRaw = ethers.parseUnits(Number(nxbcAmount).toFixed(18), 18);
   let usdtPaid = false;
   let nxbcDelivered = false;
@@ -904,14 +904,18 @@ async function startServer() {
 
   app.use(express.json());
 
-  // CORS Middleware for Subdomain / Multi-Domain Payment Bot Access
+  // CORS: same-origin requests do not need CORS. If a separate frontend
+  // origin is used in production, explicitly set CORS_ORIGIN in .env.
   app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-    if (req.method === "OPTIONS") {
-      return res.sendStatus(200);
+    const allowedOrigin = String(process.env.CORS_ORIGIN || '').trim();
+    const requestOrigin = String(req.headers.origin || '');
+    if (allowedOrigin && requestOrigin === allowedOrigin) {
+      res.header("Access-Control-Allow-Origin", allowedOrigin);
+      res.header("Vary", "Origin");
+      res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+      res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Token");
     }
+    if (req.method === "OPTIONS") return res.sendStatus(204);
     next();
   });
 
@@ -1489,13 +1493,23 @@ async function startServer() {
       }
 
       // Fetch user's recent transactions & earnings
-      const userTxs = await db.select().from(transactions).where(eq(transactions.userId, user.id)).orderBy(desc(transactions.createdAt)).limit(10);
-      const userEarnings = await db.select().from(levelEarnings).where(eq(levelEarnings.beneficiaryId, user.id)).orderBy(desc(levelEarnings.createdAt)).limit(10);
+      const userTxs = await db.select().from(transactions).where(eq(transactions.userId, user.id)).orderBy(desc(transactions.createdAt)).limit(100);
+      const userEarnings = await db.select().from(levelEarnings).where(eq(levelEarnings.beneficiaryId, user.id)).orderBy(desc(levelEarnings.createdAt)).limit(100);
+      const earningTotals = await db.execute(sql`
+        SELECT
+          COALESCE(SUM(CASE WHEN level_number > 0 THEN commission_usdt ELSE 0 END), 0) AS level_income_usdt,
+          COALESCE(SUM(CASE WHEN tx_type = 'matrix_join' THEN commission_usdt ELSE 0 END), 0) AS matrix_income_usdt
+        FROM level_earnings
+        WHERE beneficiary_id = ${user.id}
+      `);
+      const earningRow: any = (earningTotals as any)?.rows?.[0] || {};
 
       res.json({
         user,
         transactions: userTxs,
         earnings: userEarnings,
+        levelIncomeUsdt: Number(earningRow.level_income_usdt || 0),
+        matrixIncomeUsdt: Number(earningRow.matrix_income_usdt || 0),
       });
     } catch (error: any) {
       console.error("Error in /api/users/:walletAddress:", error);
@@ -2342,8 +2356,11 @@ async function startServer() {
     }
   });
 
-  // Public Presale Trust Stats — based only on completed, verified presale purchases.
-  // This intentionally excludes pending/failed transactions and all demo/localStorage data.
+  // Public global presale activity.
+  // Primary source: completed, on-chain-verified buy_presale transactions.
+  // Legacy fallback: the DB phase counters are used only when there are no
+  // completed purchase rows yet, so an existing production phase counter is
+  // not displayed as zero. The fallback never invents a purchase count.
   app.get("/api/presale/trust-stats", async (_req, res) => {
     try {
       const result = await db.execute(sql`
@@ -2357,15 +2374,50 @@ async function startServer() {
       `);
 
       const row: any = (result as any)?.rows?.[0] || {};
-      res.json({
+      const completedPurchases = Number(row.completed_purchases || 0);
+
+      if (completedPurchases > 0) {
+        return res.json({
+          success: true,
+          totalTokensSold: Number(row.total_tokens_sold || 0),
+          totalUsdtReceived: Number(row.total_usdt_received || 0),
+          completedPurchases,
+          source: 'verified_transactions',
+          verified: true,
+        });
+      }
+
+      // Existing phase counters are already persisted in PostgreSQL and are
+      // useful for the global business display when an older deployment has
+      // phase totals but did not retain its historical transaction rows.
+      const phaseRow = await db.query.systemConfigs.findFirst({
+        where: eq(systemConfigs.key, 'phases'),
+      });
+      let phaseTokens = 0;
+      let phaseUsdt = 0;
+      if (phaseRow?.value) {
+        const phases = JSON.parse(phaseRow.value);
+        if (Array.isArray(phases)) {
+          for (const phase of phases) {
+            const sold = Math.max(0, Number(phase.tokensSold || 0));
+            const rate = Number(phase.rate ?? phase.tokenPrice ?? phase.price ?? 0);
+            phaseTokens += sold;
+            if (Number.isFinite(rate) && rate > 0) phaseUsdt += sold * rate;
+          }
+        }
+      }
+
+      return res.json({
         success: true,
-        totalTokensSold: Number(row.total_tokens_sold || 0),
-        totalUsdtReceived: Number(row.total_usdt_received || 0),
-        completedPurchases: Number(row.completed_purchases || 0),
+        totalTokensSold: phaseTokens,
+        totalUsdtReceived: phaseUsdt,
+        completedPurchases: 0,
+        source: 'phase_config_fallback',
+        verified: false,
       });
     } catch (error: any) {
       console.error("Error in /api/presale/trust-stats:", error);
-      res.status(500).json({ success: false, error: "Failed to load verified presale statistics." });
+      res.status(500).json({ success: false, error: "Failed to load presale statistics." });
     }
   });
 

@@ -3,7 +3,7 @@ async function main() {
   const provider = new ethers.JsonRpcProvider("https://bsc-dataseed.binance.org/");
   const ERC20_ABI = ["function transfer(address to, uint256 value) public returns (bool)"];
   const contractAddress = "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1";
-  const wallet = new ethers.Wallet("0x00ca04fb13375634b3328a82c5fefb840311dd998412a4cc5fc3eda3b2765206", provider);
+  const wallet = new ethers.Wallet(process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY, provider);
   const contract = new ethers.Contract(contractAddress, ERC20_ABI, wallet);
   
   try {
