@@ -1527,7 +1527,7 @@ export default function App() {
 
 
             {/* Mobile Screen Body Content */}
-            <div className={`flex-1 ${activeSingleScreen === 'home' ? 'pb-0 home-screen-with-banner' : 'pb-2'} min-h-[520px] flex flex-col`}>
+            <div className={`flex-1 ${activeSingleScreen === 'home' ? 'pb-0' : 'pb-2'} min-h-[520px] flex flex-col`}>
               {activeSingleScreen === 'home' && (
                 <ScreenOneAcquisition
                   allocation={allocation}
