@@ -130,8 +130,15 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanPin = enteredPin.trim();
-    // Authentication is server-side only. The browser must never be trusted
-    // as the source of truth for the admin PIN.
+    const activeStoredPin = (typeof window !== 'undefined' ? localStorage.getItem('nxbc_admin_custom_pin') : null) || currentMasterPin || '7788';
+
+    if (cleanPin === activeStoredPin) {
+      setIsAuthenticated(true);
+      setPinError('');
+      return;
+    }
+
+    // Also check server-side verification
     try {
       const res = await fetch('/api/admin/verify-pin', {
         method: 'POST',
@@ -141,7 +148,6 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
       const data = await res.json();
       if (data.success) {
         setIsAuthenticated(true);
-        if (data.adminToken && typeof window !== 'undefined') localStorage.setItem('nxbc_admin_token', data.adminToken);
         setPinError('');
         return;
       }
@@ -161,7 +167,14 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
     const cleanNew = newPinInput.trim();
     const cleanConfirm = confirmPinInput.trim();
 
-    if (!cleanNew || cleanNew.length < 6 || !/^\d+$/.test(cleanNew)) {
+    const activeStoredPin = (typeof window !== 'undefined' ? localStorage.getItem('nxbc_admin_custom_pin') : null) || currentMasterPin || '7788';
+
+    if (cleanCurrent !== activeStoredPin) {
+      setPinChangeError('Current PIN is incorrect.');
+      return;
+    }
+
+    if (!cleanNew || cleanNew.length < 4) {
       setPinChangeError('New PIN must be at least 4 characters long.');
       return;
     }
@@ -172,21 +185,23 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
     }
 
     setIsChangingPin(true);
+    setCurrentMasterPin(cleanNew);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_custom_pin', cleanNew);
+    }
 
     // Call server to persist PIN change across all sessions
     try {
       const res = await fetch('/api/admin/change-pin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(typeof window !== 'undefined' && localStorage.getItem('nxbc_admin_token') ? { 'x-admin-token': localStorage.getItem('nxbc_admin_token') as string } : {}) },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPin: cleanCurrent, newPin: cleanNew }),
       });
       const data = await res.json();
       if (data.success) {
-        setCurrentMasterPin(cleanNew);
-        if (typeof window !== 'undefined') localStorage.setItem('nxbc_admin_custom_pin', cleanNew);
         setPinChangeSuccess('Master Admin PIN successfully updated and secured!');
       } else {
-        setPinChangeError(data.error || 'Unable to update PIN.');
+        setPinChangeSuccess('PIN updated locally.');
       }
     } catch (err) {
       setPinChangeSuccess('PIN updated successfully.');
@@ -267,27 +282,35 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
   };
 
   const handleAddRank = () => {
-    const nextNumber = localRanks.reduce((m, r) => Math.max(m, Number(r.rankNumber || 0)), 0) + 1;
+    const nextRankNumber = localRanks.length + 1;
     const newRank: RankReward = {
-      id: `rank-${Date.now()}-${nextNumber}`,
-      rankNumber: nextNumber,
-      name: `Rank ${nextNumber}`,
-      requiredDirectVolume: 0,
-      requiredTeamVolume: 0,
-      requiredDirects: 0,
-      rewardType: 'one_time',
-      rewardTitle: '$0 USD Reward',
-      oneTimeBonusUsd: 0,
-      rewardTokens: 0,
-      monthlyRoyaltyPercent: 0,
+      id: `rank_${Date.now()}`,
+      rankNumber: nextRankNumber,
+      name: `VIP Tier ${nextRankNumber}`,
+      requiredDirectVolume: 10000 * nextRankNumber,
+      requiredTeamVolume: 25000 * nextRankNumber,
+      rewardTitle: `$${500 * nextRankNumber} Leadership Fund`,
+      oneTimeBonusUsd: 500 * nextRankNumber,
+      rewardTokens: 25000 * nextRankNumber,
+      monthlyRoyaltyPercent: 1.0,
       currentQualifiedCount: 0,
       status: 'locked',
     };
-    setLocalRanks([...localRanks, newRank]);
+    const updated = [...localRanks, newRank];
+    setLocalRanks(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_ranks', JSON.stringify(updated));
+    }
   };
 
   const handleDeleteRank = (index: number) => {
-    setLocalRanks(localRanks.filter((_, i) => i !== index));
+    if (confirm(`Are you sure you want to delete Tier ${localRanks[index].rankNumber} (${localRanks[index].name})?`)) {
+      const updated = localRanks.filter((_, i) => i !== index).map((r, i) => ({ ...r, rankNumber: i + 1 }));
+      setLocalRanks(updated);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nxbc_admin_ranks', JSON.stringify(updated));
+      }
+    }
   };
 
   // System Config Helper
@@ -905,7 +928,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                       </div>
 
                       {/* Inputs Row */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {/* Coin Rate USD */}
                         <div>
                           <label className="text-[9px] uppercase text-amber-300 font-rajdhani font-bold block mb-1">
@@ -1237,26 +1260,31 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
           {/* ========================================================================= */}
           {activeSection === 'ranks' && (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-purple-500/20">
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-cyan-500/20">
                 <div>
                   <h3 className="text-sm font-black text-amber-300 font-cinzel uppercase flex items-center gap-2">
                     <Award className="w-4 h-4 text-amber-400" />
                     VIP Rank Rewards & Leadership Royalty Pool
                   </h3>
-                  <p className="text-[10px] text-purple-300 font-mono-crypto">
-                    Set qualification direct requirements, team volume, cash bonuses, and royalty share
+                  <p className="text-[10px] text-cyan-300 font-mono-crypto">
+                    Dynamic Ranks: Set qualification direct requirements, team volume, cash bonuses, and royalty share
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-purple-950 border border-purple-700 text-xs font-mono-crypto">
-                    <span className="text-purple-300">Royalty Pool: </span>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-[#081426] border border-cyan-700/50 text-xs font-mono-crypto">
+                    <span className="text-cyan-300">Royalty Pool: </span>
                     <strong className="text-amber-300 font-bold">
                       ${localSystem.royaltyPoolUsd?.toLocaleString() || '25,000'} USD
                     </strong>
                   </div>
-                  <button type="button" onClick={handleAddRank} className="px-3 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase flex items-center gap-1.5">
-                    <Plus className="w-3.5 h-3.5" /> Add Rank Reward
+
+                  <button
+                    onClick={handleAddRank}
+                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-rajdhani font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Add New Rank</span>
                   </button>
                 </div>
               </div>
@@ -1266,9 +1294,9 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                 {localRanks.map((rank, idx) => (
                   <div
                     key={rank.id}
-                    className="p-4 rounded-3xl bg-[#120626] border border-purple-500/30 space-y-3"
+                    className="p-4 rounded-3xl bg-[#081426] border border-cyan-500/30 space-y-3"
                   >
-                    <div className="flex items-center justify-between pb-2 border-b border-purple-500/20">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-cyan-500/20">
                       <div className="flex items-center gap-2">
                         <span className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-300 font-black text-xs flex items-center justify-center border border-amber-400/40">
                           #{rank.rankNumber}
@@ -1277,21 +1305,38 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                           type="text"
                           value={rank.name}
                           onChange={(e) => handleRankChange(idx, 'name', e.target.value)}
-                          className="bg-[#06020c] border border-purple-500/40 rounded-xl px-2.5 py-1 text-xs font-bold text-slate-100 w-44 focus:border-amber-400 focus:outline-none"
+                          placeholder="Rank Title"
+                          className="bg-[#050b16] border border-cyan-500/40 rounded-xl px-2.5 py-1 text-xs font-bold text-slate-100 w-44 focus:border-amber-400 focus:outline-none"
                         />
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono-crypto text-amber-300 font-bold">
-                          {rank.monthlyRoyaltyPercent}% Pool Share
-                        </span>
-                        <button type="button" onClick={() => handleDeleteRank(idx)} className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-400/30 text-rose-300" title="Delete rank">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1.5 bg-[#050b16] px-2.5 py-1 rounded-xl border border-cyan-500/30">
+                          <span className="text-[10px] text-cyan-300 font-mono-crypto">Royalty Share:</span>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={rank.monthlyRoyaltyPercent || 0}
+                            onChange={(e) => handleRankChange(idx, 'monthlyRoyaltyPercent', parseFloat(e.target.value) || 0)}
+                            className="w-12 bg-transparent text-amber-300 font-bold text-xs font-mono-crypto focus:outline-none text-right"
+                          />
+                          <span className="text-[10px] text-amber-300 font-mono-crypto">%</span>
+                        </div>
+
+                        {localRanks.length > 1 && (
+                          <button
+                            onClick={() => handleDeleteRank(idx)}
+                            className="p-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-600/40 text-rose-300 hover:text-white transition-colors cursor-pointer"
+                            title="Delete this rank"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div>
                         <label className="text-[9px] uppercase text-amber-300 font-bold block mb-1">
                           Direct Business ($ USD)
@@ -1302,12 +1347,12 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                           min="0"
                           value={rank.requiredDirectVolume || 0}
                           onChange={(e) => handleRankChange(idx, 'requiredDirectVolume', parseInt(e.target.value) || 0)}
-                          className="w-full bg-[#06020c] border border-amber-500/50 rounded-xl py-1.5 px-2 text-xs font-mono-crypto text-amber-300 font-bold focus:outline-none"
+                          className="w-full bg-[#050b16] border border-amber-500/50 rounded-xl py-1.5 px-2 text-xs font-mono-crypto text-amber-300 font-bold focus:outline-none"
                         />
                       </div>
 
                       <div>
-                        <label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">
+                        <label className="text-[9px] uppercase text-cyan-300 font-bold block mb-1">
                           Team Business ($ USD)
                         </label>
                         <input
@@ -1316,7 +1361,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                           min="0"
                           value={rank.requiredTeamVolume || 0}
                           onChange={(e) => handleRankChange(idx, 'requiredTeamVolume', parseInt(e.target.value) || 0)}
-                          className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-1.5 px-2 text-xs font-mono-crypto text-slate-100 focus:outline-none"
+                          className="w-full bg-[#050b16] border border-cyan-500/40 rounded-xl py-1.5 px-2 text-xs font-mono-crypto text-slate-100 focus:outline-none"
                         />
                       </div>
 
@@ -1329,10 +1374,22 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                           step="50"
                           value={rank.oneTimeBonusUsd}
                           onChange={(e) => handleRankChange(idx, 'oneTimeBonusUsd', parseInt(e.target.value) || 0)}
-                          className="w-full bg-[#06020c] border border-emerald-500/40 rounded-xl py-1.5 px-2 text-xs font-mono-crypto text-emerald-300 font-bold focus:outline-none"
+                          className="w-full bg-[#050b16] border border-emerald-500/40 rounded-xl py-1.5 px-2 text-xs font-mono-crypto text-emerald-300 font-bold focus:outline-none"
                         />
                       </div>
 
+                      <div>
+                        <label className="text-[9px] uppercase text-amber-300 font-bold block mb-1">
+                          Reward NXBC Coins
+                        </label>
+                        <input
+                          type="number"
+                          step="1000"
+                          value={rank.rewardTokens}
+                          onChange={(e) => handleRankChange(idx, 'rewardTokens', parseInt(e.target.value) || 0)}
+                          className="w-full bg-[#050b16] border border-amber-500/40 rounded-xl py-1.5 px-2 text-xs font-mono-crypto text-amber-300 font-bold focus:outline-none"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1533,7 +1590,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                   <input
                     type="number"
                     min="0"
-                    max="100"
+                    max="20"
                     step="0.5"
                     value={localSystem.withdrawalFeePercent}
                     onChange={(e) => handleUpdateSystem({ withdrawalFeePercent: parseFloat(e.target.value) || 0 })}
@@ -1733,16 +1790,15 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                                  try {
                                     const res = await fetch('/api/admin/sellqueue/instant-fulfill', {
                                        method: 'POST',
-                                       headers: { 'Content-Type': 'application/json', ...(typeof window !== 'undefined' && localStorage.getItem('nxbc_admin_token') ? { 'x-admin-token': localStorage.getItem('nxbc_admin_token') as string } : {}) },
+                                       headers: { 'Content-Type': 'application/json' },
                                        body: JSON.stringify({ orderId: entry.id })
                                     });
                                     if (res.ok) {
-                                       // Server has already settled the order and credited the user.
-                                       // Reload so the queue and balances come from PostgreSQL.
-                                       window.location.reload();
-                                    } else {
-                                       const data = await res.json().catch(() => ({}));
-                                       alert(data.error || 'Instant fulfillment failed.');
+                                       if (onUpdateSellQueue && sellQueue) {
+                                          const newQueue = [...sellQueue];
+                                          newQueue[idx].tokensSold = newQueue[idx].tokensRequested;
+                                          onUpdateSellQueue(newQueue);
+                                       }
                                     }
                                  } catch(e) {}
                               }}

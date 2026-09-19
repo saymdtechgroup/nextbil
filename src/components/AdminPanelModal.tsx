@@ -155,6 +155,32 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setLocalRanks(updated);
   };
 
+  const handleAddRank = () => {
+    const nextRankNumber = localRanks.length + 1;
+    const newRank: RankReward = {
+      id: `rank_${Date.now()}`,
+      rankNumber: nextRankNumber,
+      name: `VIP Tier ${nextRankNumber}`,
+      requiredDirectVolume: 10000 * nextRankNumber,
+      requiredTeamVolume: 25000 * nextRankNumber,
+      rewardTitle: `$${500 * nextRankNumber} Leadership Fund`,
+      oneTimeBonusUsd: 500 * nextRankNumber,
+      rewardTokens: 25000 * nextRankNumber,
+      monthlyRoyaltyPercent: 1.0,
+      currentQualifiedCount: 0,
+      status: 'locked',
+    };
+    setLocalRanks([...localRanks, newRank]);
+  };
+
+  const handleDeleteRank = (index: number) => {
+    if (confirm(`Are you sure you want to delete Tier ${localRanks[index].rankNumber} (${localRanks[index].name})?`)) {
+      const updated = localRanks.filter((_, i) => i !== index);
+      const reindexed = updated.map((r, i) => ({ ...r, rankNumber: i + 1 }));
+      setLocalRanks(reindexed);
+    }
+  };
+
   const totalAllocatedTokens = localPhases.reduce((acc, p) => acc + p.totalSupply, 0);
   const totalTargetUsd = localPhases.reduce((acc, p) => acc + p.totalSupply * p.rate, 0);
   const totalLevelPercent = localLevels.reduce((acc, l) => acc + l.commissionPercent, 0);
@@ -882,21 +908,28 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           {/* ========================================================================= */}
           {activeTab === 'ranks' && (
             <div className="space-y-3.5">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-xs font-bold text-slate-100 uppercase font-rajdhani tracking-wider flex items-center gap-1.5">
                     <Award className="w-4 h-4 text-amber-400" />
                     Rank Progression & Lifetime Royalty Pool Share
                   </h3>
-                  <p className="text-[9px] text-purple-400 font-mono-crypto">
-                    Qualification requirement, one-time cash bonus, reward coins, and monthly royalty % for each rank.
+                  <p className="text-[9px] text-cyan-300/80 font-mono-crypto">
+                    Dynamic Ranks: Add, customize, or remove rank requirements, cash bonus/funds, coins & royalties.
                   </p>
                 </div>
-                <div className="text-right">
-                  <span className="text-[10px] text-purple-300 font-mono-crypto">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] text-cyan-300 font-mono-crypto hidden sm:inline">
                     Total Royalty Pool:{' '}
                     <strong className="text-amber-400 font-bold">{totalRoyaltyPercent}% Global</strong>
                   </span>
+                  <button
+                    onClick={handleAddRank}
+                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-rajdhani font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Add New Rank</span>
+                  </button>
                 </div>
               </div>
 
@@ -905,9 +938,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 {localRanks.map((rank, idx) => (
                   <div
                     key={rank.id}
-                    className="p-3.5 rounded-2xl bg-[#090317] border border-purple-500/20 hover:border-amber-400/50 transition-all"
+                    className="p-3.5 rounded-2xl bg-[#081426] border border-cyan-500/20 hover:border-amber-400/50 transition-all"
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-purple-500/15">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-cyan-500/15">
                       <div className="flex items-center gap-2">
                         <span className="px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-400/40 text-xs font-bold font-rajdhani">
                           Tier {rank.rankNumber}
@@ -916,13 +949,35 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           type="text"
                           value={rank.name}
                           onChange={(e) => handleRankChange(idx, 'name', e.target.value)}
-                          className="bg-[#06020c] border border-purple-500/30 rounded-lg px-2 py-1 text-xs font-bold text-slate-100 w-44 focus:border-amber-400 focus:outline-none"
+                          placeholder="Rank Title"
+                          className="bg-[#050b16] border border-cyan-500/30 rounded-lg px-2 py-1 text-xs font-bold text-slate-100 w-44 focus:border-amber-400 focus:outline-none"
                         />
                       </div>
 
-                      <span className="text-[10px] font-mono-crypto text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/30">
-                        Royalty: {rank.monthlyRoyaltyPercent}% Pool
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 bg-[#050b16] px-2 py-0.5 rounded border border-cyan-500/30">
+                          <span className="text-[9px] text-cyan-400 font-mono-crypto">Royalty:</span>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={rank.monthlyRoyaltyPercent || 0}
+                            onChange={(e) => handleRankChange(idx, 'monthlyRoyaltyPercent', parseFloat(e.target.value) || 0)}
+                            className="w-12 bg-transparent text-emerald-400 font-bold text-[10px] font-mono-crypto focus:outline-none text-right"
+                          />
+                          <span className="text-[9px] text-emerald-400 font-mono-crypto">%</span>
+                        </div>
+
+                        {localRanks.length > 1 && (
+                          <button
+                            onClick={() => handleDeleteRank(idx)}
+                            className="p-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-600/40 text-rose-300 hover:text-white transition-colors cursor-pointer"
+                            title="Delete this rank"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
@@ -937,13 +992,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           min="0"
                           value={rank.requiredDirectVolume || 0}
                           onChange={(e) => handleRankChange(idx, 'requiredDirectVolume', parseInt(e.target.value) || 0)}
-                          className="w-full bg-[#06020c] border border-amber-500/40 rounded-lg py-1 px-2 text-xs font-mono-crypto text-amber-300 font-bold focus:border-amber-400 focus:outline-none"
+                          className="w-full bg-[#050b16] border border-amber-500/40 rounded-lg py-1 px-2 text-xs font-mono-crypto text-amber-300 font-bold focus:border-amber-400 focus:outline-none"
                         />
                       </div>
 
                       {/* Team Business Required */}
                       <div>
-                        <label className="text-[8px] uppercase text-purple-300/80 font-rajdhani font-semibold block">
+                        <label className="text-[8px] uppercase text-cyan-300/80 font-rajdhani font-semibold block">
                           Team Business ($ USD)
                         </label>
                         <input
@@ -952,7 +1007,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           min="0"
                           value={rank.requiredTeamVolume || 0}
                           onChange={(e) => handleRankChange(idx, 'requiredTeamVolume', parseInt(e.target.value) || 0)}
-                          className="w-full bg-[#06020c] border border-purple-600/40 rounded-lg py-1 px-2 text-xs font-mono-crypto text-slate-200 focus:border-amber-400 focus:outline-none"
+                          className="w-full bg-[#050b16] border border-cyan-600/40 rounded-lg py-1 px-2 text-xs font-mono-crypto text-slate-200 focus:border-amber-400 focus:outline-none"
                         />
                       </div>
 
@@ -967,7 +1022,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           min="0"
                           value={rank.oneTimeBonusUsd}
                           onChange={(e) => handleRankChange(idx, 'oneTimeBonusUsd', parseInt(e.target.value) || 0)}
-                          className="w-full bg-[#06020c] border border-emerald-500/40 rounded-lg py-1 px-2 text-xs font-mono-crypto text-emerald-300 font-bold focus:border-emerald-400 focus:outline-none"
+                          className="w-full bg-[#050b16] border border-emerald-500/40 rounded-lg py-1 px-2 text-xs font-mono-crypto text-emerald-300 font-bold focus:border-emerald-400 focus:outline-none"
                         />
                       </div>
 
@@ -982,7 +1037,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           min="0"
                           value={rank.rewardTokens}
                           onChange={(e) => handleRankChange(idx, 'rewardTokens', parseInt(e.target.value) || 0)}
-                          className="w-full bg-[#06020c] border border-amber-500/40 rounded-lg py-1 px-2 text-xs font-mono-crypto text-amber-300 font-bold focus:border-amber-400 focus:outline-none"
+                          className="w-full bg-[#050b16] border border-amber-500/40 rounded-lg py-1 px-2 text-xs font-mono-crypto text-amber-300 font-bold focus:border-amber-400 focus:outline-none"
                         />
                       </div>
                     </div>
