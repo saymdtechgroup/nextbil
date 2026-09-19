@@ -337,7 +337,7 @@ async function finalizeConfirmedPurchase(
              if (rank.rankNumber > newlyAchievedRank) {
                 if (updatedDirectVol >= (rank.requiredDirectVolume || 0) && 
                     updatedTeamVol >= (rank.requiredTeamVolume || 0) && 
-                    true) {
+                    (upUser.directCount || 0) >= (rank.requiredDirects || 0)) {
                     
                     newlyAchievedRank = rank.rankNumber;
                     rankBonusToPay += (rank.oneTimeBonusUsd || 0);
@@ -2331,10 +2331,22 @@ async function startServer() {
       const configRecord = await db.query.systemConfigs.findFirst({
         where: eq(systemConfigs.key, "phases"),
       });
-      if (!configRecord?.value) {
-        return res.json({ success: true, phases: [] });
+      const phases = configRecord?.value ? JSON.parse(configRecord.value) : [];
+      const socialRecord = await db.query.systemConfigs.findFirst({
+        where: eq(systemConfigs.key, "systemConfig"),
+      });
+      let publicSystemConfig: any = {};
+      if (socialRecord?.value) {
+        try {
+          const parsed = JSON.parse(socialRecord.value);
+          publicSystemConfig = {
+            tokenName: parsed.tokenName,
+            tokenSymbol: parsed.tokenSymbol,
+            presalePaused: Boolean(parsed.presalePaused),
+            socialLinks: parsed.socialLinks || {},
+          };
+        } catch {}
       }
-      const phases = JSON.parse(configRecord.value);
       const safePhases = Array.isArray(phases) ? phases.map((p: any) => ({
         id: p.id,
         phaseNumber: Number(p.phaseNumber ?? 0),
@@ -2349,7 +2361,7 @@ async function startServer() {
         unlockRequirement: p.unlockRequirement,
         targetDate: p.targetDate,
       })) : [];
-      res.json({ success: true, phases: safePhases });
+      res.json({ success: true, phases: safePhases, systemConfig: publicSystemConfig });
     } catch (error: any) {
       console.error("Error in /api/presale/config:", error);
       res.status(500).json({ success: false, error: "Failed to load presale configuration." });
@@ -2461,7 +2473,7 @@ async function startServer() {
         { key: "phases", value: phases ? JSON.stringify(phases) : null, desc: "Presale Phases and Coin Prices" },
         { key: "referralLevels", value: referralLevels ? JSON.stringify(referralLevels) : null, desc: "10-Level Commission Plan" },
         { key: "rankRewards", value: rankRewards ? JSON.stringify(rankRewards) : null, desc: "Leadership Rank Rewards" },
-        { key: "systemConfig", value: systemConfig ? JSON.stringify(systemConfig) : null, desc: "System Parameters" },
+        { key: "systemConfig", value: systemConfig ? JSON.stringify(systemConfig) : null, desc: "System Parameters, Social Links and Financial Rules" },
         { key: "matrixConfig", value: matrixConfig ? JSON.stringify(matrixConfig) : null, desc: "2x2 Matrix System Config" },
       ];
 

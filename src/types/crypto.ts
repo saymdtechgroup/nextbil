@@ -90,6 +90,8 @@ export interface AdminSystemConfig {
   withdrawalFeePercent: number;
   matrixConfig: MatrixConfig;
   royaltyPoolUsd: number;
+  sellQueueSharePercent?: number;
+  socialLinks?: { x?: string; youtube?: string; telegram?: string; facebook?: string };
 }
 
 export interface MatrixNode {

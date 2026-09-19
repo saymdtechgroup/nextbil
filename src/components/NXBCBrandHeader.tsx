@@ -9,6 +9,7 @@ interface NXBCBrandHeaderProps {
   walletAddress?: string;
   onOpenWallet?: () => void;
   onOpenMenu?: () => void;
+  socialLinks?: { x?: string; youtube?: string; telegram?: string; facebook?: string };
 }
 
 export const NXBCBrandHeader: React.FC<NXBCBrandHeaderProps> = ({
@@ -18,6 +19,7 @@ export const NXBCBrandHeader: React.FC<NXBCBrandHeaderProps> = ({
   walletAddress = '',
   onOpenWallet,
   onOpenMenu,
+  socialLinks = {} as { x?: string; youtube?: string; telegram?: string; facebook?: string },
 }) => {
   const shortWallet = walletAddress
     ? `${walletAddress.slice(0, 5)}...${walletAddress.slice(-4)}`
@@ -36,10 +38,10 @@ export const NXBCBrandHeader: React.FC<NXBCBrandHeaderProps> = ({
       </div>
 
       <div className="nxbc-header-actions">
-        <button type="button" className="nxbc-social-btn" aria-label="X" title="X">𝕏</button>
-        <button type="button" className="nxbc-social-btn youtube" aria-label="YouTube" title="YouTube"><Youtube size={15} /></button>
-        <button type="button" className="nxbc-social-btn facebook" aria-label="Facebook" title="Facebook"><Facebook size={15} /></button>
-        <button type="button" className="nxbc-social-btn telegram" aria-label="Telegram" title="Telegram"><Send size={15} /></button>
+        {socialLinks.x && <a href={socialLinks.x} target="_blank" rel="noopener noreferrer" className="nxbc-social-btn" aria-label="X" title="X">𝕏</a>}
+        {socialLinks.youtube && <a href={socialLinks.youtube} target="_blank" rel="noopener noreferrer" className="nxbc-social-btn youtube" aria-label="YouTube" title="YouTube"><Youtube size={15} /></a>}
+        {socialLinks.facebook && <a href={socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="nxbc-social-btn facebook" aria-label="Facebook" title="Facebook"><Facebook size={15} /></a>}
+        {socialLinks.telegram && <a href={socialLinks.telegram} target="_blank" rel="noopener noreferrer" className="nxbc-social-btn telegram" aria-label="Telegram" title="Telegram"><Send size={15} /></a>}
         <button type="button" className="nxbc-icon-btn" aria-label="Notifications" title="Notifications"><Bell size={16} /></button>
         <button type="button" className="nxbc-icon-btn" aria-label="Account" title={shortWallet} onClick={onOpenWallet}><UserRound size={16} /></button>
         {onOpenMenu && (

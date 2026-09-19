@@ -130,15 +130,8 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanPin = enteredPin.trim();
-    const activeStoredPin = (typeof window !== 'undefined' ? localStorage.getItem('nxbc_admin_custom_pin') : null) || currentMasterPin || '7788';
 
-    if (cleanPin === activeStoredPin) {
-      setIsAuthenticated(true);
-      setPinError('');
-      return;
-    }
-
-    // Also check server-side verification
+    // Authentication is server-side only. Never accept a browser/localStorage PIN as proof of admin access.
     try {
       const res = await fetch('/api/admin/verify-pin', {
         method: 'POST',
@@ -146,7 +139,11 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
         body: JSON.stringify({ pin: cleanPin }),
       });
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.adminToken) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('nxbc_admin_token', data.adminToken);
+          localStorage.removeItem('nxbc_admin_custom_pin');
+        }
         setIsAuthenticated(true);
         setPinError('');
         return;
@@ -167,13 +164,6 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
     const cleanNew = newPinInput.trim();
     const cleanConfirm = confirmPinInput.trim();
 
-    const activeStoredPin = (typeof window !== 'undefined' ? localStorage.getItem('nxbc_admin_custom_pin') : null) || currentMasterPin || '7788';
-
-    if (cleanCurrent !== activeStoredPin) {
-      setPinChangeError('Current PIN is incorrect.');
-      return;
-    }
-
     if (!cleanNew || cleanNew.length < 4) {
       setPinChangeError('New PIN must be at least 4 characters long.');
       return;
@@ -185,26 +175,26 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
     }
 
     setIsChangingPin(true);
-    setCurrentMasterPin(cleanNew);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('nxbc_admin_custom_pin', cleanNew);
-    }
-
     // Call server to persist PIN change across all sessions
     try {
       const res = await fetch('/api/admin/change-pin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(typeof window !== 'undefined' && localStorage.getItem('nxbc_admin_token') ? { 'x-admin-token': localStorage.getItem('nxbc_admin_token') as string } : {}),
+        },
         body: JSON.stringify({ currentPin: cleanCurrent, newPin: cleanNew }),
       });
       const data = await res.json();
       if (data.success) {
+        setCurrentMasterPin(cleanNew);
         setPinChangeSuccess('Master Admin PIN successfully updated and secured!');
       } else {
-        setPinChangeSuccess('PIN updated locally.');
+        setPinChangeError(data.error || 'PIN update failed.');
+        return;
       }
     } catch (err) {
-      setPinChangeSuccess('PIN updated successfully.');
+      setPinChangeError('Server unavailable. PIN was not changed.');
     } finally {
       setIsChangingPin(false);
       setCurrentPinInput('');
@@ -355,7 +345,10 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
     try {
       const res = await fetch('/api/admin/configs', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(typeof window !== 'undefined' && localStorage.getItem('nxbc_admin_token') ? { 'x-admin-token': localStorage.getItem('nxbc_admin_token') as string } : {}),
+        },
         body: JSON.stringify({
           phases: localPhases,
           referralLevels: localLevels,
@@ -546,7 +539,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
           </button>
 
           <button
-            onClick={() => setIsAuthenticated(false)}
+            onClick={() => { localStorage.removeItem('nxbc_admin_token'); setIsAuthenticated(false); }}
             className="p-2 rounded-xl bg-purple-950/80 hover:bg-purple-900 border border-purple-700/50 text-purple-300 text-xs"
             title="Lock System Vault"
           >
@@ -1550,6 +1543,35 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                       onChange={(e) => handleUpdateSystem({ receivingAddress: e.target.value })}
                       className="w-full bg-[#06020c] border border-amber-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 font-bold focus:border-amber-400 focus:outline-none"
                     />
+                  </div>
+
+                  <div className="sm:col-span-2 pt-3 border-t border-purple-500/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <label className="text-[9px] uppercase text-cyan-300 font-bold block">Social Media Links</label>
+                        <p className="text-[9px] text-purple-300/80 font-mono-crypto">These links are stored in PostgreSQL and shown live on the user frontend.</p>
+                      </div>
+                      <span className="text-[9px] text-emerald-300 font-mono-crypto">DATABASE CONTROLLED</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {([
+                        ['x', 'X / Twitter URL'],
+                        ['youtube', 'YouTube URL'],
+                        ['telegram', 'Telegram URL'],
+                        ['facebook', 'Facebook URL'],
+                      ] as const).map(([key, label]) => (
+                        <div key={key}>
+                          <label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">{label}</label>
+                          <input
+                            type="url"
+                            value={localSystem.socialLinks?.[key] || ''}
+                            onChange={(e) => handleUpdateSystem({ socialLinks: { ...(localSystem.socialLinks || {}), [key]: e.target.value } })}
+                            placeholder={`https://${key === 'x' ? 'x.com/yourpage' : key + '.com/yourpage'}`}
+                            className="w-full bg-[#06020c] border border-cyan-500/30 rounded-xl py-2 px-3 text-xs font-mono-crypto text-slate-100 focus:border-amber-400 focus:outline-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>

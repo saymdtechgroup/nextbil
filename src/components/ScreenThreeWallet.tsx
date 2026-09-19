@@ -176,35 +176,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
             }
           }
 
-          // If still empty but tokenSellBalanceUsd > 0, provide the user's exact example scenario (Phase 2: 10 tokens @ $0.10 + Phase 3: 10 tokens @ $1.00 = $11.00)
-          if (defaultEntries.length === 0 && tokenSellBalanceUsd > 0) {
-            defaultEntries.push({
-              id: 'ledger-p2-demo',
-              phaseIndex: 2,
-              phaseName: 'Phase 2 ($0.10)',
-              tokenPrice: 0.10,
-              tokensSold: 10,
-              tokensReturned: 0,
-              grossUsdt: 1.00,
-              withdrawnUsdt: 0,
-              availableUsdt: 1.00,
-              status: 'unclaimed',
-              timestamp: 'Completed Auto-Sell',
-            });
-            defaultEntries.push({
-              id: 'ledger-p3-demo',
-              phaseIndex: 3,
-              phaseName: 'Phase 3 ($1.00)',
-              tokenPrice: 1.00,
-              tokensSold: 10,
-              tokensReturned: 0,
-              grossUsdt: 10.00,
-              withdrawnUsdt: 0,
-              availableUsdt: 10.00,
-              status: 'unclaimed',
-              timestamp: 'Completed Auto-Sell',
-            });
-          }
+          // Never invent ledger rows in production. Empty means there are no database-backed sell settlements.
 
           setLedgerEntries(defaultEntries);
         }

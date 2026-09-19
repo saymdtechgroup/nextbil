@@ -114,62 +114,8 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
   const totalMatrixMembers = matrixLevels.reduce((sum, item) => sum + item.members, 0);
   const totalTierPercent = levels.reduce((total, level) => total + level.commissionPercent, 0);
 
-  // 5 Major Leadership Funds Fallback
-  const effectiveRankRewards = useMemo(() => {
-    if (rankRewards && rankRewards.length > 0) return rankRewards;
-    return [
-      {
-        id: 'rank-1',
-        rankNumber: 1,
-        name: 'Team Development Fund',
-        requiredDirectVolume: 2000,
-        requiredTeamVolume: 3000,
-        rewardType: 'fund' as const,
-        rewardTitle: '$100 Team Development Fund',
-        oneTimeBonusUsd: 100,
-      },
-      {
-        id: 'rank-2',
-        rankNumber: 2,
-        name: 'Charity Fund',
-        requiredDirectVolume: 50000,
-        requiredTeamVolume: 50000,
-        rewardType: 'fund' as const,
-        rewardTitle: '$500 Charity Fund',
-        oneTimeBonusUsd: 500,
-      },
-      {
-        id: 'rank-3',
-        rankNumber: 3,
-        name: 'Travel Tour Fund',
-        requiredDirectVolume: 100000,
-        requiredTeamVolume: 150000,
-        rewardType: 'fund' as const,
-        rewardTitle: '$500 International Travel Fund',
-        oneTimeBonusUsd: 500,
-      },
-      {
-        id: 'rank-4',
-        rankNumber: 4,
-        name: 'Dream Car Fund',
-        requiredDirectVolume: 100000,
-        requiredTeamVolume: 2000000,
-        rewardType: 'fund' as const,
-        rewardTitle: 'Dream Car Fund ($50,000 USD Value)',
-        oneTimeBonusUsd: 50000,
-      },
-      {
-        id: 'rank-5',
-        rankNumber: 5,
-        name: 'Luxury House Fund',
-        requiredDirectVolume: 100000,
-        requiredTeamVolume: 5000000,
-        rewardType: 'fund' as const,
-        rewardTitle: 'Luxury House Fund ($100,000 USD Value)',
-        oneTimeBonusUsd: 100000,
-      },
-    ];
-  }, [rankRewards]);
+  // Rank rewards are database/admin controlled. Do not inject demo rewards when the API has no data.
+  const effectiveRankRewards = useMemo(() => (rankRewards && rankRewards.length > 0 ? rankRewards : []), [rankRewards]);
 
   const isMlmQualified = totalInvestedUsd >= minMlmQualifyUsd;
   const progressPercent = minMlmQualifyUsd > 0

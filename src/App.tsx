@@ -291,7 +291,11 @@ export default function App() {
             setRankRewards(data.rankRewards);
           }
           if (data.systemConfig && typeof data.systemConfig === 'object') {
-            setSystemConfig(data.systemConfig);
+            setSystemConfig((prev) => ({
+              ...prev,
+              ...data.systemConfig,
+              socialLinks: { ...(prev.socialLinks || {}), ...(data.systemConfig.socialLinks || {}) },
+            }));
           }
           if (data.matrixConfig && typeof data.matrixConfig === 'object') {
             setMatrixConfig(data.matrixConfig);
@@ -570,6 +574,7 @@ export default function App() {
     matrixConfig: { placementIncomeUsd: 1, uplineSharePercent: 100, enabled: true },
     royaltyPoolUsd: 25000,
     sellQueueSharePercent: 20,
+    socialLinks: { x: '', youtube: '', telegram: '', facebook: '' },
   });
 
   // 2x2 Matrix Structure Nodes Data (Clean Real Tree)
@@ -1493,9 +1498,9 @@ export default function App() {
               </div>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              <button type="button" aria-label="X" title="X" className="w-9 h-9 rounded-full flex items-center justify-center bg-black/30 border border-slate-500/40 text-white text-lg hover:border-amber-300/60 transition-colors">𝕏</button>
-              <button type="button" aria-label="YouTube" title="YouTube" className="w-9 h-9 rounded-full flex items-center justify-center bg-red-500/10 border border-red-400/25 text-red-400 hover:border-red-300/60 transition-colors"><Youtube size={17} /></button>
-              <button type="button" aria-label="Telegram" title="Telegram" className="w-9 h-9 rounded-full flex items-center justify-center bg-cyan-500/10 border border-cyan-400/25 text-cyan-300 hover:border-cyan-200/60 transition-colors"><Send size={17} /></button>
+              {systemConfig.socialLinks?.x && <a href={systemConfig.socialLinks.x} target="_blank" rel="noopener noreferrer" aria-label="X" title="X" className="w-9 h-9 rounded-full flex items-center justify-center bg-black/30 border border-slate-500/40 text-white text-lg hover:border-amber-300/60 transition-colors">𝕏</a>}
+              {systemConfig.socialLinks?.youtube && <a href={systemConfig.socialLinks.youtube} target="_blank" rel="noopener noreferrer" aria-label="YouTube" title="YouTube" className="w-9 h-9 rounded-full flex items-center justify-center bg-red-500/10 border border-red-400/25 text-red-400 hover:border-red-300/60 transition-colors"><Youtube size={17} /></a>}
+              {systemConfig.socialLinks?.telegram && <a href={systemConfig.socialLinks.telegram} target="_blank" rel="noopener noreferrer" aria-label="Telegram" title="Telegram" className="w-9 h-9 rounded-full flex items-center justify-center bg-cyan-500/10 border border-cyan-400/25 text-cyan-300 hover:border-cyan-200/60 transition-colors"><Send size={17} /></a>}
               <div className="relative">
                 <button type="button" aria-label="More" title="More" onClick={() => setShowHomeQuickMenu(v => !v)} className={`w-9 h-9 rounded-full flex items-center justify-center border transition-colors ${showHomeQuickMenu ? 'bg-amber-400/15 border-amber-300/70 text-amber-300' : 'bg-black/30 border-amber-400/30 text-slate-200 hover:border-amber-300/60'}`}><MoreVertical size={19} /></button>
                 {showHomeQuickMenu && (
