@@ -5,6 +5,7 @@ import {
   Copy,
   Check,
   ChevronRight,
+  ChevronLeft,
   Sparkles,
   Crown,
   RefreshCw,
@@ -210,69 +211,96 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
       </div>
 
       {/* 2. MLM Qualification Status Banner ($100 Rule) */}
-      <div className={`p-3.5 rounded-2xl border transition-all ${
+      <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${
         isMlmQualified
-          ? 'bg-gradient-to-r from-emerald-950/70 via-[#0a1e16] to-[#071a13] border-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.15)]'
-          : 'bg-gradient-to-r from-amber-950/70 via-[#180a04] to-[#120703] border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.15)]'
+          ? 'bg-gradient-to-r from-[#071a13] via-[#092219] to-[#04120c] border-emerald-500/40 shadow-[0_0_24px_rgba(16,185,129,0.12)]'
+          : 'bg-gradient-to-r from-[#120703] via-[#1a0c05] to-[#0d0502] border-amber-500/40 shadow-[0_0_24px_rgba(245,158,11,0.12)]'
       }`}>
-        <div className="flex items-center justify-between gap-3">
+        {/* Top Header Row with Status Badge properly placed on top right */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <div className={`p-2 rounded-xl border ${isMlmQualified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-400/40' : 'bg-amber-500/20 text-amber-400 border-amber-400/40'}`}>
+            <div className={`p-2 sm:p-2.5 rounded-xl border shrink-0 ${
+              isMlmQualified
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-400/40'
+                : 'bg-amber-500/20 text-amber-400 border-amber-400/40'
+            }`}>
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-xs sm:text-sm font-bold text-slate-100 font-rajdhani uppercase tracking-wider">
-                  MLM Commission Eligibility
-                </h3>
-                <span className={`text-[9px] font-mono-crypto px-2 py-0.5 rounded-full font-bold border ${
-                  isMlmQualified
-                    ? 'bg-emerald-900/60 text-emerald-300 border-emerald-400/50'
-                    : 'bg-amber-900/60 text-amber-300 border-amber-400/50'
-                }`}>
-                  {isMlmQualified ? '👑 Active Leader ($100+ Qualified)' : 'Token Investor (< $100)'}
-                </span>
-              </div>
+              <h3 className="text-xs sm:text-sm font-bold text-slate-100 font-rajdhani uppercase tracking-wider">
+                MLM Commission Eligibility
+              </h3>
               <p className="text-[10px] text-cyan-200/90 font-mono-crypto mt-0.5">
                 {isMlmQualified
-                  ? `Purchased: $${totalInvestedUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })} USD • Full 10-level Unilevel & Matrix earnings active`
-                  : `Purchased: $${totalInvestedUsd.toFixed(2)} USD • Total $${minMlmQualifyUsd} cumulative purchases required to unlock MLM earnings`}
+                  ? 'All 10-level Unilevel & Matrix earnings unlocked'
+                  : `$${minMlmQualifyUsd} cumulative purchases required to unlock MLM earnings`}
               </p>
             </div>
           </div>
 
-          {!isMlmQualified && onOpenBuyModal && (
-            <button
-              onClick={onOpenBuyModal}
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-mono-crypto font-bold text-xs shrink-0 active:scale-95 shadow-sm"
-            >
-              +${remainingToQualify.toFixed(0)} Qualify
-            </button>
-          )}
+          {/* Properly positioned Role & Status Badge */}
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <span className={`text-[9.5px] font-mono-crypto px-2.5 py-1 rounded-full font-bold border flex items-center gap-1.5 whitespace-nowrap shadow-sm ${
+              isMlmQualified
+                ? 'bg-emerald-900/60 text-emerald-300 border-emerald-400/50'
+                : 'bg-amber-950/80 text-amber-300 border-amber-400/50'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isMlmQualified ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              {isMlmQualified ? '👑 Active Leader ($100+)' : 'Role: Token Investor (< $100)'}
+            </span>
+          </div>
         </div>
 
-        {!isMlmQualified && (
-          <div className="mt-2.5 space-y-1">
-            <div className="flex justify-between text-[9px] font-mono-crypto text-amber-300/90">
-              <span>Qualification Progress ($100 Milestone)</span>
-              <span>${totalInvestedUsd.toFixed(2)} / ${minMlmQualifyUsd.toFixed(2)} USD ({progressPercent}%)</span>
+        {/* Action & Progress Info Section */}
+        <div className="pt-2.5 space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="text-[10px] sm:text-[11px] font-mono-crypto text-slate-200">
+              Purchased:{' '}
+              <strong className="text-white font-bold">
+                ${totalInvestedUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </strong>{' '}
+              / ${minMlmQualifyUsd.toFixed(2)} USD
+              {!isMlmQualified && (
+                <span className="text-amber-300 ml-1.5">
+                  (${remainingToQualify.toFixed(2)} needed)
+                </span>
+              )}
             </div>
-            <div className="w-full h-2 rounded-full bg-[#06020c] overflow-hidden border border-amber-500/30">
-              <div
-                className="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-all duration-500"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-            <p className="text-[9px] text-amber-200/70 leading-tight mt-1">
-              *Users with &lt; $100 act as token investors. At $100+ total purchases, network commissions unlock automatically.
-            </p>
+
+            {!isMlmQualified && onOpenBuyModal && (
+              <button
+                type="button"
+                onClick={onOpenBuyModal}
+                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-mono-crypto font-bold text-xs shrink-0 active:scale-95 shadow-[0_0_12px_rgba(245,158,11,0.25)] transition-all self-start sm:self-auto"
+              >
+                +${remainingToQualify.toFixed(0)} Qualify Now
+              </button>
+            )}
           </div>
-        )}
+
+          {!isMlmQualified && (
+            <div className="space-y-1 mt-1">
+              <div className="flex justify-between text-[8.5px] sm:text-[9px] font-mono-crypto text-amber-300/90">
+                <span>Qualification Progress ($100 Milestone)</span>
+                <span className="font-bold">{progressPercent}% Completed</span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-[#06020c] overflow-hidden border border-amber-500/30">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 to-yellow-300 rounded-full transition-all duration-500"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <p className="text-[8.5px] sm:text-[9px] text-amber-200/70 leading-relaxed pt-0.5">
+                *Users under $100 operate in <strong>Token Investor</strong> mode. At $100+ total purchases, all 10-level network commissions and upline bonuses unlock automatically.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 3. Overall Income & Community Stats Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="p-3 rounded-2xl bg-[#110722] border border-cyan-500/20 text-center">
+        <div className="p-3 rounded-2xl bg-[#050b16] border border-cyan-500/20 text-center">
           <span className="text-[9px] uppercase font-bold text-cyan-300/80 block font-mono-crypto">Unilevel Team</span>
           <span className="text-xl sm:text-2xl font-black font-mono-crypto gold-gradient-text block mt-0.5">
             {totalUnilevelMembers}
@@ -280,7 +308,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
           <span className="text-[8px] text-amber-300/70 font-mono-crypto">Direct: {teamData?.totalDirectMembers ?? 0}</span>
         </div>
 
-        <div className="p-3 rounded-2xl bg-[#110722] border border-cyan-500/20 text-center">
+        <div className="p-3 rounded-2xl bg-[#050b16] border border-cyan-500/20 text-center">
           <span className="text-[9px] uppercase font-bold text-cyan-300/80 block font-mono-crypto">Unilevel Income</span>
           <span className="text-xl sm:text-2xl font-black font-mono-crypto text-emerald-400 block mt-0.5">
             ${levelIncomeUsd.toFixed(2)}
@@ -288,7 +316,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
           <span className="text-[8px] text-emerald-300/70 font-mono-crypto">10-Tier Generations</span>
         </div>
 
-        <div className="p-3 rounded-2xl bg-[#110722] border border-cyan-500/20 text-center">
+        <div className="p-3 rounded-2xl bg-[#050b16] border border-cyan-500/20 text-center">
           <span className="text-[9px] uppercase font-bold text-cyan-300/80 block font-mono-crypto">Matrix Team</span>
           <span className="text-xl sm:text-2xl font-black font-mono-crypto text-cyan-300 block mt-0.5">
             {totalMatrixMembers}
@@ -296,7 +324,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
           <span className="text-[8px] text-cyan-300/70 font-mono-crypto">2x2 Spillover</span>
         </div>
 
-        <div className="p-3 rounded-2xl bg-[#110722] border border-cyan-500/20 text-center">
+        <div className="p-3 rounded-2xl bg-[#050b16] border border-cyan-500/20 text-center">
           <span className="text-[9px] uppercase font-bold text-cyan-300/80 block font-mono-crypto">Matrix Income</span>
           <span className="text-xl sm:text-2xl font-black font-mono-crypto text-cyan-400 block mt-0.5">
             ${Number(teamData?.totalMatrixIncome || 0).toFixed(2)}
@@ -305,43 +333,129 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
         </div>
       </div>
 
-      {/* 4. EXPLICIT 3-TAB SELECTOR (Clears all confusion between Unilevel, Matrix, and Leadership Funds) */}
+      {/* 4. EXPLICIT 3-TAB SELECTOR (Horizontally Scrollable Left to Right) */}
       <div className="space-y-3">
-        <div className="flex rounded-2xl bg-[#0d041c] p-1.5 border border-cyan-500/30 gap-1.5 shadow-inner">
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[10px] font-mono-crypto text-amber-300/80 flex items-center gap-1">
+            <span>Income Modules</span>
+            <span className="text-slate-400 text-[9px] hidden sm:inline">(Scroll left to right ↔)</span>
+          </span>
+          <span className="text-[9px] text-amber-400/80 font-mono-crypto sm:hidden">
+            Swipe left/right ↔
+          </span>
+        </div>
+
+        <div className="relative flex items-center">
+          {/* Scroll Left Button */}
           <button
-            onClick={() => setIncomeTab('unilevel')}
-            className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-bold font-rajdhani uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
-              incomeTab === 'unilevel'
-                ? 'bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 shadow-md font-black ring-2 ring-amber-400/50'
-                : 'text-cyan-300 hover:text-white hover:bg-cyan-900/30'
-            }`}
+            id="team-tabs-scroll-left"
+            onClick={() => {
+              const el = document.getElementById('team-tabs-scroll-container');
+              if (el) el.scrollBy({ left: -200, behavior: 'smooth' });
+            }}
+            className="hidden sm:flex shrink-0 mr-1.5 p-2 rounded-xl bg-[#081426] border border-amber-400/30 text-amber-300 hover:text-white hover:bg-amber-500/20 transition-all shadow-sm active:scale-95"
+            title="Scroll tabs left"
+            aria-label="Scroll left"
           >
-            <Users className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">1. Unilevel (10-Level)</span>
+            <ChevronLeft className="w-4 h-4" />
           </button>
 
-          <button
-            onClick={() => setIncomeTab('matrix')}
-            className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-bold font-rajdhani uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
-              incomeTab === 'matrix'
-                ? 'bg-gradient-to-r from-cyan-600 to-cyan-600 text-white shadow-md font-black ring-2 ring-cyan-400/50'
-                : 'text-cyan-300 hover:text-white hover:bg-cyan-900/30'
-            }`}
+          {/* Horizontally Scrollable Tabs Container */}
+          <div
+            id="team-tabs-scroll-container"
+            className="flex-1 flex items-center overflow-x-auto no-scrollbar scroll-touch rounded-2xl bg-[#081426]/95 p-1.5 border border-amber-400/30 gap-2 shadow-inner snap-x scroll-smooth"
           >
-            <Sparkles className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">2. 2x2 Matrix</span>
-          </button>
+            <button
+              id="tab-unilevel-btn"
+              onClick={() => {
+                setIncomeTab('unilevel');
+                const btn = document.getElementById('tab-unilevel-btn');
+                btn?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+              }}
+              className={`shrink-0 whitespace-nowrap snap-start py-2.5 px-4 rounded-xl text-xs font-bold font-rajdhani uppercase tracking-wider flex items-center gap-2 transition-all ${
+                incomeTab === 'unilevel'
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 shadow-md font-black ring-2 ring-amber-400/50'
+                  : 'text-slate-300 hover:text-white bg-[#050b16]/70 hover:bg-slate-800/80 border border-slate-700/50'
+              }`}
+            >
+              <Users className="w-4 h-4 shrink-0" />
+              <span>1. Unilevel (10-Level)</span>
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full font-mono-crypto font-bold ${
+                  incomeTab === 'unilevel'
+                    ? 'bg-black/25 text-slate-950'
+                    : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                }`}
+              >
+                {totalUnilevelMembers} Members
+              </span>
+            </button>
 
+            <button
+              id="tab-matrix-btn"
+              onClick={() => {
+                setIncomeTab('matrix');
+                const btn = document.getElementById('tab-matrix-btn');
+                btn?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+              }}
+              className={`shrink-0 whitespace-nowrap snap-start py-2.5 px-4 rounded-xl text-xs font-bold font-rajdhani uppercase tracking-wider flex items-center gap-2 transition-all ${
+                incomeTab === 'matrix'
+                  ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-md font-black ring-2 ring-cyan-400/50'
+                  : 'text-slate-300 hover:text-white bg-[#050b16]/70 hover:bg-slate-800/80 border border-slate-700/50'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 shrink-0" />
+              <span>2. 2x2 Matrix</span>
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full font-mono-crypto font-bold ${
+                  incomeTab === 'matrix'
+                    ? 'bg-black/25 text-white'
+                    : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                }`}
+              >
+                {totalMatrixMembers} Placements
+              </span>
+            </button>
+
+            <button
+              id="tab-leadership-btn"
+              onClick={() => {
+                setIncomeTab('leadership');
+                const btn = document.getElementById('tab-leadership-btn');
+                btn?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+              }}
+              className={`shrink-0 whitespace-nowrap snap-start py-2.5 px-4 rounded-xl text-xs font-bold font-rajdhani uppercase tracking-wider flex items-center gap-2 transition-all ${
+                incomeTab === 'leadership'
+                  ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-slate-950 shadow-md font-black ring-2 ring-amber-400/50'
+                  : 'text-slate-300 hover:text-white bg-[#050b16]/70 hover:bg-slate-800/80 border border-slate-700/50'
+              }`}
+            >
+              <Crown className="w-4 h-4 shrink-0" />
+              <span>3. Leadership Funds & Salary</span>
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full font-mono-crypto font-bold ${
+                  incomeTab === 'leadership'
+                    ? 'bg-black/25 text-slate-950'
+                    : 'bg-yellow-500/15 text-yellow-300 border border-yellow-500/30'
+                }`}
+              >
+                5 Ranks
+              </span>
+            </button>
+          </div>
+
+          {/* Scroll Right Button */}
           <button
-            onClick={() => setIncomeTab('leadership')}
-            className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-bold font-rajdhani uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
-              incomeTab === 'leadership'
-                ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-slate-950 shadow-md font-black ring-2 ring-amber-400/50'
-                : 'text-cyan-300 hover:text-white hover:bg-cyan-900/30'
-            }`}
+            id="team-tabs-scroll-right"
+            onClick={() => {
+              const el = document.getElementById('team-tabs-scroll-container');
+              if (el) el.scrollBy({ left: 200, behavior: 'smooth' });
+            }}
+            className="hidden sm:flex shrink-0 ml-1.5 p-2 rounded-xl bg-[#081426] border border-amber-400/30 text-amber-300 hover:text-white hover:bg-amber-500/20 transition-all shadow-sm active:scale-95"
+            title="Scroll tabs right"
+            aria-label="Scroll right"
           >
-            <Crown className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">3. Leadership Funds & Salary</span>
+            <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
@@ -425,7 +539,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                 {teamError && <div className="p-4 text-xs text-rose-300 font-mono-crypto text-center">{teamError}</div>}
                 {!teamLoading && !teamError && unilevelLevels.map((level) => (
                   <div key={`uni-${level.level}`} className="pt-2 pb-1 first:pt-0">
-                    <div className="p-2.5 rounded-xl bg-[#0e061d] border border-cyan-500/15 hover:border-amber-400/40 transition-colors flex items-center justify-between text-xs">
+                    <div className="p-2.5 rounded-xl bg-[#081426] border border-cyan-500/15 hover:border-amber-400/40 transition-colors flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2.5">
                         <span className="w-7 h-7 rounded-xl bg-cyan-900/80 text-amber-300 font-mono-crypto font-bold text-xs flex items-center justify-center border border-cyan-700 shrink-0">
                           L{level.level}
@@ -531,7 +645,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                 {matrixLevels.map((level) => (
                   <div
                     key={`mat-${level.level}`}
-                    className="p-2.5 rounded-xl bg-[#0f0520] border border-cyan-500/15 hover:border-cyan-400/40 transition-colors flex items-center justify-between text-xs"
+                    className="p-2.5 rounded-xl bg-[#081426] border border-cyan-500/15 hover:border-cyan-400/40 transition-colors flex items-center justify-between text-xs"
                   >
                     <div className="flex items-center gap-2.5">
                       <span className="w-7 h-7 rounded-xl bg-cyan-900/60 text-cyan-200 font-mono-crypto font-bold text-xs flex items-center justify-center border border-cyan-700/60 shrink-0">
@@ -564,7 +678,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
 
         {/* ----------------- TAB 3: LEADERSHIP FUNDS & MONTHLY SALARY ----------------- */}
         {incomeTab === 'leadership' && (
-          <div className="rounded-3xl border border-amber-500/40 bg-gradient-to-br from-[#1c0c33] via-[#140826] to-[#0c0417] p-4 sm:p-5 space-y-4 shadow-xl">
+          <div className="rounded-3xl border border-amber-500/40 bg-gradient-to-br from-[#050b16] via-[#081426] to-[#050b16] p-4 sm:p-5 space-y-4 shadow-xl">
             {/* Tab Explanation Banner */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-amber-500/20">
               <div>
@@ -594,7 +708,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
               {effectiveRankRewards.map((rank) => (
                 <div
                   key={rank.id}
-                  className="p-3 sm:p-3.5 rounded-2xl bg-[#0f0520] border border-amber-500/25 hover:border-amber-400/50 transition-all space-y-2.5 shadow-md"
+                  className="p-3 sm:p-3.5 rounded-2xl bg-[#081426] border border-amber-500/25 hover:border-amber-400/50 transition-all space-y-2.5 shadow-md"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2.5">
@@ -624,7 +738,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                   </div>
 
                   {/* Qualification Turnover Targets */}
-                  <div className="grid grid-cols-2 gap-2 text-[10px] bg-[#070310] p-2.5 rounded-xl border border-cyan-500/15 font-mono-crypto">
+                  <div className="grid grid-cols-2 gap-2 text-[10px] bg-[#050b16] p-2.5 rounded-xl border border-cyan-500/15 font-mono-crypto">
                     <div>
                       <span className="text-cyan-400 text-[8px] uppercase font-bold block">1. Direct Business Goal</span>
                       <strong className="text-amber-300 text-xs block mt-0.5">

@@ -68,6 +68,12 @@ interface BuyTokenModalProps {
     p5Percent: number;
     dexPercent: number;
   };
+  directBuyerInfo?: {
+    phaseNumber: number;
+    sellerWallet: string;
+    remainingTokens: number;
+    tokenPrice: number;
+  } | null;
 }
 
 export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
@@ -98,6 +104,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     p5Percent: 15,
     dexPercent: 15,
   },
+  directBuyerInfo = null,
 }) => {
   const [step, setStep] = useState<1 | 2>(1);
   const currency = 'USDT';
@@ -509,16 +516,16 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
     receivingAddress
-  )}&margin=4&bgcolor=110725&color=F59E0B`;
+  )}&margin=4&bgcolor=050b16&color=F59E0B`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
-      <div className="w-full max-w-md max-h-[94vh] overflow-y-auto rounded-3xl bg-[#110725] border border-amber-500/30 p-4 sm:p-5 shadow-[0_0_50px_rgba(245,158,11,0.25)] relative text-slate-100 scroll-smooth">
+      <div className="w-full max-w-md max-h-[94vh] overflow-y-auto rounded-3xl bg-[#050b16] border border-amber-500/40 p-4 sm:p-5 shadow-[0_0_50px_rgba(245,158,11,0.25)] relative text-slate-100 scroll-smooth">
         
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-cyan-400 hover:text-amber-400 transition-colors p-1 bg-[#1a0f35] rounded-full z-10"
+          className="absolute top-4 right-4 text-cyan-400 hover:text-amber-400 transition-colors p-1.5 bg-[#081426] border border-cyan-500/30 rounded-full z-10"
         >
           <X className="w-5 h-5" />
         </button>
@@ -532,8 +539,24 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               </h2>
             </div>
 
+            {/* Direct Seller Match Active Banner (FIFO Queue Bypass) */}
+            {directBuyerInfo && (
+              <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-cyan-500/20 to-emerald-500/20 border border-amber-400/50 shadow-md animate-fade-in">
+                <div className="flex items-center gap-2 text-amber-300 font-rajdhani font-black text-xs uppercase tracking-wider">
+                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>⚡ Direct Seller Match Active</span>
+                  <span className="text-[8px] px-1.5 py-0.2 rounded bg-amber-400/30 text-amber-200 border border-amber-400/40">
+                    FIFO BYPASS
+                  </span>
+                </div>
+                <p className="text-[9.5px] text-slate-200 font-mono-crypto mt-1 leading-tight">
+                  Your purchase prioritizes buying directly from Seller (<strong>{directBuyerInfo.sellerWallet ? `${directBuyerInfo.sellerWallet.slice(0, 6)}...${directBuyerInfo.sellerWallet.slice(-4)}` : 'Inviter'}</strong>)'s Phase {directBuyerInfo.phaseNumber} order ahead of the public FIFO queue!
+                </p>
+              </div>
+            )}
+
             {/* Decentralized Hold & Swap Warning Alert */}
-            <div className="p-2.5 rounded-xl bg-gradient-to-r from-emerald-950/60 to-indigo-950/60 border border-emerald-500/40 text-[10px] text-emerald-200 leading-snug shadow-sm space-y-1.5">
+            <div className="p-2.5 rounded-xl bg-gradient-to-r from-emerald-950/60 to-cyan-950/60 border border-emerald-500/40 text-[10px] text-emerald-200 leading-snug shadow-sm space-y-1.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 font-bold text-emerald-300">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -541,7 +564,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                 </div>
               </div>
               <p className="text-slate-200">
-                <strong className="text-emerald-300 font-semibold">100% NXBC टोकन्स सीधे आपके SafePal / Web3 वॉलेट में क्रेडिट होंगे।</strong> वेबसाइट का इंटरनल इंजन आपके लॉकअप व फेज़ ऑटो-सेल शेड्यूलिंग को मैनेज करेगा।
+                <strong className="text-emerald-300 font-semibold">100% of NXBC tokens are credited directly to your connected Web3 wallet.</strong> The platform's automated engine manages your lockup and phase auto-liquidation schedule.
               </p>
             </div>
 
