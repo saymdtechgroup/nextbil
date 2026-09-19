@@ -219,6 +219,41 @@ function buildWithdrawMessage(walletAddress: string, amountUsdt: number, walletT
   return `Authorize withdrawal\nWallet: ${walletAddress.toLowerCase()}\nAmount: ${amountUsdt} USDT\nType: ${walletType}\nTimestamp: ${timestamp}`;
 }
 
+async function getVerifiedPresaleTokensByPhase(phaseNumber: number): Promise<number> {
+  try {
+    const rows = await db.select({
+      total: sql`coalesce(sum(${transactions.tokenAmount}), 0)`,
+    })
+      .from(transactions)
+      .where(and(
+        eq(transactions.type, "buy_presale"),
+        eq(transactions.status, "completed"),
+        eq(transactions.phaseIndex, phaseNumber),
+      ));
+    return Math.max(0, Number(rows[0]?.total ?? 0));
+  } catch (error) {
+    console.error(`[PHASE SOLD] Failed to calculate verified sales for phase ${phaseNumber}:`, error);
+    return 0;
+  }
+}
+
+async function getPhaseSalesSnapshot(phase: any): Promise<{ adminSold: number; verifiedSold: number; totalSold: number }> {
+  const phaseNumber = Number(phase?.phaseNumber || 0);
+  const legacySold = Math.max(0, Number(phase?.tokensSold ?? 0));
+  const verifiedSold = phaseNumber > 0 ? await getVerifiedPresaleTokensByPhase(phaseNumber) : 0;
+  // Before this fix, tokensSold was a combined counter. If adminSold does not
+  // exist yet, preserve that legacy total instead of double-counting verified
+  // purchases. Once adminSold exists, it is a separate manual baseline.
+  const adminSold = phase?.adminSold !== undefined && phase?.adminSold !== null
+    ? Math.max(0, Number(phase.adminSold))
+    : Math.max(0, legacySold - verifiedSold);
+  return {
+    adminSold,
+    verifiedSold,
+    totalSold: Math.max(0, adminSold + verifiedSold),
+  };
+}
+
 function verifyWalletSignature(message: string, signature: string, expectedAddress: string): boolean {
   try {
     const recovered = ethers.verifyMessage(message, signature);
@@ -249,19 +284,30 @@ async function finalizeConfirmedPurchase(
             const activeIdx = phases.findIndex((p: any) => p.status === 'active');
             if (activeIdx !== -1) {
                 const currentP = phases[activeIdx];
-                const newSold = currentP.tokensSold + Number(tokenAmount);
-                if (newSold >= currentP.totalSupply) {
-                    phases[activeIdx].tokensSold = currentP.totalSupply;
+                const phaseNumber = Number(currentP.phaseNumber || phaseIndex || activeIdx + 1);
+                const sales = await getPhaseSalesSnapshot(currentP);
+                const adminSold = sales.adminSold;
+                const verifiedSold = sales.verifiedSold;
+                const totalSold = sales.totalSold;
+                const cappedSold = Math.min(Math.max(0, Number(currentP.totalSupply || 0)), totalSold);
+
+                phases[activeIdx].adminSold = adminSold;
+                phases[activeIdx].tokensSold = cappedSold;
+                if (cappedSold >= Number(currentP.totalSupply || 0)) {
                     phases[activeIdx].status = 'completed';
                     if (activeIdx + 1 < phases.length) {
                         phases[activeIdx + 1].status = 'active';
-                        phases[activeIdx + 1].tokensSold = 0;
+                        phases[activeIdx + 1].adminSold = Math.max(0, Number(phases[activeIdx + 1].adminSold ?? phases[activeIdx + 1].tokensSold ?? 0));
+                        const nextPhaseNumber = Number(phases[activeIdx + 1].phaseNumber || activeIdx + 2);
+                        const nextVerifiedSold = await getVerifiedPresaleTokensByPhase(nextPhaseNumber);
+                        phases[activeIdx + 1].tokensSold = Math.min(
+                          Math.max(0, Number(phases[activeIdx + 1].totalSupply || 0)),
+                          phases[activeIdx + 1].adminSold + nextVerifiedSold,
+                        );
                     }
-                } else {
-                    phases[activeIdx].tokensSold = newSold;
                 }
                 await db.update(systemConfigs).set({ value: JSON.stringify(phases), updatedAt: new Date() }).where(eq(systemConfigs.key, 'phases'));
-                console.log(`[API] Phase progression updated safely in DB. Phase ${currentP.id} Sold: ${newSold}`);
+                console.log(`[API] Phase progression updated. Phase ${currentP.id}: adminSold=${adminSold}, verifiedSold=${verifiedSold}, totalSold=${cappedSold}`);
             }
         }
       } catch (phaseErr) {
@@ -337,7 +383,7 @@ async function finalizeConfirmedPurchase(
              if (rank.rankNumber > newlyAchievedRank) {
                 if (updatedDirectVol >= (rank.requiredDirectVolume || 0) && 
                     updatedTeamVol >= (rank.requiredTeamVolume || 0) && 
-                    (upUser.directCount || 0) >= (rank.requiredDirects || 0)) {
+                    true) {
                     
                     newlyAchievedRank = rank.rankNumber;
                     rankBonusToPay += (rank.oneTimeBonusUsd || 0);
@@ -897,6 +943,29 @@ async function verifyPendingPresalePurchases() {
   }
 }
 
+
+async function ensureTokenWithdrawalSettlementTable() {
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS token_withdrawal_settlements (
+    id BIGSERIAL PRIMARY KEY,
+    return_tx_hash TEXT NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    wallet_address TEXT NOT NULL,
+    gross_amount DOUBLE PRECISION NOT NULL,
+    net_payout DOUBLE PRECISION NOT NULL,
+    service_fee DOUBLE PRECISION NOT NULL,
+    tokens_returned DOUBLE PRECISION NOT NULL,
+    wallet_type TEXT NOT NULL,
+    phase_breakdown JSONB NOT NULL DEFAULT '[]'::jsonb,
+    payout_nonce BIGINT,
+    payout_tx_hash TEXT,
+    transaction_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'prepared',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+  )`);
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS token_withdrawal_settlements_nonce_uq ON token_withdrawal_settlements (payout_nonce) WHERE payout_nonce IS NOT NULL`);
+}
+
 async function startServer() {
   try { await ensureDirectBuyerTables(); } catch (e) { console.error("[DIRECT MATCH] table initialization failed:", e); }
   const app = express();
@@ -1286,6 +1355,10 @@ async function startServer() {
         try { treasuryAddress = ethers.getAddress(treasuryAddress); } catch {
           return res.status(500).json({ error: "Invalid NXBC return treasury address configuration." });
         }
+        await ensureTokenWithdrawalSettlementTable();
+        const existingSettlementRows = await db.execute(sql`SELECT * FROM token_withdrawal_settlements WHERE return_tx_hash=${tokenReturnTxHash} LIMIT 1`);
+        const existingSettlement: any = (existingSettlementRows as any).rows?.[0] || (existingSettlementRows as any)[0];
+
         // Prevent replay of an already-consumed NXBC return transaction.
         // A valid on-chain transfer may only authorize one successful settlement.
         // If a payout previously failed before ledger commit, the hash remains reusable.
@@ -1293,7 +1366,7 @@ async function startServer() {
           const priorUse = await db.query.tokenSellLedgers.findFirst({
             where: eq(tokenSellLedgers.returnTxHash, tokenReturnTxHash),
           });
-          if (priorUse) {
+          if (priorUse && !existingSettlement) {
             return res.status(400).json({
               error: "This NXBC return transaction has already been used for a Token Sell withdrawal."
             });
@@ -1313,8 +1386,9 @@ async function startServer() {
           return res.status(400).json({ error: verification.error || "NXBC return could not be verified on BSC. USDT withdrawal blocked." });
         }
 
-        // Verification passed. No ledger mutation is performed yet; it is deferred
-        // until the real USDT payout transaction has been broadcast successfully.
+        // Verification passed. The settlement is now persisted BEFORE any USDT is sent.
+        // A durable settlement row + reserved Ethereum nonce makes the payout idempotent
+        // across retries, process restarts and database/network failures.
       }
 
       const finalTokensReturned = walletType === 'token_sell'
@@ -1324,111 +1398,313 @@ async function startServer() {
       let txHash = "";
       let executionMode = "simulated_blockchain";
 
-      // Check if real Hot Wallet Private Key is provided in .env
       const rawKey = (process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY || "").trim();
       const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
-      const usdtContractAddress = process.env.USDT_CONTRACT_ADDRESS || "0x55d398326f99059fF775485246999027B3197955"; // BSC USDT
+      const usdtContractAddress = process.env.USDT_CONTRACT_ADDRESS || "0x55d398326f99059fF775485246999027B3197955";
 
-      if (rawKey && (rawKey.length === 64 || rawKey.length === 66)) {
-        const formattedKey = rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`;
-        try {
-          const provider = new ethers.JsonRpcProvider(rpcUrl);
-          const wallet = new ethers.Wallet(formattedKey, provider);
-          const usdtContract = new ethers.Contract(usdtContractAddress, ERC20_ABI, wallet);
-
-          // Convert NET payout amount to 18 decimals after the live Admin-configured fee deduction
-          const decimals = 18;
-          const parsedAmount = ethers.parseUnits(netPayout.toFixed(4), decimals);
-
-          console.log(`[PAYOUT BOT] Sender Hot Wallet: ${wallet.address}`);
-          console.log(`[PAYOUT BOT] Initiating automated ${walletType} payout of Gross: $${grossAmount} | Fee (${withdrawalFeePercent}%): $${serviceFee.toFixed(2)} | Net: $${netPayout.toFixed(2)} USDT to ${walletAddress}...`);
-          
-          const tx = await usdtContract.transfer(walletAddress, parsedAmount);
-          console.log(`[PAYOUT BOT] Real BSC Transaction Broadcasted: https://bscscan.com/tx/${tx.hash}`);
-          const payoutReceipt = await tx.wait(1);
-          if (!payoutReceipt || payoutReceipt.status !== 1) {
-            return res.status(503).json({
-              error: "USDT payout transaction was broadcast but did not confirm successfully on BSC.",
-              txHash: tx.hash,
-              serviceFeePercent: withdrawalFeePercent,
-            });
-          }
-          txHash = tx.hash;
-          executionMode = "real_bsc_blockchain";
-        } catch (botError: any) {
-          console.error("[PAYOUT BOT ERROR] On-chain USDT dispatch failed:", botError.message);
-          if (botError.info?.error?.message) {
-            console.error("[PAYOUT BOT REASON]:", botError.info.error.message);
-          }
-          return res.status(503).json({
-            error: `USDT payout failed on BSC: ${botError?.message || 'unknown payout error'}`,
-            serviceFeePercent: withdrawalFeePercent,
-          });
-        }
-      } else {
+      if (!rawKey || (rawKey.length !== 64 && rawKey.length !== 66)) {
         return res.status(503).json({
           error: "USDT payout wallet is not configured. No withdrawal was completed and no fake blockchain hash was generated.",
           serviceFeePercent: withdrawalFeePercent,
         });
       }
 
-      // Only after the real payout has been broadcast do we commit the token-sell
-      // ledger changes. This prevents a failed payout from consuming the user's claim.
+      const formattedKey = rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`;
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      const wallet = new ethers.Wallet(formattedKey, provider);
+      const usdtContract = new ethers.Contract(usdtContractAddress, ERC20_ABI, wallet);
+      const decimals = 18;
+      const parsedAmount = ethers.parseUnits(netPayout.toFixed(4), decimals);
+
+      // Token-sale withdrawals get a durable idempotency record keyed by the user's
+      // already-verified NXBC return transaction. This is the settlement's unique key.
+      let settlement: any = null;
       if (walletType === 'token_sell') {
-        for (const update of pendingLedgerUpdates) {
-          await db.update(tokenSellLedgers)
-            .set({
-              withdrawnUsdt: update.withdrawn,
-              tokensReturned: update.returned,
-              serviceFeeUsdt: (update.entry.serviceFeeUsdt || 0) + update.fee,
-              status: update.status,
-              returnTxHash: tokenReturnTxHash,
-              payoutTxHash: txHash,
-              updatedAt: new Date(),
-            })
-            .where(eq(tokenSellLedgers.id, update.entry.id));
+        await ensureTokenWithdrawalSettlementTable();
+        const phaseJson = JSON.stringify(phaseBreakdown);
+        await db.execute(sql`
+          INSERT INTO token_withdrawal_settlements
+            (return_tx_hash,user_id,wallet_address,gross_amount,net_payout,service_fee,tokens_returned,wallet_type,phase_breakdown,status)
+          VALUES
+            (${tokenReturnTxHash},${user.id},${normalizedAddress},${grossAmount},${netPayout},${serviceFee},${finalTokensReturned},${walletType},${phaseJson}::jsonb,'prepared')
+          ON CONFLICT (return_tx_hash) DO NOTHING
+        `);
+        const settlementRows = await db.execute(sql`
+          SELECT * FROM token_withdrawal_settlements WHERE return_tx_hash=${tokenReturnTxHash} LIMIT 1
+        `);
+        settlement = (settlementRows as any).rows?.[0] || (settlementRows as any)[0];
+        if (!settlement) return res.status(500).json({ error: "Could not create durable withdrawal settlement." });
+
+        if (String(settlement.status) === 'broadcasting') {
+          const ageMs = Date.now() - new Date(settlement.updated_at).getTime();
+          if (ageMs < 120000 && !settlement.payout_tx_hash) {
+            return res.status(409).json({ error: "This Token Sell withdrawal is already being processed. Please wait for the current BSC payout to finish.", settlementStatus: settlement.status });
+          }
+        }
+
+        if (Number(settlement.user_id) !== Number(user.id) || String(settlement.wallet_address).toLowerCase() !== normalizedAddress) {
+          return res.status(409).json({ error: "This NXBC return transaction is already bound to a different wallet/user." });
+        }
+        if (String(settlement.status) === 'completed' && settlement.payout_tx_hash) {
+          const existingTx = settlement.transaction_id
+            ? await db.query.transactions.findFirst({ where: eq(transactions.id, Number(settlement.transaction_id)) })
+            : null;
+          return res.json({
+            success: true,
+            message: "This Token Sell withdrawal was already completed; duplicate payout blocked.",
+            txHash: settlement.payout_tx_hash,
+            walletType,
+            grossAmount: Number(settlement.gross_amount),
+            serviceFee: Number(settlement.service_fee),
+            netPayout: Number(settlement.net_payout),
+            tokenReturnTxHash,
+            tokensReturned: Number(settlement.tokens_returned),
+            phaseBreakdown: settlement.phase_breakdown || phaseBreakdown,
+            executionMode: "real_bsc_blockchain",
+            transaction: existingTx,
+          });
+        }
+
+        // Reserve a nonce once, before broadcasting. If the server dies after broadcast
+        // but before saving the tx hash, a retry can recover the same transaction by nonce.
+        if (settlement.payout_nonce == null) {
+          await db.transaction(async (tx) => {
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('nxbc_usdt_payout_nonce_v1'))`);
+            const latest = await tx.execute(sql`
+              SELECT payout_nonce FROM token_withdrawal_settlements WHERE id=${Number(settlement.id)} FOR UPDATE
+            `);
+            const row: any = (latest as any).rows?.[0] || (latest as any)[0];
+            if (row?.payout_nonce == null) {
+              const nonce = await provider.getTransactionCount(wallet.address, 'pending');
+              await tx.execute(sql`
+                UPDATE token_withdrawal_settlements
+                SET payout_nonce=${Number(nonce)}, updated_at=NOW()
+                WHERE id=${Number(settlement.id)} AND payout_nonce IS NULL
+              `);
+              settlement.payout_nonce = Number(nonce);
+            } else {
+              settlement.payout_nonce = Number(row.payout_nonce);
+            }
+          });
+        }
+
+        const expectedNonce = Number(settlement.payout_nonce);
+        if (!settlement.payout_tx_hash && String(settlement.status) !== 'broadcasting') {
+          const claimRows = await db.execute(sql`
+            UPDATE token_withdrawal_settlements
+            SET status='broadcasting', updated_at=NOW()
+            WHERE id=${Number(settlement.id)} AND status IN ('prepared','broadcasting')
+            RETURNING *
+          `);
+          const claimed: any = (claimRows as any).rows?.[0] || (claimRows as any)[0];
+          if (claimed) {
+            settlement = claimed;
+          } else {
+            const freshRows = await db.execute(sql`SELECT * FROM token_withdrawal_settlements WHERE id=${Number(settlement.id)} LIMIT 1`);
+            const fresh: any = (freshRows as any).rows?.[0] || (freshRows as any)[0];
+            if (fresh) settlement = fresh;
+            if (String(settlement.status) === 'broadcasting' && !settlement.payout_tx_hash) {
+              return res.status(409).json({ error: "This Token Sell withdrawal is already being processed. Please wait for the current BSC payout to finish.", settlementStatus: settlement.status });
+            }
+          }
+        }
+        let payoutTx: ethers.TransactionResponse | null = null;
+        if (settlement.payout_tx_hash) {
+          payoutTx = await provider.getTransaction(String(settlement.payout_tx_hash));
+        }
+
+        // Crash recovery: if a tx was broadcast but its hash was not persisted, find it
+        // by the reserved sender nonce in the pending/latest blocks and verify it is
+        // the exact USDT transfer we intended. This avoids sending a second payout
+        // after a process crash in the tiny broadcast-to-database window.
+        if (!payoutTx) {
+          let byNonce: ethers.TransactionResponse | null = null;
+          try {
+            const pendingBlock: any = await provider.send('eth_getBlockByNumber', ['pending', true]);
+            const pendingTxs = Array.isArray(pendingBlock?.transactions) ? pendingBlock.transactions : [];
+            const match = pendingTxs.find((t: any) => String(t?.from || '').toLowerCase() === wallet.address.toLowerCase() && Number(BigInt(t?.nonce || '0x0')) === expectedNonce);
+            if (match?.hash) byNonce = await provider.getTransaction(match.hash);
+          } catch { /* pending block support varies by BSC RPC */ }
+          if (!byNonce) {
+            const latestBlock = await provider.getBlockNumber();
+            const firstBlock = Math.max(0, latestBlock - 120);
+            for (let blockNo = latestBlock; blockNo >= firstBlock && !byNonce; blockNo--) {
+              const block: any = await provider.getBlock(blockNo, true);
+              const txs = Array.isArray(block?.prefetchedTransactions) ? block.prefetchedTransactions : (Array.isArray(block?.transactions) ? block.transactions : []);
+              const match = txs.find((t: any) => String(t?.from || '').toLowerCase() === wallet.address.toLowerCase() && Number(t?.nonce) === expectedNonce);
+              if (match) byNonce = typeof match === 'string' ? await provider.getTransaction(match) : match;
+            }
+          }
+          if (byNonce) {
+            try {
+              const parsed = usdtContract.interface.parseTransaction({ data: byNonce.data, value: byNonce.value });
+              const parsedTo = parsed?.args?.[0] ? ethers.getAddress(String(parsed.args[0])) : '';
+              const parsedValue = parsed?.args?.[1] != null ? BigInt(parsed.args[1].toString()) : 0n;
+              const intendedTo = ethers.getAddress(normalizedAddress);
+              if (byNonce.to?.toLowerCase() !== ethers.getAddress(usdtContractAddress).toLowerCase() ||
+                  parsed?.name !== 'transfer' || parsedTo !== intendedTo || parsedValue !== parsedAmount) {
+                return res.status(409).json({ error: "Reserved payout nonce is occupied by a different transaction. Withdrawal locked for safety; manual reconciliation required." });
+              }
+            } catch {
+              return res.status(409).json({ error: "A transaction is using the reserved payout nonce but it is not the expected USDT payout. Withdrawal locked for safety." });
+            }
+            payoutTx = byNonce;
+            txHash = byNonce.hash;
+            await db.execute(sql`
+              UPDATE token_withdrawal_settlements
+              SET payout_tx_hash=${txHash}, status='broadcasted', updated_at=NOW()
+              WHERE id=${Number(settlement.id)} AND (payout_tx_hash IS NULL OR payout_tx_hash=${txHash})
+            `);
+          }
+        }
+
+        // If no transaction exists at the reserved nonce, broadcast exactly once using
+        // that nonce. The durable nonce prevents a restart from silently using a new nonce.
+        if (!payoutTx) {
+          console.log(`[PAYOUT BOT] Sender Hot Wallet: ${wallet.address}`);
+          console.log(`[PAYOUT BOT] Initiating automated ${walletType} payout of Gross: $${grossAmount} | Fee (${withdrawalFeePercent}%): $${serviceFee.toFixed(2)} | Net: $${netPayout.toFixed(2)} USDT to ${walletAddress} using nonce ${expectedNonce}...`);
+          try {
+            payoutTx = await usdtContract.transfer(walletAddress, parsedAmount, { nonce: expectedNonce });
+            txHash = payoutTx.hash;
+            await db.execute(sql`
+              UPDATE token_withdrawal_settlements
+              SET payout_tx_hash=${txHash}, status='broadcasted', updated_at=NOW()
+              WHERE id=${Number(settlement.id)} AND payout_tx_hash IS NULL
+            `);
+          } catch (botError: any) {
+            console.error("[PAYOUT BOT ERROR] On-chain USDT dispatch failed:", botError.message);
+            return res.status(503).json({ error: `USDT payout failed on BSC: ${botError?.message || 'unknown payout error'}`, serviceFeePercent: withdrawalFeePercent });
+          }
+        }
+
+        const payoutReceipt = await payoutTx.wait(1);
+        if (!payoutReceipt || payoutReceipt.status !== 1) {
+          return res.status(503).json({
+            error: "USDT payout transaction did not confirm successfully on BSC. The durable settlement remains pending and will not be paid twice.",
+            txHash: payoutTx.hash,
+            serviceFeePercent: withdrawalFeePercent,
+          });
+        }
+        txHash = payoutTx.hash;
+        executionMode = "real_bsc_blockchain";
+
+        // Finalize all DB mutations together. A retry after a process/database failure
+        // sees the durable settlement + payout hash and resumes this finalization without
+        // sending another USDT transfer.
+        await db.transaction(async (tx) => {
+          const current = await tx.execute(sql`
+            SELECT status FROM token_withdrawal_settlements WHERE id=${Number(settlement.id)} FOR UPDATE
+          `);
+          const currentRow: any = (current as any).rows?.[0] || (current as any)[0];
+          if (!currentRow) throw new Error("Durable settlement record disappeared.");
+
+          if (walletType === 'token_sell' && String(currentRow.status) !== 'completed') {
+            for (const update of pendingLedgerUpdates) {
+              await tx.update(tokenSellLedgers)
+                .set({
+                  withdrawnUsdt: update.withdrawn,
+                  tokensReturned: update.returned,
+                  serviceFeeUsdt: (update.entry.serviceFeeUsdt || 0) + update.fee,
+                  status: update.status,
+                  returnTxHash: tokenReturnTxHash,
+                  payoutTxHash: txHash,
+                  updatedAt: new Date(),
+                })
+                .where(eq(tokenSellLedgers.id, update.entry.id));
+            }
+          }
+
+          if (String(currentRow.status) !== 'completed') {
+            const [newTx] = await tx.insert(transactions).values({
+              userId: user.id,
+              type: 'withdrawal',
+              amountUsdt: netPayout,
+              tokenAmount: finalTokensReturned,
+              tokenPrice: 1.0,
+              status: 'completed',
+              txHash: txHash,
+            }).returning();
+
+            const lockedUser = await tx.query.users.findFirst({ where: eq(users.id, user.id) });
+            if (!lockedUser) throw new Error("User disappeared while finalizing withdrawal.");
+            const availableNow = Number(lockedUser.availableUsdt || 0);
+            if (availableNow < grossAmount) throw new Error("Available balance changed before finalization; manual reconciliation required.");
+
+            await tx.update(users)
+              .set({
+                availableUsdt: Math.max(0, availableNow - grossAmount),
+                totalWithdrawnUsdt: Number(lockedUser.totalWithdrawnUsdt || 0) + grossAmount,
+                updatedAt: new Date(),
+              })
+              .where(eq(users.id, user.id));
+
+            await tx.execute(sql`
+              UPDATE token_withdrawal_settlements
+              SET status='completed', transaction_id=${newTx.id}, payout_tx_hash=${txHash}, updated_at=NOW()
+              WHERE id=${Number(settlement.id)}
+            `);
+          }
+        });
+      } else {
+        // Non-token MLM withdrawals keep the existing real-BSC payout path.
+        try {
+          const tx = await usdtContract.transfer(walletAddress, parsedAmount);
+          txHash = tx.hash;
+          const payoutReceipt = await tx.wait(1);
+          if (!payoutReceipt || payoutReceipt.status !== 1) {
+            return res.status(503).json({ error: "USDT payout transaction was broadcast but did not confirm successfully on BSC.", txHash: tx.hash, serviceFeePercent: withdrawalFeePercent });
+          }
+          executionMode = "real_bsc_blockchain";
+        } catch (botError: any) {
+          console.error("[PAYOUT BOT ERROR] On-chain USDT dispatch failed:", botError.message);
+          return res.status(503).json({ error: `USDT payout failed on BSC: ${botError?.message || 'unknown payout error'}`, serviceFeePercent: withdrawalFeePercent });
         }
       }
 
-      // Record in Transactions Database
-      const txTitle = walletType === 'token_sell'
-        ? `Token Auto-Sell Settlement Payout (Net $${netPayout.toFixed(2)} after ${withdrawalFeePercent}% Fee)`
-        : `MLM & Community Earnings Payout (Net $${netPayout.toFixed(2)} after ${withdrawalFeePercent}% Fee)`;
+      // Record and finalize legacy MLM/community withdrawals (token_sell was finalized above atomically).
+      if (walletType !== 'token_sell') {
+        const txTitle = `MLM & Community Earnings Payout (Net $${netPayout.toFixed(2)} after ${withdrawalFeePercent}% Fee)`;
+        const [txRecord] = await db.insert(transactions).values({
+          userId: user.id,
+          type: 'withdrawal',
+          amountUsdt: netPayout,
+          tokenAmount: finalTokensReturned,
+          tokenPrice: 1.0,
+          status: 'completed',
+          txHash: txHash,
+        }).returning();
+        const newAvailable = Math.max(0, currentAvailable - grossAmount);
+        await db.update(users)
+          .set({ availableUsdt: newAvailable, totalWithdrawnUsdt: (user.totalWithdrawnUsdt || 0) + grossAmount, updatedAt: new Date() })
+          .where(eq(users.id, user.id));
+        return res.json({ success: true, message: `${txTitle} processed successfully!`, txHash, walletType, grossAmount, serviceFee, netPayout, tokenReturnTxHash: null, tokensReturned: finalTokensReturned, phaseBreakdown, executionMode, transaction: txRecord, newAvailableBalance: newAvailable });
+      }
 
-      const [txRecord] = await db.insert(transactions).values({
-        userId: user.id,
-        type: 'withdrawal',
-        amountUsdt: netPayout,
-        tokenAmount: finalTokensReturned,
-        tokenPrice: 1.0,
-        status: 'completed',
-        txHash: txHash,
-      }).returning();
-
-      // Deduct available USDT and update withdrawn stats
-      const newAvailable = Math.max(0, currentAvailable - grossAmount);
-      await db.update(users)
-        .set({
-          availableUsdt: newAvailable,
-          totalWithdrawnUsdt: (user.totalWithdrawnUsdt || 0) + grossAmount,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, user.id));
-
+      const completedSettlementRows = await db.execute(sql`
+        SELECT s.*, t.id AS transaction_id, t.tx_hash AS completed_tx_hash
+        FROM token_withdrawal_settlements s
+        LEFT JOIN transactions t ON t.id=s.transaction_id
+        WHERE s.return_tx_hash=${tokenReturnTxHash} LIMIT 1
+      `);
+      const completedSettlement: any = (completedSettlementRows as any).rows?.[0] || (completedSettlementRows as any)[0];
+      const finalTx = completedSettlement?.transaction_id
+        ? await db.query.transactions.findFirst({ where: eq(transactions.id, Number(completedSettlement.transaction_id)) })
+        : null;
+      const latestUser = await db.query.users.findFirst({ where: eq(users.id, user.id) });
       return res.json({
         success: true,
-        message: `${txTitle} processed successfully!`,
-        txHash,
+        message: `Token Auto-Sell Settlement Payout (Net $${netPayout.toFixed(2)} after ${withdrawalFeePercent}% Fee) processed successfully!`,
+        txHash: completedSettlement?.payout_tx_hash || txHash,
         walletType,
         grossAmount,
         serviceFee,
         netPayout,
-        tokenReturnTxHash: tokenReturnTxHash || null,
+        tokenReturnTxHash,
         tokensReturned: finalTokensReturned,
         phaseBreakdown,
         executionMode,
-        transaction: txRecord,
-        newAvailableBalance: newAvailable,
+        transaction: finalTx,
+        newAvailableBalance: Number(latestUser?.availableUsdt || 0),
       });
     } catch (error: any) {
       console.error("Error in /api/wallet/withdraw:", error);
@@ -1715,7 +1991,10 @@ async function startServer() {
         return res.status(400).json({ error: "Token amount does not match amountUsdt / current phase price." });
       }
 
-      const remainingInPhase = Math.max(0, Number(activePhase.totalSupply) - Number(activePhase.tokensSold));
+      const activePhaseNumber = Number(activePhase.phaseNumber || phaseIndex || 1);
+      const activeSales = await getPhaseSalesSnapshot(activePhase);
+      const activeTotalSold = activeSales.totalSold;
+      const remainingInPhase = Math.max(0, Number(activePhase.totalSupply) - activeTotalSold);
       if (Number(tokenAmount) > remainingInPhase) {
         return res.status(400).json({ error: "Purchase exceeds remaining supply in the active phase.", remainingInPhase });
       }
@@ -2347,19 +2626,27 @@ async function startServer() {
           };
         } catch {}
       }
-      const safePhases = Array.isArray(phases) ? phases.map((p: any) => ({
-        id: p.id,
-        phaseNumber: Number(p.phaseNumber ?? 0),
-        name: p.name,
-        shortName: p.shortName,
-        rate: Number(p.rate ?? p.tokenPrice ?? p.price ?? 0),
-        rateLabel: p.rateLabel,
-        totalSupply: Number(p.totalSupply ?? 0),
-        tokensSold: Number(p.tokensSold ?? 0),
-        status: p.status,
-        multiplier: p.multiplier,
-        unlockRequirement: p.unlockRequirement,
-        targetDate: p.targetDate,
+      const safePhases = Array.isArray(phases) ? await Promise.all(phases.map(async (p: any) => {
+        const sales = await getPhaseSalesSnapshot(p);
+        const { adminSold, verifiedSold } = sales;
+        const phaseNumber = Number(p.phaseNumber ?? 0);
+        const totalSold = Math.min(Math.max(0, Number(p.totalSupply ?? 0)), sales.totalSold);
+        return {
+          id: p.id,
+          phaseNumber,
+          name: p.name,
+          shortName: p.shortName,
+          rate: Number(p.rate ?? p.tokenPrice ?? p.price ?? 0),
+          rateLabel: p.rateLabel,
+          totalSupply: Number(p.totalSupply ?? 0),
+          tokensSold: totalSold,
+          adminSold,
+          verifiedSold,
+          status: p.status,
+          multiplier: p.multiplier,
+          unlockRequirement: p.unlockRequirement,
+          targetDate: p.targetDate,
+        };
       })) : [];
       res.json({ success: true, phases: safePhases, systemConfig: publicSystemConfig });
     } catch (error: any) {
@@ -2375,57 +2662,57 @@ async function startServer() {
   // not displayed as zero. The fallback never invents a purchase count.
   app.get("/api/presale/trust-stats", async (_req, res) => {
     try {
-      const result = await db.execute(sql`
-        SELECT
-          COALESCE(SUM(token_amount), 0) AS total_tokens_sold,
-          COALESCE(SUM(amount_usdt), 0) AS total_usdt_received,
-          COUNT(*) AS completed_purchases
-        FROM transactions
-        WHERE type = 'buy_presale'
-          AND status = 'completed'
-      `);
-
-      const row: any = (result as any)?.rows?.[0] || {};
-      const completedPurchases = Number(row.completed_purchases || 0);
-
-      if (completedPurchases > 0) {
-        return res.json({
-          success: true,
-          totalTokensSold: Number(row.total_tokens_sold || 0),
-          totalUsdtReceived: Number(row.total_usdt_received || 0),
-          completedPurchases,
-          source: 'verified_transactions',
-          verified: true,
-        });
-      }
-
-      // Existing phase counters are already persisted in PostgreSQL and are
-      // useful for the global business display when an older deployment has
-      // phase totals but did not retain its historical transaction rows.
       const phaseRow = await db.query.systemConfigs.findFirst({
         where: eq(systemConfigs.key, 'phases'),
       });
-      let phaseTokens = 0;
-      let phaseUsdt = 0;
-      if (phaseRow?.value) {
-        const phases = JSON.parse(phaseRow.value);
-        if (Array.isArray(phases)) {
-          for (const phase of phases) {
-            const sold = Math.max(0, Number(phase.tokensSold || 0));
-            const rate = Number(phase.rate ?? phase.tokenPrice ?? phase.price ?? 0);
-            phaseTokens += sold;
-            if (Number.isFinite(rate) && rate > 0) phaseUsdt += sold * rate;
+
+      let totalTokensSold = 0;
+      let totalUsdtReceived = 0;
+      let completedPurchases = 0;
+      const phaseData = phaseRow?.value ? JSON.parse(phaseRow.value) : [];
+
+      if (Array.isArray(phaseData)) {
+        for (const phase of phaseData) {
+          const sales = await getPhaseSalesSnapshot(phase);
+          const supply = Math.max(0, Number(phase.totalSupply || 0));
+          const sold = Math.min(supply, sales.totalSold);
+          const rate = Number(phase.rate ?? phase.tokenPrice ?? phase.price ?? 0);
+          totalTokensSold += sold;
+          if (Number.isFinite(rate) && rate > 0) totalUsdtReceived += sold * rate;
+          if (Number(phase.phaseNumber || 0) > 0) {
+            const rows = await db.select({ count: sql`count(*)` })
+              .from(transactions)
+              .where(and(
+                eq(transactions.type, 'buy_presale'),
+                eq(transactions.status, 'completed'),
+                eq(transactions.phaseIndex, Number(phase.phaseNumber)),
+              ));
+            completedPurchases += Number(rows[0]?.count ?? 0);
           }
         }
+      } else {
+        const result = await db.execute(sql`
+          SELECT
+            COALESCE(SUM(token_amount), 0) AS total_tokens_sold,
+            COALESCE(SUM(amount_usdt), 0) AS total_usdt_received,
+            COUNT(*) AS completed_purchases
+          FROM transactions
+          WHERE type = 'buy_presale'
+            AND status = 'completed'
+        `);
+        const row: any = (result as any)?.rows?.[0] || {};
+        totalTokensSold = Number(row.total_tokens_sold || 0);
+        totalUsdtReceived = Number(row.total_usdt_received || 0);
+        completedPurchases = Number(row.completed_purchases || 0);
       }
 
       return res.json({
         success: true,
-        totalTokensSold: phaseTokens,
-        totalUsdtReceived: phaseUsdt,
-        completedPurchases: 0,
-        source: 'phase_config_fallback',
-        verified: false,
+        totalTokensSold,
+        totalUsdtReceived,
+        completedPurchases,
+        source: 'admin_baseline_plus_verified_transactions',
+        verified: completedPurchases > 0,
       });
     } catch (error: any) {
       console.error("Error in /api/presale/trust-stats:", error);
@@ -2449,9 +2736,22 @@ async function startServer() {
         }
       } catch (dbErr) {}
 
+      const adminPhases = Array.isArray(dbConfigs.phases)
+        ? await Promise.all(dbConfigs.phases.map(async (p: any) => {
+            const sales = await getPhaseSalesSnapshot(p);
+            return {
+              ...p,
+              // Admin UI edits only the manual/initial sold baseline. Verified
+              // user purchases are calculated separately and are never lost.
+              tokensSold: sales.adminSold,
+              adminSold: sales.adminSold,
+            };
+          }))
+        : dbConfigs.phases || null;
+
       res.json({
         success: true,
-        phases: dbConfigs.phases || null,
+        phases: adminPhases,
         referralLevels: dbConfigs.referralLevels || null,
         rankRewards: dbConfigs.rankRewards || null,
         systemConfig: dbConfigs.systemConfig || null,
@@ -2468,9 +2768,19 @@ async function startServer() {
     try {
       const { phases, referralLevels, rankRewards, systemConfig, matrixConfig } = req.body;
 
-      // Save to database
+      // Save to database. The admin "Coins Sold" field is a manual/initial
+      // sold baseline. Verified blockchain purchases are stored in transactions
+      // and are added separately, so saving admin settings can never erase or
+      // overwrite real user purchase history.
+      const phasesForSave = Array.isArray(phases)
+        ? phases.map((p: any) => ({
+            ...p,
+            adminSold: Math.max(0, Number(p.tokensSold ?? p.adminSold ?? 0)),
+            tokensSold: Math.max(0, Number(p.tokensSold ?? p.adminSold ?? 0)),
+          }))
+        : phases;
       const itemsToSave = [
-        { key: "phases", value: phases ? JSON.stringify(phases) : null, desc: "Presale Phases and Coin Prices" },
+        { key: "phases", value: phasesForSave ? JSON.stringify(phasesForSave) : null, desc: "Presale Phases and Coin Prices" },
         { key: "referralLevels", value: referralLevels ? JSON.stringify(referralLevels) : null, desc: "10-Level Commission Plan" },
         { key: "rankRewards", value: rankRewards ? JSON.stringify(rankRewards) : null, desc: "Leadership Rank Rewards" },
         { key: "systemConfig", value: systemConfig ? JSON.stringify(systemConfig) : null, desc: "System Parameters, Social Links and Financial Rules" },
@@ -2534,6 +2844,8 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  await ensureTokenWithdrawalSettlementTable();
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);

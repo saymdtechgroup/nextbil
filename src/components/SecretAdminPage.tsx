@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ShieldAlert,
   KeyRound,
@@ -121,6 +121,32 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
 
 
 
+
+  // Always load the authoritative admin configuration after authentication.
+  // This prevents stale localStorage/parent state from overwriting live DB values
+  // such as phase tokens sold and withdrawal fee.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('nxbc_admin_token') : null;
+        const res = await fetch('/api/admin/configs', {
+          headers: token ? { 'x-admin-token': token } : {},
+        });
+        const data = await res.json();
+        if (cancelled || !data?.success) return;
+        if (Array.isArray(data.phases) && data.phases.length) setLocalPhases(data.phases);
+        if (Array.isArray(data.referralLevels) && data.referralLevels.length) setLocalLevels(data.referralLevels);
+        if (Array.isArray(data.rankRewards) && data.rankRewards.length) setLocalRanks(data.rankRewards);
+        if (data.systemConfig && typeof data.systemConfig === 'object') setLocalSystem((prev) => ({ ...prev, ...data.systemConfig }));
+        if (data.matrixConfig && typeof data.matrixConfig === 'object') setLocalMatrix(data.matrixConfig);
+      } catch (err) {
+        console.error('[ADMIN] Failed to load live configuration:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isAuthenticated]);
 
   // Simulation test amount
   const [simBuyAmount, setSimBuyAmount] = useState<number>(500);
@@ -359,6 +385,12 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
       });
       const data = await res.json();
       if (data?.success) {
+        // Use the server-reconciled phase counters so a stale admin screen
+        // cannot keep showing 0 after a real purchase already exists.
+        if (Array.isArray(data.phases) && data.phases.length) {
+          setLocalPhases(data.phases);
+          if (typeof window !== 'undefined') localStorage.setItem('nxbc_admin_phases', JSON.stringify(data.phases));
+        }
         setSaveSuccessMsg('✓ All settings saved & live-updated across all user dashboards!');
       } else {
         setSaveSuccessMsg('✓ Settings saved & applied live!');
@@ -958,7 +990,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                         {/* Coins Sold */}
                         <div>
                           <label className="text-[9px] uppercase text-emerald-400 font-rajdhani font-bold block mb-1">
-                            Coins Sold (NXBC)
+                            Admin / Initial Sold (NXBC)
                           </label>
                           <input
                             type="number"
