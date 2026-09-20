@@ -20,6 +20,7 @@ import {
 import confetti from 'canvas-confetti';
 import {
   NXBC_CONTRACT,
+  NXBC_PRESALE_CONTRACT,
   USDT_CONTRACT,
   ADMIN_TREASURY_WALLET,
   fetchOnChainTokenBalance,
@@ -83,7 +84,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   currentRate = 0.01,
   walletConnected = false,
   walletAddress = '',
-  contractAddress = '0x4Bc1a2f057FF9a036b8C27a90f7C7F403dC85cae',
+  contractAddress = NXBC_PRESALE_CONTRACT,
   receivingAddress = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
   minPurchaseUsd = 0.01,
   nxbusdBalance = 0,
@@ -128,7 +129,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
         (window as any).okxwallet;
 
       if (!eth || typeof eth.request !== 'function') {
-        navigator.clipboard.writeText('0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1');
+        navigator.clipboard.writeText('0x94D064AFDB04E3489C313054260929588b38dF85');
         setTokenImportNotice('Contract Copied! Paste in SafePal / Trust Wallet > Add Custom Token.');
         setTimeout(() => setTokenImportNotice(null), 5000);
         return;
@@ -139,7 +140,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
         params: {
           type: 'ERC20',
           options: {
-            address: '0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1',
+            address: '0x94D064AFDB04E3489C313054260929588b38dF85',
             symbol: 'NXBC',
             decimals: 18,
           },
@@ -148,7 +149,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
       setTokenImportNotice('NXBC Token added to your Web3 wallet asset list!');
       setTimeout(() => setTokenImportNotice(null), 5000);
     } catch (e: any) {
-      navigator.clipboard.writeText('0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1');
+      navigator.clipboard.writeText('0x94D064AFDB04E3489C313054260929588b38dF85');
       setTokenImportNotice('Contract Copied! Paste in SafePal > Add Custom Token.');
       setTimeout(() => setTokenImportNotice(null), 5000);
     }
@@ -337,7 +338,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
       setPaymentStatusText(`Approving Smart Contract...`);
 
       // 1. Approve Smart Contract to spend USDT
-      const contractAddress = '0x4Bc1a2f057FF9a036b8C27a90f7C7F403dC85cae';
+      const contractAddress = NXBC_PRESALE_CONTRACT;
       const cleanContract = contractAddress.toLowerCase().replace('0x', '').padStart(64, '0');
       const cleanVal = tokenAmountWei.toString(16).padStart(64, '0');
       const approveData = `0x095ea7b3${cleanContract}${cleanVal}`; // approve(address,uint256)

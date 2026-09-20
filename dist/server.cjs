@@ -296,10 +296,10 @@ var ERC20_ABI = [
   "function decimals() view returns (uint8)"
 ];
 var ERC20_TRANSFER_TOPIC = import_ethers.ethers.id("Transfer(address,address,uint256)");
-var DEFAULT_NXBC_TOKEN_ADDRESS = "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1";
+var DEFAULT_NXBC_TOKEN_ADDRESS = "0x94D064AFDB04E3489C313054260929588b38dF85";
 var DEFAULT_BSC_RPC = "https://bsc-dataseed.binance.org/";
 var DEFAULT_USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
-var DEFAULT_PRESALE_ADDRESS = "0x4Bc1a2f057FF9a036b8C27a90f7C7F403dC85cae";
+var DEFAULT_PRESALE_ADDRESS = "0x0C4a86691B3937549BFa688211EbF56520B64981";
 var DEFAULT_ADMIN_WALLET = "0x8d1abCa8Cf0f42799b9a76254710e979bd59c261";
 function settlementEndpointsEnabled() {
   return process.env.ENABLE_UNVERIFIED_INTERNAL_SETTLEMENTS === "true";
@@ -1605,7 +1605,7 @@ async function startServer() {
       if (hotWalletDispatchEnabled) {
         const privateKey = process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY;
         const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
-        const nxbcTokenContractAddress = process.env.NXBC_TOKEN_ADDRESS || "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1";
+        const nxbcTokenContractAddress = process.env.NXBC_TOKEN_ADDRESS || "0x94D064AFDB04E3489C313054260929588b38dF85";
         if (privateKey && privateKey.startsWith("0x") && privateKey.length >= 64) {
           try {
             const provider = new import_ethers.ethers.JsonRpcProvider(rpcUrl);

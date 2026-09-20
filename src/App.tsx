@@ -55,7 +55,7 @@ import {
 
 
 const INITIAL_PHASES: PhaseConfig[] = [
-  { id: 'p1', phaseNumber: 1, name: 'Phase 1', shortName: 'P1', rate: 0.01, rateLabel: '$0.01', totalSupply: 500000, tokensSold: 0, status: 'active', multiplier: '10x Phase', unlockRequirement: 'Live Now' },
+  { id: 'p1', phaseNumber: 1, name: 'Phase 1', shortName: 'P1', rate: 0.01, rateLabel: '$0.01', totalSupply: 1000000, tokensSold: 0, status: 'active', multiplier: '10x Phase', unlockRequirement: 'Live Now' },
   { id: 'p2', phaseNumber: 2, name: 'Phase 2', shortName: 'P2', rate: 0.10, rateLabel: '$0.10', totalSupply: 2500000, tokensSold: 0, status: 'upcoming', multiplier: '15x Phase', unlockRequirement: 'After P1' },
   { id: 'p3', phaseNumber: 3, name: 'Phase 3', shortName: 'P3', rate: 1.00, rateLabel: '$1.00', totalSupply: 7000000, tokensSold: 0, status: 'upcoming', multiplier: '20x Phase', unlockRequirement: 'After P2' },
   { id: 'p4', phaseNumber: 4, name: 'Phase 4', shortName: 'P4', rate: 10.00, rateLabel: '$10.00', totalSupply: 19500000, tokensSold: 0, status: 'upcoming', multiplier: '25x Phase', unlockRequirement: 'After P3' },
@@ -563,7 +563,7 @@ export default function App() {
   const [systemConfig, setSystemConfig] = useState<AdminSystemConfig>({
     tokenName: 'NXBC',
     tokenSymbol: 'NXBC',
-    contractAddress: '0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1',
+    contractAddress: '0x94D064AFDB04E3489C313054260929588b38dF85',
     receivingAddress: '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
     minPurchaseUsd: 0.01,
     maxPurchaseUsd: 50000,
