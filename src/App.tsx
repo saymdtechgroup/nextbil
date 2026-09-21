@@ -401,7 +401,7 @@ export default function App() {
   // Transactions History (Persisted in localStorage)
   
   const [allocation, setAllocation] = useState<AllocationState>({
-    p1Percent: 0, p2Percent: 0, p3Percent: 0, p4Percent: 0, p5Percent: 0, livePercent: 0,
+    p1Percent: 0, p2Percent: 20, p3Percent: 30, p4Percent: 20, p5Percent: 15, livePercent: 15,
     unallocatedPercent: 0, totalTokensPurchased: 0, isLocked: false, lockedTimestamp: ''
   });
 
