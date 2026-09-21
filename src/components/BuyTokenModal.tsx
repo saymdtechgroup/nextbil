@@ -253,7 +253,16 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
       setP5Tokens(p5);
       setLiveTokens(live + Math.max(0, tokenQuantity - allocated));
     }
-  }, [tokenQuantity, isOpen, activePhaseInfo.phaseNumber, initialAllocation]);
+  }, [
+    tokenQuantity,
+    isOpen,
+    activePhaseInfo.phaseNumber,
+    initialAllocation.p2Percent,
+    initialAllocation.p3Percent,
+    initialAllocation.p4Percent,
+    initialAllocation.p5Percent,
+    initialAllocation.livePercent,
+  ]);
 
   if (!isOpen) return null;
 
