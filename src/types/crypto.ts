@@ -19,13 +19,14 @@ export interface AllocationState {
   p3Percent: number;
   p4Percent: number;
   p5Percent: number;
-  dexPercent: number;
+  livePercent: number;
   unallocatedPercent: number;
   p1Tokens?: PhaseAllocation;
   p2Tokens?: PhaseAllocation;
   p3Tokens?: PhaseAllocation;
   p4Tokens?: PhaseAllocation;
   p5Tokens?: PhaseAllocation;
+  liveTokens?: PhaseAllocation;
   totalTokensPurchased: number;
   isLocked: boolean;
   lockedTimestamp?: string;
@@ -88,9 +89,10 @@ export interface AdminSystemConfig {
   presalePaused: boolean;
   directSponsorPercent: number;
   withdrawalFeePercent: number;
+  // Admin-controlled FIFO seller share; company share is automatically 100 - this value.
+  sellQueueSharePercent: number;
   matrixConfig: MatrixConfig;
   royaltyPoolUsd: number;
-  sellQueueSharePercent?: number;
   socialLinks?: { x?: string; youtube?: string; telegram?: string; facebook?: string };
 }
 

@@ -21,47 +21,13 @@ type TreeNode = {
 // Dummy Data Generator
 const myTree: TreeNode = {
   id: 'me',
-  name: 'You (Satoshi)',
-  wallet: '0x71C...a89F',
-  rank: 'Gold Director',
+  name: 'Your Network',
+  wallet: 'Connect wallet to view network',
+  rank: '—',
   totalTeam: 0,
-  investment: 500,
+  investment: 0,
   isExpanded: true,
-  children: [
-    {
-      id: 'd1',
-      name: 'Alex D.',
-      wallet: '0x8A1...f32E',
-      rank: 'Silver Leader',
-      totalTeam: 42,
-      investment: 250,
-      isExpanded: true,
-      children: [
-        { id: 'd1_1', name: 'Bob M.', wallet: '0x9B2...d41C', rank: 'Member', totalTeam: 0, investment: 100 },
-        { id: 'd1_2', name: 'Charlie', wallet: '0xC33...e52D', rank: 'Member', totalTeam: 12, investment: 50 },
-      ]
-    },
-    {
-      id: 'd2',
-      name: 'Diana P.',
-      wallet: '0x4D4...b11A',
-      rank: 'Bronze',
-      totalTeam: 18,
-      investment: 120,
-      isExpanded: false,
-      children: [
-        { id: 'd2_1', name: 'Eve S.', wallet: '0xE55...a22B', rank: 'Member', totalTeam: 5, investment: 50 },
-      ]
-    },
-    {
-      id: 'd3',
-      name: 'Frank L.',
-      wallet: '0xF66...c33D',
-      rank: 'Member',
-      totalTeam: 0,
-      investment: 50,
-    }
-  ]
+  children: [],
 };
 
 export const NetworkTreeModal: React.FC<NetworkTreeModalProps> = ({ isOpen, onClose }) => {

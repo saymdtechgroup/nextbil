@@ -6,7 +6,7 @@ import { db } from "./src/db/index.ts";
 import { users, matrixNodes, levelEarnings, transactions, sellOrders, systemConfigs, tokenSellLedgers, rankAchievements } from "./src/db/schema.ts";
 import { eq, desc, asc, and, or, inArray, sql } from "drizzle-orm";
 import { ethers } from "ethers";
-import { scryptSync, randomBytes, timingSafeEqual, createHash } from "crypto";
+import { scryptSync, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
 
 // ---------------------------------------------------------------------------
 // Admin PIN hashing + brute-force lockout
@@ -33,6 +33,49 @@ function verifyPin(pin: string, stored: string): boolean {
 const pinAttempts = new Map<string, { count: number; lockedUntil: number }>();
 const adminSessions = new Map<string, number>();
 const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+const USER_SESSION_TTL_MS = 30 * 60 * 1000;
+const USER_SIGNATURE_MAX_AGE_MS = 5 * 60 * 1000;
+const USER_AUTH_AUDIENCE = "NXBC-DASHBOARD-V1";
+
+function getAuthSecret(): string {
+  const secret = String(process.env.AUTH_SESSION_SECRET || process.env.DATABASE_URL || "").trim();
+  if (!secret) throw new Error("AUTH_SESSION_SECRET is required for authenticated dashboard access.");
+  return secret;
+}
+
+function makeUserSession(wallet: string, issuedAt: number): string {
+  const payload = `${wallet.toLowerCase()}.${issuedAt}.${USER_SESSION_TTL_MS}`;
+  const sig = createHmac("sha256", getAuthSecret()).update(payload).digest("hex");
+  return Buffer.from(`${payload}.${sig}`).toString("base64url");
+}
+
+function readUserSession(req: express.Request): { wallet: string } | null {
+  const raw = String(req.headers.authorization || "");
+  if (!raw.startsWith("Bearer ")) return null;
+  try {
+    const decoded = Buffer.from(raw.slice(7), "base64url").toString("utf8");
+    const [wallet, issuedAtRaw, ttlRaw, sig] = decoded.split(".");
+    if (!/^0x[a-f0-9]{40}$/.test(wallet) || !sig) return null;
+    const issuedAt = Number(issuedAtRaw);
+    const ttl = Number(ttlRaw);
+    if (!Number.isFinite(issuedAt) || !Number.isFinite(ttl) || Date.now() - issuedAt < 0 || Date.now() - issuedAt > ttl) return null;
+    const payload = `${wallet}.${issuedAt}.${ttl}`;
+    const expected = createHmac("sha256", getAuthSecret()).update(payload).digest("hex");
+    if (sig.length !== expected.length || !timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+    return { wallet };
+  } catch { return null; }
+}
+
+function requireWallet(req: express.Request, res: express.Response, routeWallet: string): boolean {
+  const session = readUserSession(req);
+  const normalized = String(routeWallet || "").toLowerCase();
+  if (!session || session.wallet !== normalized) {
+    res.status(401).json({ success: false, error: "Wallet authentication required." });
+    return false;
+  }
+  return true;
+}
+
 
 function issueAdminSession(): string {
   const token = randomBytes(32).toString("hex");
@@ -89,14 +132,96 @@ const ERC20_ABI = [
 ];
 
 const ERC20_TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
-const DEFAULT_NXBC_TOKEN_ADDRESS = "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1";
+const DEFAULT_NXBC_TOKEN_ADDRESS = "0x94D064AFDB04E3489C313054260929588b38dF85";
 const DEFAULT_BSC_RPC = "https://bsc-dataseed.binance.org/";
 const DEFAULT_USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
-const DEFAULT_PRESALE_ADDRESS = "0x4Bc1a2f057FF9a036b8C27a90f7C7F403dC85cae";
+const DEFAULT_PRESALE_ADDRESS = "0x0C4a86691B3937549BFa688211EbF56520B64981";
 const DEFAULT_ADMIN_WALLET = "0x8d1abCa8Cf0f42799b9a76254710e979bd59c261";
+
+
+const LIVE_PRESALE_PHASES = [
+  { phaseNumber: 1, name: 'Phase 1', shortName: 'P1', rate: 0.01, totalSupply: 1_000_000 },
+  { phaseNumber: 2, name: 'Phase 2', shortName: 'P2', rate: 0.10, totalSupply: 2_500_000 },
+  { phaseNumber: 3, name: 'Phase 3', shortName: 'P3', rate: 1.00, totalSupply: 7_000_000 },
+  { phaseNumber: 4, name: 'Phase 4', shortName: 'P4', rate: 10.00, totalSupply: 19_500_000 },
+  { phaseNumber: 5, name: 'Phase 5', shortName: 'P5', rate: 100.00, totalSupply: 40_000_000 },
+] as const;
+
+async function getLivePresaleState() {
+  const rpcUrl = process.env.RPC_URL || DEFAULT_BSC_RPC;
+  const presaleAddress = process.env.NXBC_PRESALE_CONTRACT_ADDRESS || DEFAULT_PRESALE_ADDRESS;
+  const provider = new ethers.JsonRpcProvider(rpcUrl);
+  const presale = new ethers.Contract(presaleAddress, [
+    'function currentPhase() view returns (uint256)',
+    'function currentPhasePrice() view returns (uint256)',
+    'function currentPhaseSold() view returns (uint256)',
+    'function currentPhaseRemaining() view returns (uint256)',
+    'function totalSold() view returns (uint256)',
+    'function presaleActive() view returns (bool)',
+    'function presaleNXBCBalance() view returns (uint256)',
+  ], provider);
+
+  const [currentPhaseRaw, priceRaw, soldRaw, remainingRaw, totalSoldRaw, active, presaleBalanceRaw] = await Promise.all([
+    presale.currentPhase(),
+    presale.currentPhasePrice(),
+    presale.currentPhaseSold(),
+    presale.currentPhaseRemaining(),
+    presale.totalSold(),
+    presale.presaleActive(),
+    presale.presaleNXBCBalance(),
+  ]);
+
+  const currentPhase = Number(currentPhaseRaw);
+  const currentSold = Number(ethers.formatUnits(soldRaw, 18));
+  const currentRemaining = Number(ethers.formatUnits(remainingRaw, 18));
+  const totalSold = Number(ethers.formatUnits(totalSoldRaw, 18));
+  const price = Number(ethers.formatUnits(priceRaw, 18));
+  const presaleBalance = Number(ethers.formatUnits(presaleBalanceRaw, 18));
+
+  const phases = LIVE_PRESALE_PHASES.map((p) => ({
+    ...p,
+    rateLabel: `$${p.rate.toFixed(2)}`,
+    tokensSold: p.phaseNumber < currentPhase ? p.totalSupply : p.phaseNumber === currentPhase ? currentSold : 0,
+    status: !active && p.phaseNumber === 5 && currentPhase === 5
+      ? 'completed'
+      : p.phaseNumber < currentPhase
+        ? 'completed'
+        : p.phaseNumber === currentPhase
+          ? 'active'
+          : 'upcoming',
+    unlockRequirement: p.phaseNumber === 1 ? 'Live Now' : `After P${p.phaseNumber - 1}`,
+  }));
+
+  return { currentPhase, price, currentSold, currentRemaining, totalSold, active, presaleBalance, phases };
+}
 
 function settlementEndpointsEnabled(): boolean {
   return process.env.ENABLE_UNVERIFIED_INTERNAL_SETTLEMENTS === "true";
+}
+
+function validateProductionEnvironment() {
+  if (process.env.NODE_ENV !== 'production') return;
+  const required = [
+    'RPC_URL', 'NXBC_TOKEN_ADDRESS', 'NXBC_PRESALE_CONTRACT_ADDRESS',
+    'USDT_CONTRACT_ADDRESS', 'PRESALE_RECEIVING_WALLET', 'NXBC_RETURN_TREASURY_ADDRESS',
+    'PAYOUT_HOT_WALLET_PRIVATE_KEY', 'ADMIN_PIN_INITIAL', 'AUTH_SESSION_SECRET',
+  ];
+  const missing = required.filter((key) => !String(process.env[key] || '').trim());
+  const hasDatabaseUrl = !!String(process.env.DATABASE_URL || '').trim();
+  const hasDatabaseParts = ['SQL_HOST','SQL_USER','SQL_PASSWORD','SQL_DB_NAME'].every((key) => !!String(process.env[key] || '').trim());
+  if (!hasDatabaseUrl && !hasDatabaseParts) missing.unshift('DATABASE_URL (or SQL_HOST/SQL_USER/SQL_PASSWORD/SQL_DB_NAME)');
+  if (missing.length) throw new Error(`Missing required production environment variables: ${missing.join(', ')}`);
+  if (process.env.ENABLE_UNVERIFIED_INTERNAL_SETTLEMENTS === 'true') {
+    throw new Error('ENABLE_UNVERIFIED_INTERNAL_SETTLEMENTS must not be true in production.');
+  }
+  if (process.env.ENABLE_HOT_WALLET_DISPATCH === 'true') {
+    throw new Error('ENABLE_HOT_WALLET_DISPATCH must remain false; the deployed presale contract is the only NXBC delivery path.');
+  }
+  for (const key of ['NXBC_TOKEN_ADDRESS','NXBC_PRESALE_CONTRACT_ADDRESS','USDT_CONTRACT_ADDRESS','PRESALE_RECEIVING_WALLET','NXBC_RETURN_TREASURY_ADDRESS']) {
+    try { ethers.getAddress(String(process.env[key])); } catch { throw new Error(`${key} is not a valid EVM address.`); }
+  }
+  const pin = String(process.env.ADMIN_PIN_INITIAL || '').trim();
+  if (!/^\d{6,}$/.test(pin)) throw new Error('ADMIN_PIN_INITIAL must be at least 6 numeric digits.');
 }
 
 async function verifyPresalePurchaseOnChain(params: {
@@ -115,6 +240,11 @@ async function verifyPresalePurchaseOnChain(params: {
   if (!receipt) return { ok: false, pending: true, error: "Purchase transaction is not mined yet." };
   if (receipt.status !== 1) return { ok: false, error: "Purchase transaction reverted on BSC." };
   if (receipt.from.toLowerCase() !== buyer.toLowerCase()) return { ok: false, error: "Purchase transaction sender does not match the buyer wallet." };
+  const presaleAddressForTx = (process.env.NXBC_PRESALE_CONTRACT_ADDRESS || process.env.NXBC_PRESALE_CONTRACT || DEFAULT_PRESALE_ADDRESS).toLowerCase();
+  const purchaseTx = await provider.getTransaction(txHash);
+  if (!purchaseTx || !purchaseTx.to || purchaseTx.to.toLowerCase() !== presaleAddressForTx) {
+    return { ok: false, error: "The transaction was not sent to the official NXBC Presale contract." };
+  }
 
   const usdtAddress = (process.env.USDT_CONTRACT_ADDRESS || DEFAULT_USDT_ADDRESS).toLowerCase();
   const nxbcAddress = (process.env.NXBC_TOKEN_ADDRESS || DEFAULT_NXBC_TOKEN_ADDRESS).toLowerCase();
@@ -135,8 +265,8 @@ async function verifyPresalePurchaseOnChain(params: {
       const from = String(parsed.args.from).toLowerCase();
       const to = String(parsed.args.to).toLowerCase();
       const value = parsed.args.value as bigint;
-      if (log.address.toLowerCase() === usdtAddress && from === buyer.toLowerCase() && to === adminWallet && value >= usdtRaw) usdtPaid = true;
-      if (log.address.toLowerCase() === nxbcAddress && from === presaleAddress && to === buyer.toLowerCase() && value >= nxbcRaw) nxbcDelivered = true;
+      if (log.address.toLowerCase() === usdtAddress && from === buyer.toLowerCase() && to === adminWallet && value === usdtRaw) usdtPaid = true;
+      if (log.address.toLowerCase() === nxbcAddress && from === presaleAddress && to === buyer.toLowerCase() && value === nxbcRaw) nxbcDelivered = true;
     } catch {}
   }
   if (!usdtPaid) return { ok: false, error: "The BSC transaction does not contain the required USDT payment to the presale treasury." };
@@ -636,11 +766,9 @@ async function finalizeConfirmedPurchase(
  
 // FIFO Phase Sale Matcher
 
-  // Every verified presale purchase contributes exactly 20% of its NXBC amount
-
-  // to seller orders for the purchased phase. The remaining 80% is the admin
-
-  // portion. User proceeds are credited to the user's withdrawable token-sale
+  // Every verified presale purchase contributes the Admin-configured seller
+  // share (20% by default) of its NXBC amount to seller orders for the purchased
+  // phase. The remaining percentage is the company/treasury share. User proceeds are credited to the user's withdrawable token-sale
 
   // balance, but the actual NXBC return to treasury and USDT payout happen only
 
@@ -657,197 +785,123 @@ async function finalizeConfirmedPurchase(
     const order = await db.query.sellOrders.findFirst({ where: eq(sellOrders.id, sellOrderId) });
     if (!order || Number(order.userId) !== Number(sellerUserId)) throw new Error('Sale order not found or not owned by this wallet.');
     if (Number(order.phaseNumber) < 2 || Number(order.phaseNumber) > 5) throw new Error('Direct Buyer Match is available only for Phase 2 to Phase 5.');
+    const live = await getLivePresaleState();
+    if (!live.active || Number(live.currentPhase) !== Number(order.phaseNumber)) throw new Error(`Direct Buyer Match is available only while Phase ${Number(order.phaseNumber)} is active.`);
     if (!['open','partially_filled'].includes(String(order.status)) || Number(order.remainingTokens || 0) <= 0) throw new Error('This sale order is no longer open.');
     const token = DIRECT_INVITE_PREFIX + randomBytes(24).toString('hex'); const expiresAt = new Date(Date.now()+DIRECT_INVITE_TTL_MS);
-    await db.execute(sql`UPDATE direct_buyer_invites SET expires_at = NOW() WHERE sell_order_id=${sellOrderId} AND used_at IS NULL AND expires_at > NOW()`);
+    // Multiple active links are allowed. Each link is single-use and independently
+    // expires after 24 hours, so one seller can share several buyer links at once.
     await db.execute(sql`INSERT INTO direct_buyer_invites (seller_user_id,sell_order_id,phase_number,token_hash,expires_at) VALUES (${sellerUserId},${sellOrderId},${Number(order.phaseNumber)},${hashDirectInvite(token)},${expiresAt})`);
     return { token, expiresAt, phaseNumber:Number(order.phaseNumber), remainingTokens:Number(order.remainingTokens||0) };
   }
-  async function matchDirectBuyerFirst(params: { buyerUserId:number; buyerWallet:string; phaseNumber:number; buyerTokenAmount:number; inviteToken?:string }) {
-    const share=Math.max(0,Number(params.buyerTokenAmount)*0.20); if(share<=0||!params.inviteToken) return {matched:0,unmatched:share,match:null as any,inviteUsed:false};
-    await ensureDirectBuyerTables();
-    const rows=await db.execute(sql`SELECT * FROM direct_buyer_invites WHERE token_hash=${hashDirectInvite(params.inviteToken)} LIMIT 1`); const invite:any=(rows as any).rows?.[0]||(rows as any)[0];
+  async function matchDirectBuyerFirst(
+    params: { buyerUserId:number; buyerWallet:string; phaseNumber:number; buyerTokenAmount:number; inviteToken?:string },
+    conn: any,
+    sellerSharePercent: number,
+  ) {
+    const share=Math.max(0,Number(params.buyerTokenAmount)*(sellerSharePercent/100));
+    if(share<=0||!params.inviteToken) return {matched:0,unmatched:share,match:null as any,inviteUsed:false};
+    const rows=await conn.execute(sql`SELECT * FROM direct_buyer_invites WHERE token_hash=${hashDirectInvite(params.inviteToken)} FOR UPDATE`);
+    const invite:any=(rows as any).rows?.[0]||(rows as any)[0];
     if(!invite||invite.used_at||new Date(invite.expires_at).getTime()<=Date.now()) return {matched:0,unmatched:share,match:null as any,inviteUsed:false};
-    const buyer=String(params.buyerWallet||'').toLowerCase(); if(String(invite.claimed_by_wallet||'')&&String(invite.claimed_by_wallet).toLowerCase()!==buyer) return {matched:0,unmatched:share,match:null as any,inviteUsed:false};
+    const buyer=String(params.buyerWallet||'').toLowerCase();
+    if(String(invite.claimed_by_wallet||'')&&String(invite.claimed_by_wallet).toLowerCase()!==buyer) return {matched:0,unmatched:share,match:null as any,inviteUsed:false};
     if(Number(invite.phase_number)!==Number(params.phaseNumber)||Number(invite.seller_user_id)===Number(params.buyerUserId)) return {matched:0,unmatched:share,match:null as any,inviteUsed:false};
-    const order=await db.query.sellOrders.findFirst({where:eq(sellOrders.id,Number(invite.sell_order_id))});
-    if(!order||Number(order.userId)!==Number(invite.seller_user_id)||!['open','partially_filled'].includes(String(order.status))) return {matched:0,unmatched:share,match:null as any,inviteUsed:false};
-    const remaining=Math.max(0,Number(order.remainingTokens||0)), filled=Math.min(share,remaining), price=Number(order.tokenPrice||0);
+    const orderRows=await conn.execute(sql`SELECT * FROM sell_orders WHERE id=${Number(invite.sell_order_id)} FOR UPDATE`);
+    const order:any=(orderRows as any).rows?.[0]||(orderRows as any)[0];
+    if(!order||Number(order.user_id)!==Number(invite.seller_user_id)||!['open','partially_filled'].includes(String(order.status))) return {matched:0,unmatched:share,match:null as any,inviteUsed:false};
+    const remaining=Math.max(0,Number(order.remaining_tokens||0)), filled=Math.min(share,remaining), price=Number(order.token_price||0);
     if(filled<=0||!Number.isFinite(price)||price<=0) return {matched:0,unmatched:share,match:null as any,inviteUsed:false};
     const nextRemaining=Math.max(0,remaining-filled), nextStatus=nextRemaining<=1e-12?'completed':'partially_filled', grossUsdt=filled*price;
-    await db.update(sellOrders).set({remainingTokens:nextRemaining,status:nextStatus}).where(eq(sellOrders.id,order.id));
-    const seller=await db.query.users.findFirst({where:eq(users.id,order.userId)}); if(seller){
-      await db.update(users).set({totalEarnedUsdt:Number(seller.totalEarnedUsdt||0)+grossUsdt,availableUsdt:Number(seller.availableUsdt||0)+grossUsdt,updatedAt:new Date()}).where(eq(users.id,seller.id));
-      await db.insert(tokenSellLedgers).values({userId:seller.id,walletAddress:seller.walletAddress,phaseIndex:order.phaseNumber,phaseName:`Phase ${order.phaseNumber}`,tokenPrice:price,tokensSold:filled,tokensReturned:0,grossUsdt,withdrawnUsdt:0,serviceFeeUsdt:0,status:'unclaimed'});
+    await conn.update(sellOrders).set({remainingTokens:nextRemaining,status:nextStatus}).where(eq(sellOrders.id,Number(order.id)));
+    const seller=await conn.query.users.findFirst({where:eq(users.id,Number(order.user_id))});
+    if(seller){
+      await conn.update(users).set({ updatedAt:new Date() }).where(eq(users.id,seller.id));
+      await conn.insert(tokenSellLedgers).values({userId:seller.id,walletAddress:seller.walletAddress,phaseIndex:Number(order.phase_number),phaseName:`Phase ${order.phase_number}`,tokenPrice:price,tokensSold:filled,tokensReturned:0,grossUsdt,withdrawnUsdt:0,serviceFeeUsdt:0,status:'unclaimed'});
     }
-    await db.execute(sql`UPDATE direct_buyer_invites SET claimed_by_wallet=${buyer}, used_at=NOW() WHERE id=${Number(invite.id)} AND used_at IS NULL`);
-    return {matched:filled,unmatched:Math.max(0,share-filled),inviteUsed:true,match:{orderId:order.id,sellerUserId:order.userId,phaseNumber:order.phaseNumber,tokensSold:filled,tokenPrice:price,grossUsdt,remainingOrderTokens:nextRemaining,status:nextStatus}};
+    await conn.execute(sql`UPDATE direct_buyer_invites SET claimed_by_wallet=${buyer}, used_at=NOW() WHERE id=${Number(invite.id)} AND used_at IS NULL`);
+    return {matched:filled,unmatched:Math.max(0,share-filled),inviteUsed:true,match:{orderId:Number(order.id),sellerUserId:Number(order.user_id),phaseNumber:Number(order.phase_number),tokensSold:filled,tokenPrice:price,grossUsdt,remainingOrderTokens:nextRemaining,status:nextStatus}};
   }
+  async function getFifoShareConfig() {
+    // The FIFO split is an approved admin-controlled operational setting.
+    // It is read from the authoritative PostgreSQL systemConfig on each
+    // settlement, so a change applies to new matching activity without
+    // changing already-completed ledger records.
+    const DEFAULT_SELLER_SHARE = 20;
+    let sellerSharePercent = DEFAULT_SELLER_SHARE;
+    try {
+      const row = await db.query.systemConfigs.findFirst({
+        where: eq(systemConfigs.key, 'systemConfig'),
+      });
+      if (row?.value) {
+        const parsed = JSON.parse(row.value);
+        const configured = Number(parsed?.sellQueueSharePercent);
+        if (Number.isFinite(configured) && configured >= 0 && configured <= 100) {
+          sellerSharePercent = configured;
+        }
+      }
+    } catch (e) {
+      console.warn('[FIFO] Failed to read sellQueueSharePercent; using safe default 20%.', e);
+    }
+    const companySharePercent = 100 - sellerSharePercent;
+    return { sellerSharePercent, companySharePercent };
+  }
+
   async function matchVerifiedBuyerToPhaseQueue(params: {
-
     buyerUserId: number;
-
     phaseNumber: number;
-
     buyerTokenAmount: number;
-
     buyerWallet?: string;
     directBuyerInviteToken?: string;
-
   }) {
+    const { sellerSharePercent, companySharePercent } = await getFifoShareConfig();
+    const userShareTokens = Math.max(0, params.buyerTokenAmount * (sellerSharePercent / 100));
+    const adminShareTokens = Math.max(0, params.buyerTokenAmount * (companySharePercent / 100));
+    if (userShareTokens <= 0) return { userShareTokens: 0, adminShareTokens, unmatchedUserShareTokens: 0, matches: [], directMatch: null, sellerSharePercent, companySharePercent };
 
-    const userShareTokens = Math.max(0, params.buyerTokenAmount * 0.20);
-    const adminShareTokens = Math.max(0, params.buyerTokenAmount - userShareTokens);
-    if (userShareTokens <= 0) return { userShareTokens: 0, adminShareTokens, unmatchedUserShareTokens: 0, matches: [], directMatch: null };
-    const direct = await matchDirectBuyerFirst({ buyerUserId: params.buyerUserId, buyerWallet: params.buyerWallet || '', phaseNumber: params.phaseNumber, buyerTokenAmount: params.buyerTokenAmount, inviteToken: params.directBuyerInviteToken });
-    let remainingBuyerUserShare = direct.unmatched;
-
-
-
-    const orders = await db.select().from(sellOrders)
-
-      .where(and(eq(sellOrders.phaseNumber, params.phaseNumber), inArray(sellOrders.status, ['open', 'partially_filled'])))
-
-      .orderBy(asc(sellOrders.createdAt), asc(sellOrders.priority));
-
-
-
-    const matches: any[] = [];
-
-
-
-    // Prevent self-matching: a user's own purchase cannot fill their own sell order.
-
-    for (const order of orders) {
-
-      if (remainingBuyerUserShare <= 1e-12) break;
-
-      if (Number(order.userId) === Number(params.buyerUserId)) continue;
-
-
-
-      const remainingOrderTokens = Math.max(0, Number(order.remainingTokens || 0));
-
-      if (remainingOrderTokens <= 0) continue;
-
-
-
-      const filled = Math.min(remainingBuyerUserShare, remainingOrderTokens);
-
-      if (filled <= 0) continue;
-
-
-
-      const price = Number(order.tokenPrice || 0);
-
-      if (!Number.isFinite(price) || price <= 0) continue;
-
-      const grossUsdt = filled * price;
-
-      const nextRemaining = Math.max(0, remainingOrderTokens - filled);
-
-      const nextStatus = nextRemaining <= 1e-12 ? 'completed' : 'partially_filled';
-
-
-
-      await db.update(sellOrders).set({
-
-        remainingTokens: nextRemaining,
-
-        status: nextStatus,
-
-      }).where(eq(sellOrders.id, order.id));
-
-
-
-      const seller = await db.query.users.findFirst({ where: eq(users.id, order.userId) });
-
-      if (seller) {
-
-        // This is a ledger credit only. No NXBC is moved and no USDT is paid yet.
-
-        await db.update(users).set({
-
-          totalEarnedUsdt: Number(seller.totalEarnedUsdt || 0) + grossUsdt,
-
-          availableUsdt: Number(seller.availableUsdt || 0) + grossUsdt,
-
-          updatedAt: new Date(),
-
-        }).where(eq(users.id, seller.id));
-
-
-
-        await db.insert(tokenSellLedgers).values({
-
-          userId: seller.id,
-
-          walletAddress: seller.walletAddress,
-
-          phaseIndex: order.phaseNumber,
-
-          phaseName: `Phase ${order.phaseNumber}`,
-
-          tokenPrice: price,
-
-          tokensSold: filled,
-
-          tokensReturned: 0,
-
-          grossUsdt,
-
-          withdrawnUsdt: 0,
-
-          serviceFeeUsdt: 0,
-
-          status: 'unclaimed',
-
-        });
-
+    // Serialize matching for a phase. This prevents two simultaneous buyers from
+    // both consuming the same seller order balance.
+    await ensureDirectBuyerTables();
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`nxbc-fifo-phase-${params.phaseNumber}`}))`);
+      const direct = await matchDirectBuyerFirst(
+        { buyerUserId: params.buyerUserId, buyerWallet: params.buyerWallet || '', phaseNumber: params.phaseNumber, buyerTokenAmount: params.buyerTokenAmount, inviteToken: params.directBuyerInviteToken },
+        tx,
+        sellerSharePercent,
+      );
+      let remainingBuyerUserShare = direct.unmatched;
+      const orders = await tx.select().from(sellOrders)
+        .where(and(eq(sellOrders.phaseNumber, params.phaseNumber), inArray(sellOrders.status, ['open', 'partially_filled'])))
+        .orderBy(asc(sellOrders.priority), asc(sellOrders.createdAt), asc(sellOrders.id));
+      const matches: any[] = [];
+      for (const order of orders) {
+        if (remainingBuyerUserShare <= 1e-12) break;
+        if (Number(order.userId) === Number(params.buyerUserId)) continue;
+        const remainingOrderTokens = Math.max(0, Number(order.remainingTokens || 0));
+        if (remainingOrderTokens <= 0) continue;
+        const filled = Math.min(remainingBuyerUserShare, remainingOrderTokens);
+        if (filled <= 0) continue;
+        const price = Number(order.tokenPrice || 0);
+        if (!Number.isFinite(price) || price <= 0) continue;
+        const grossUsdt = filled * price;
+        const nextRemaining = Math.max(0, remainingOrderTokens - filled);
+        const nextStatus = nextRemaining <= 1e-12 ? 'completed' : 'partially_filled';
+        await tx.update(sellOrders).set({ remainingTokens: nextRemaining, status: nextStatus }).where(eq(sellOrders.id, order.id));
+        const seller = await tx.query.users.findFirst({ where: eq(users.id, order.userId) });
+        if (seller) {
+          await tx.update(users).set({ updatedAt: new Date() }).where(eq(users.id, seller.id));
+          await tx.insert(tokenSellLedgers).values({
+            userId: seller.id, walletAddress: seller.walletAddress, phaseIndex: order.phaseNumber,
+            phaseName: `Phase ${order.phaseNumber}`, tokenPrice: price, tokensSold: filled,
+            tokensReturned: 0, grossUsdt, withdrawnUsdt: 0, serviceFeeUsdt: 0, status: 'unclaimed',
+          });
+        }
+        matches.push({ orderId: order.id, sellerUserId: order.userId, phaseNumber: order.phaseNumber, tokensSold: filled, tokenPrice: price, grossUsdt, remainingOrderTokens: nextRemaining, status: nextStatus });
+        remainingBuyerUserShare -= filled;
       }
-
-
-
-      matches.push({
-
-        orderId: order.id,
-
-        sellerUserId: order.userId,
-
-        phaseNumber: order.phaseNumber,
-
-        tokensSold: filled,
-
-        tokenPrice: price,
-
-        grossUsdt,
-
-        remainingOrderTokens: nextRemaining,
-
-        status: nextStatus,
-
-      });
-
-      remainingBuyerUserShare -= filled;
-
-    }
-
-
-
-    return {
-
-      userShareTokens,
-
-      adminShareTokens,
-
-      unmatchedUserShareTokens: Math.max(0, remainingBuyerUserShare),
-
-      matches,
-
-    };
-
+      return { userShareTokens, adminShareTokens, unmatchedUserShareTokens: Math.max(0, remainingBuyerUserShare), matches, directMatch: direct.match || null, sellerSharePercent, companySharePercent };
+    });
   }
-
 
 
 // ---------------------------------------------------------------------------
@@ -944,6 +998,46 @@ async function verifyPendingPresalePurchases() {
 }
 
 
+async function ensureProductionSafetyTables() {
+  // Immutable per-phase FIFO identity. `priority` may be changed by system
+  // configuration, but `fifo_number` is permanent and is what users see.
+  await db.execute(sql`ALTER TABLE sell_orders ADD COLUMN IF NOT EXISTS fifo_number INTEGER NOT NULL DEFAULT 0`);
+  await db.execute(sql`UPDATE sell_orders SET fifo_number = priority WHERE fifo_number = 0 AND priority > 0`);
+  await db.execute(sql`CREATE SEQUENCE IF NOT EXISTS sell_orders_fifo_seq`);
+  await db.execute(sql`SELECT setval('sell_orders_fifo_seq', GREATEST(1, COALESCE((SELECT MAX(fifo_number) FROM sell_orders), 0) + 1), false)`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS sell_orders_phase_fifo_idx ON sell_orders(phase_number, fifo_number)`);
+  // DEX/LIVE/HOLD allocations are persistent reservations and must never be
+  // available for a later presale/FIFO allocation.
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS live_hold_allocations (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      wallet_address TEXT NOT NULL,
+      purchase_tx_hash TEXT,
+      tokens_allocated DOUBLE PRECISION NOT NULL,
+      status TEXT NOT NULL DEFAULT 'held',
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS live_hold_allocations_user_idx
+    ON live_hold_allocations(user_id)
+  `);
+  await db.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS live_hold_allocations_purchase_tx_uq
+    ON live_hold_allocations(purchase_tx_hash)
+    WHERE purchase_tx_hash IS NOT NULL
+  `);
+  // A blockchain purchase tx can only settle once. Partial unique index keeps
+  // legacy NULL tx hashes valid while preventing duplicate real tx settlements.
+  await db.execute(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS transactions_buy_presale_tx_uq
+    ON transactions(tx_hash)
+    WHERE type='buy_presale' AND tx_hash IS NOT NULL
+  `);
+}
+
 async function ensureTokenWithdrawalSettlementTable() {
   await db.execute(sql`CREATE TABLE IF NOT EXISTS token_withdrawal_settlements (
     id BIGSERIAL PRIMARY KEY,
@@ -966,10 +1060,63 @@ async function ensureTokenWithdrawalSettlementTable() {
   await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS token_withdrawal_settlements_nonce_uq ON token_withdrawal_settlements (payout_nonce) WHERE payout_nonce IS NOT NULL`);
 }
 
+
+async function ensureInitialAdminPin() {
+  const existing = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'admin_pin') });
+  if (existing?.value) return;
+  const initialPin = String(process.env.ADMIN_PIN_INITIAL || '').trim();
+  if (!initialPin || !/^\d{6,}$/.test(initialPin)) {
+    throw new Error('ADMIN_PIN_INITIAL is required on first production startup and must be at least 6 digits.');
+  }
+  await db.insert(systemConfigs).values({
+    key: 'admin_pin',
+    value: hashPin(initialPin),
+    description: 'Master Admin Security PIN (hashed)',
+  });
+  console.log('[ADMIN] Initial security PIN stored as a salted hash.');
+}
+
+async function ensureWalletSeparationMigration() {
+  // One-time reconciliation for production data: the old `available_usdt`
+  // mixed MLM and token-sale proceeds. From this release onward token-sale
+  // proceeds are authoritative in token_sell_ledgers and available_usdt is MLM-only.
+  const key = 'wallet_separation_v1';
+  try {
+    const flag = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, key) });
+    if (flag?.value === 'done') return;
+
+    await db.execute(sql`
+      UPDATE users u
+      SET available_usdt = GREATEST(
+        0,
+        COALESCE(u.available_usdt, 0) - COALESCE((
+          SELECT SUM(GREATEST(0, l.gross_usdt - l.withdrawn_usdt))
+          FROM token_sell_ledgers l
+          WHERE l.user_id = u.id
+            AND l.status IN ('unclaimed','partially_claimed')
+        ), 0)
+      )
+    `);
+    if (flag) {
+      await db.update(systemConfigs).set({ value: 'done', updatedAt: new Date() }).where(eq(systemConfigs.key, key));
+    } else {
+      await db.insert(systemConfigs).values({ key, value: 'done', description: 'One-time separation of Token Sale Wallet and MLM Wallet balances' });
+    }
+    console.log('[WALLET] Token-sale and MLM balances separated successfully.');
+  } catch (e:any) {
+    console.error('[WALLET] Separation migration failed:', e?.message || e);
+    throw e;
+  }
+}
+
 async function startServer() {
-  try { await ensureDirectBuyerTables(); } catch (e) { console.error("[DIRECT MATCH] table initialization failed:", e); }
+  validateProductionEnvironment();
+  try { await ensureProductionSafetyTables(); } catch (e) { console.error("[PRODUCTION SAFETY] table initialization failed:", e); throw e; }
+  try { await ensureDirectBuyerTables(); } catch (e) { console.error("[DIRECT MATCH] table initialization failed:", e); throw e; }
+  try { await ensureWalletSeparationMigration(); } catch (e) { console.error("[WALLET] separation initialization failed:", e); throw e; }
+  try { await ensureInitialAdminPin(); } catch (e) { console.error("[ADMIN] initial PIN configuration failed:", e); throw e; }
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT || 3000);
 
   app.use(express.json());
 
@@ -1055,6 +1202,7 @@ async function startServer() {
   app.get("/api/wallet/token-sell-ledger", async (req, res) => {
     try {
       const { walletAddress } = req.query;
+      if (!requireWallet(req, res, String(walletAddress || ""))) return;
       if (!walletAddress || typeof walletAddress !== "string") {
         return res.status(400).json({ error: "walletAddress is required" });
       }
@@ -1184,14 +1332,8 @@ async function startServer() {
         status: 'unclaimed',
       }).returning();
 
-      // Update user's availableUsdt in DB
-      await db.update(users)
-        .set({
-          availableUsdt: (user.availableUsdt || 0) + calculatedGross,
-          totalEarnedUsdt: (user.totalEarnedUsdt || 0) + calculatedGross,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, user.id));
+      // Token-sale proceeds belong only to the Token Sale Wallet ledger.
+      // They must never be added to the MLM wallet balance.
 
       return res.json({
         success: true,
@@ -1220,6 +1362,9 @@ async function startServer() {
       if (!walletAddress || !amountUsdt || Number(amountUsdt) <= 0) {
         return res.status(400).json({ error: "Invalid wallet address or withdrawal amount" });
       }
+      if (walletType !== 'mlm' && walletType !== 'token_sell') {
+        return res.status(400).json({ error: "Invalid withdrawal wallet type." });
+      }
 
       // --- AUTH: caller must prove they control walletAddress ---------------
       if (!signature || !timestamp) {
@@ -1244,7 +1389,7 @@ async function startServer() {
       usedSignatures.add(sigKey);
       // ------------------------------------------------------------------------
 
-      const grossAmount = Number(amountUsdt);
+      const grossAmount = Number(Number(amountUsdt).toFixed(4));
       const normalizedAddress = walletAddress.toLowerCase();
 
       // Read the live fee from the same admin-managed systemConfig used by the UI.
@@ -1260,8 +1405,8 @@ async function startServer() {
       if (!Number.isFinite(withdrawalFeePercent) || withdrawalFeePercent < 0 || withdrawalFeePercent > 100) {
         return res.status(500).json({ error: "Invalid withdrawal fee configuration. Admin must correct it before withdrawals." });
       }
-      const serviceFee = grossAmount * (withdrawalFeePercent / 100);
-      const netPayout = Math.max(0, grossAmount - serviceFee);
+      const serviceFee = Number((grossAmount * (withdrawalFeePercent / 100)).toFixed(4));
+      const netPayout = Number(Math.max(0, grossAmount - serviceFee).toFixed(4));
 
       // Look up user in database — do NOT auto-create with a pre-loaded balance,
       // an unknown wallet has nothing to withdraw.
@@ -1273,14 +1418,25 @@ async function startServer() {
         return res.status(404).json({ error: "User not found. Nothing to withdraw." });
       }
 
-      // SECURITY: never invent balance to cover a withdrawal request. Only pay
-      // out what the ledger actually shows the user has earned/available.
-      const currentAvailable = user.availableUsdt || 0;
-      if (currentAvailable < grossAmount) {
+      // SECURITY: balances are strictly separated. Token-sale withdrawals can
+      // spend only token_sell_ledgers; MLM withdrawals can spend only users.available_usdt.
+      let currentAvailable = Number(user.availableUsdt || 0);
+      if (walletType === 'token_sell') {
+        const balanceRows = await db.execute(sql`
+          SELECT COALESCE(SUM(GREATEST(0, gross_usdt - withdrawn_usdt)), 0) AS available
+          FROM token_sell_ledgers
+          WHERE wallet_address=${normalizedAddress}
+            AND status IN ('unclaimed','partially_claimed')
+        `);
+        const row:any = (balanceRows as any).rows?.[0] || (balanceRows as any)[0];
+        currentAvailable = Number(row?.available || 0);
+      }
+      if (currentAvailable + 1e-9 < grossAmount) {
         return res.status(400).json({
-          error: "Insufficient available balance for this withdrawal.",
+          error: walletType === 'token_sell' ? 'Insufficient Token Sale Wallet balance.' : 'Insufficient MLM Wallet balance.',
           availableUsdt: currentAvailable,
           requestedUsdt: grossAmount,
+          walletType,
         });
       }
 
@@ -1396,7 +1552,7 @@ async function startServer() {
         : Number(tokensReturned) || 0;
 
       let txHash = "";
-      let executionMode = "simulated_blockchain";
+      let executionMode = "real_bsc_blockchain";
 
       const rawKey = (process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY || "").trim();
       const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
@@ -1625,14 +1781,12 @@ async function startServer() {
               txHash: txHash,
             }).returning();
 
+            // Token-sale ledger rows are the only balance source for this wallet.
+            // Do not debit users.available_usdt here; that field is MLM-only.
             const lockedUser = await tx.query.users.findFirst({ where: eq(users.id, user.id) });
             if (!lockedUser) throw new Error("User disappeared while finalizing withdrawal.");
-            const availableNow = Number(lockedUser.availableUsdt || 0);
-            if (availableNow < grossAmount) throw new Error("Available balance changed before finalization; manual reconciliation required.");
-
             await tx.update(users)
               .set({
-                availableUsdt: Math.max(0, availableNow - grossAmount),
                 totalWithdrawnUsdt: Number(lockedUser.totalWithdrawnUsdt || 0) + grossAmount,
                 updatedAt: new Date(),
               })
@@ -1691,6 +1845,12 @@ async function startServer() {
         ? await db.query.transactions.findFirst({ where: eq(transactions.id, Number(completedSettlement.transaction_id)) })
         : null;
       const latestUser = await db.query.users.findFirst({ where: eq(users.id, user.id) });
+      const remainingTokenSaleRows = await db.execute(sql`
+        SELECT COALESCE(SUM(GREATEST(0, gross_usdt - withdrawn_usdt)), 0) AS available_usdt
+        FROM token_sell_ledgers
+        WHERE user_id=${user.id} AND status IN ('unclaimed','partially_claimed')
+      `);
+      const remainingTokenSaleRow:any = (remainingTokenSaleRows as any).rows?.[0] || {};
       return res.json({
         success: true,
         message: `Token Auto-Sell Settlement Payout (Net $${netPayout.toFixed(2)} after ${withdrawalFeePercent}% Fee) processed successfully!`,
@@ -1704,7 +1864,7 @@ async function startServer() {
         phaseBreakdown,
         executionMode,
         transaction: finalTx,
-        newAvailableBalance: Number(latestUser?.availableUsdt || 0),
+        newAvailableBalance: Number(remainingTokenSaleRow.available_usdt || 0),
       });
     } catch (error: any) {
       console.error("Error in /api/wallet/withdraw:", error);
@@ -1712,10 +1872,42 @@ async function startServer() {
     }
   });
 
+  // Wallet ownership authentication for private dashboard data.
+  app.get("/api/auth/nonce", async (req, res) => {
+    try {
+      const wallet = String(req.query.walletAddress || "").toLowerCase();
+      if (!/^0x[a-f0-9]{40}$/.test(wallet)) return res.status(400).json({ error: "Valid wallet address is required." });
+      const timestamp = Date.now();
+      const message = `${USER_AUTH_AUDIENCE}\nWallet: ${wallet}\nTimestamp: ${timestamp}`;
+      res.json({ wallet, timestamp, message, expiresInMs: USER_SIGNATURE_MAX_AGE_MS });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to create authentication challenge." });
+    }
+  });
+
+  app.post("/api/auth/verify", async (req, res) => {
+    try {
+      const wallet = String(req.body?.walletAddress || "").toLowerCase();
+      const timestamp = Number(req.body?.timestamp);
+      const signature = String(req.body?.signature || "");
+      if (!/^0x[a-f0-9]{40}$/.test(wallet) || !Number.isFinite(timestamp) || !signature) return res.status(400).json({ error: "Invalid authentication request." });
+      const age = Date.now() - timestamp;
+      if (age < 0 || age > USER_SIGNATURE_MAX_AGE_MS) return res.status(401).json({ error: "Authentication signature expired. Please retry." });
+      const message = `${USER_AUTH_AUDIENCE}\nWallet: ${wallet}\nTimestamp: ${timestamp}`;
+      const recovered = ethers.verifyMessage(message, signature).toLowerCase();
+      if (recovered !== wallet) return res.status(401).json({ error: "Wallet signature does not match the connected wallet." });
+      const token = makeUserSession(wallet, Date.now());
+      res.json({ success: true, token, expiresInMs: USER_SESSION_TTL_MS, wallet });
+    } catch (error: any) {
+      res.status(401).json({ error: error.message || "Wallet authentication failed." });
+    }
+  });
+
   // Get or Create User by Wallet Address
   app.post("/api/users/sync", async (req, res) => {
     try {
       const { walletAddress, referredBy } = req.body;
+      if (!requireWallet(req, res, String(walletAddress || ""))) return;
       if (!walletAddress) {
         return res.status(400).json({ error: "walletAddress is required" });
       }
@@ -1746,10 +1938,16 @@ async function startServer() {
           }
         }
 
-        return res.json({ user: newUser, isNew: true });
+        return res.json({ user: newUser, isNew: true, tokenSaleAvailableUsdt: 0 });
       }
 
-      return res.json({ user: existingUser, isNew: false });
+      const tokenSaleRows = await db.execute(sql`
+        SELECT COALESCE(SUM(GREATEST(0, gross_usdt - withdrawn_usdt)), 0) AS available_usdt
+        FROM token_sell_ledgers
+        WHERE user_id=${existingUser.id} AND status IN ('unclaimed','partially_claimed')
+      `);
+      const tokenSaleRow:any = (tokenSaleRows as any).rows?.[0] || {};
+      return res.json({ user: existingUser, isNew: false, tokenSaleAvailableUsdt: Number(tokenSaleRow.available_usdt || 0) });
     } catch (error: any) {
       console.error("Error in /api/users/sync:", error);
       res.status(500).json({ error: error.message });
@@ -1760,6 +1958,7 @@ async function startServer() {
   app.get("/api/users/:walletAddress", async (req, res) => {
     try {
       const { walletAddress } = req.params;
+      if (!requireWallet(req, res, walletAddress)) return;
       const user = await db.query.users.findFirst({
         where: eq(users.walletAddress, walletAddress.toLowerCase()),
       });
@@ -1771,6 +1970,15 @@ async function startServer() {
       // Fetch user's recent transactions & earnings
       const userTxs = await db.select().from(transactions).where(eq(transactions.userId, user.id)).orderBy(desc(transactions.createdAt)).limit(100);
       const userEarnings = await db.select().from(levelEarnings).where(eq(levelEarnings.beneficiaryId, user.id)).orderBy(desc(levelEarnings.createdAt)).limit(100);
+      const tokenSaleTotals = await db.execute(sql`
+        SELECT
+          COALESCE(SUM(GREATEST(0, gross_usdt - withdrawn_usdt)), 0) AS available_usdt,
+          COALESCE(SUM(withdrawn_usdt), 0) AS withdrawn_usdt
+        FROM token_sell_ledgers
+        WHERE user_id=${user.id}
+          AND status IN ('unclaimed','partially_claimed','fully_claimed')
+      `);
+      const tokenSaleRow:any = (tokenSaleTotals as any)?.rows?.[0] || {};
       const earningTotals = await db.execute(sql`
         SELECT
           COALESCE(SUM(CASE WHEN level_number > 0 THEN commission_usdt ELSE 0 END), 0) AS level_income_usdt,
@@ -1782,6 +1990,8 @@ async function startServer() {
 
       res.json({
         user,
+        tokenSaleAvailableUsdt: Number(tokenSaleRow.available_usdt || 0),
+        tokenSaleWithdrawnUsdt: Number(tokenSaleRow.withdrawn_usdt || 0),
         transactions: userTxs,
         earnings: userEarnings,
         levelIncomeUsdt: Number(earningRow.level_income_usdt || 0),
@@ -1797,6 +2007,7 @@ async function startServer() {
   app.get("/api/team/:walletAddress", async (req, res) => {
     try {
       const walletAddress = String(req.params.walletAddress || '').trim().toLowerCase();
+      if (!requireWallet(req, res, walletAddress)) return;
       if (!walletAddress) return res.status(400).json({ error: "walletAddress is required" });
 
       const leader = await db.query.users.findFirst({ where: eq(users.walletAddress, walletAddress) });
@@ -1955,49 +2166,44 @@ async function startServer() {
         return res.status(400).json({ error: "Missing required purchase fields" });
       }
 
-      // --- SERVER-SIDE PRICE & SUPPLY VALIDATION -----------------------------
-      // Never trust client-supplied price/amount blindly: recompute against the
-      // authoritative active phase config and reject mismatched or oversold buys.
-      const configRecord = await db.query.systemConfigs.findFirst({
-        where: eq(systemConfigs.key, 'phases'),
-      });
-
-      let activePhase: any = null;
-      if (configRecord && configRecord.value) {
-        const phases = JSON.parse(configRecord.value);
-        activePhase = phases.find((p: any) => p.status === 'active') || null;
+      // --- SERVER-SIDE LIVE CONTRACT VALIDATION ------------------------------
+      // The deployed NXBCPresale contract on BSC Mainnet is authoritative for
+      // phase, price, remaining supply and whether the presale is active.
+      const live = await getLivePresaleState();
+      if (!live.active) {
+        return res.status(403).json({ error: 'Presale is currently inactive on the live contract.' });
       }
 
-      let liveSystem: any = {};
-      try {
-        const systemRow = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'systemConfig') });
-        if (systemRow?.value) liveSystem = JSON.parse(systemRow.value);
-      } catch {}
-      if (liveSystem.presalePaused === true) return res.status(403).json({ error: 'Presale is currently paused by administrator.' });
-
+      const activePhaseNumber = live.currentPhase;
+      const activePhase = live.phases[activePhaseNumber - 1];
       if (!activePhase) {
-        return res.status(400).json({ error: "No active presale phase is configured." });
+        return res.status(400).json({ error: 'No valid active phase exists on the live contract.' });
       }
 
-      const activePhasePrice = Number(activePhase.rate ?? activePhase.tokenPrice ?? activePhase.price);
-      if (!Number.isFinite(activePhasePrice) || activePhasePrice <= 0) return res.status(500).json({ error: 'Active phase has an invalid token price configuration.' });
-      const PRICE_TOLERANCE = 0.0001;
-      if (Math.abs(Number(tokenPrice) - activePhasePrice) > PRICE_TOLERANCE) {
-        return res.status(400).json({ error: "Submitted token price does not match the active phase price." });
+      const activePhasePrice = live.price;
+      const submittedPrice = Number(tokenPrice);
+      if (!Number.isFinite(submittedPrice) || Math.abs(submittedPrice - activePhasePrice) > 0.000001) {
+        return res.status(400).json({ error: 'Submitted token price does not match the live contract phase price.' });
       }
 
-      const expectedTokens = Number(amountUsdt) / activePhasePrice;
-      if (Math.abs(expectedTokens - Number(tokenAmount)) / Math.max(expectedTokens, 1) > 0.01) {
-        return res.status(400).json({ error: "Token amount does not match amountUsdt / current phase price." });
+      const requestedUsdt = Number(amountUsdt);
+      const requestedTokens = Number(tokenAmount);
+      if (!Number.isFinite(requestedUsdt) || requestedUsdt <= 0 || !Number.isFinite(requestedTokens) || requestedTokens <= 0) {
+        return res.status(400).json({ error: 'Invalid purchase amount.' });
       }
 
-      const activePhaseNumber = Number(activePhase.phaseNumber || phaseIndex || 1);
-      const activeSales = await getPhaseSalesSnapshot(activePhase);
-      const activeTotalSold = activeSales.totalSold;
-      const remainingInPhase = Math.max(0, Number(activePhase.totalSupply) - activeTotalSold);
-      if (Number(tokenAmount) > remainingInPhase) {
-        return res.status(400).json({ error: "Purchase exceeds remaining supply in the active phase.", remainingInPhase });
+      const expectedTokens = requestedUsdt / activePhasePrice;
+      if (Math.abs(expectedTokens - requestedTokens) / Math.max(expectedTokens, 1) > 0.000001) {
+        return res.status(400).json({ error: 'Token amount does not match the live contract price.' });
       }
+
+      if (requestedTokens > live.currentRemaining + 1e-12) {
+        return res.status(400).json({
+          error: 'Purchase exceeds the live phase remaining supply.',
+          remainingInPhase: live.currentRemaining,
+        });
+      }
+      // ------------------------------------------------------------------------
 
       // SECURITY: a syntactically valid tx hash is NOT proof of payment. Verify
       // the real BSC receipt, buyer, exact USDT treasury payment, and exact NXBC
@@ -2007,7 +2213,10 @@ async function startServer() {
       const hasValidTxHash = typeof txHash === 'string' && /^0x[a-fA-F0-9]{64}$/.test(txHash);
       if (hasValidTxHash) {
         const chainCheck = await verifyPresalePurchaseOnChain({
-          txHash, buyer: walletAddress, usdtAmount: Number(amountUsdt), nxbcAmount: Number(tokenAmount),
+          txHash,
+          buyer: walletAddress,
+          usdtAmount: requestedUsdt,
+          nxbcAmount: requestedTokens,
         });
         if (chainCheck.ok) purchaseStatus = 'completed';
         else if (chainCheck.pending) purchaseStatus = 'pending_verification';
@@ -2034,7 +2243,7 @@ async function startServer() {
 
       // Never allow one real blockchain transaction to create multiple database
       // purchases. A valid tx hash is a one-time settlement proof.
-      if (purchaseStatus === 'completed' && txHash) {
+      if (hasValidTxHash && txHash) {
         const existingTx = await db.query.transactions.findFirst({ where: eq(transactions.txHash, txHash) });
         if (existingTx) {
           return res.status(409).json({ success: false, error: "This blockchain transaction has already been recorded as a purchase.", transaction: existingTx });
@@ -2048,7 +2257,7 @@ async function startServer() {
         amountUsdt: Number(amountUsdt),
         tokenAmount: Number(tokenAmount),
         tokenPrice: activePhasePrice,
-        phaseIndex: Number(activePhase.phaseNumber || phaseIndex || 1),
+        phaseIndex: activePhaseNumber,
         status: purchaseStatus,
         txHash: hasValidTxHash ? txHash : null,
       }).returning();
@@ -2068,7 +2277,7 @@ async function startServer() {
         user,
         Number(tokenAmount),
         Number(amountUsdt),
-        Number(activePhase.phaseNumber || phaseIndex || 1)
+        activePhaseNumber
       );
 
       // VERIFIED PURCHASE -> FIFO MATCHING. This is the only place where a real
@@ -2079,43 +2288,15 @@ async function startServer() {
       const fifoSettlement = await matchVerifiedBuyerToPhaseQueue({
         buyerUserId: user.id,
         buyerWallet: normalizedAddress,
-        phaseNumber: Number(activePhase.phaseNumber || phaseIndex || 1),
+        phaseNumber: activePhaseNumber,
         buyerTokenAmount: Number(tokenAmount),
         directBuyerInviteToken: typeof directBuyerInviteToken === 'string' ? directBuyerInviteToken : undefined,
       });
 
-      // NOTE: Token delivery now happens ON-CHAIN via the Presale Smart Contract's
-      // buyTokens() function (called directly from the user's wallet in BuyTokenModal.tsx).
-      // The hot-wallet dispatch below is intentionally DISABLED to avoid double-sending
-      // NXBC to the user (once from the contract, once from this backend).
-      // Set ENABLE_HOT_WALLET_DISPATCH=true in .env ONLY if you switch back to the
-      // direct-transfer (non-contract) purchase flow.
-      // At this point purchaseStatus === 'completed', which only happens when
-      // hasPlausibleTxHash was true, so `txHash` is guaranteed to hold a real value.
-      let tokenDispatchTxHash = txHash;
-      const hotWalletDispatchEnabled = process.env.ENABLE_HOT_WALLET_DISPATCH === "true";
-
-      if (hotWalletDispatchEnabled) {
-        const privateKey = process.env.PAYOUT_HOT_WALLET_PRIVATE_KEY || process.env.SAFEPAL_PRIVATE_KEY;
-        const rpcUrl = process.env.RPC_URL || "https://bsc-dataseed.binance.org/";
-        const nxbcTokenContractAddress = process.env.NXBC_TOKEN_ADDRESS || "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1";
-
-        if (privateKey && privateKey.startsWith("0x") && privateKey.length >= 64) {
-          try {
-            const provider = new ethers.JsonRpcProvider(rpcUrl);
-            const wallet = new ethers.Wallet(privateKey, provider);
-            const nxbcContract = new ethers.Contract(nxbcTokenContractAddress, ERC20_ABI, wallet);
-            const parsedTokens = ethers.parseUnits(Number(tokenAmount).toString(), 18);
-
-            console.log(`[TOKEN DISPATCH] Transferring ${tokenAmount} NXBC tokens directly to user wallet ${walletAddress}...`);
-            const transferTx = await nxbcContract.transfer(walletAddress, parsedTokens);
-            console.log(`[TOKEN DISPATCH] Tokens sent on-chain! TxHash: ${transferTx.hash}`);
-            tokenDispatchTxHash = transferTx.hash;
-          } catch (dispatchErr: any) {
-            console.error("[TOKEN DISPATCH] Automatic token dispatch notice:", dispatchErr?.message);
-          }
-        }
-      }
+      // SECURITY: NXBC is delivered exclusively by the presale smart contract
+      // through the user's wallet transaction. Never perform a second hot-wallet
+      // transfer here, because that can double-credit the buyer.
+      const tokenDispatchTxHash = txHash;
 
       res.json({ 
         success: true, 
@@ -2128,8 +2309,8 @@ async function startServer() {
           : `Investor Mode ($${newInvested.toFixed(2)} / $100 USD to qualify for MLM commissions)`,
         fifoSettlement: {
           buyerTokens: Number(tokenAmount),
-          userSharePercent: 20,
-          adminSharePercent: 80,
+          userSharePercent: fifoSettlement.sellerSharePercent,
+          adminSharePercent: fifoSettlement.companySharePercent,
           userShareTokens: fifoSettlement.userShareTokens,
           adminShareTokens: fifoSettlement.adminShareTokens,
           unmatchedUserShareTokens: fifoSettlement.unmatchedUserShareTokens,
@@ -2156,12 +2337,13 @@ async function startServer() {
          totalUsdtValue: sellOrders.totalUsdtValue,
          status: sellOrders.status,
          priority: sellOrders.priority,
+         fifoNumber: sellOrders.fifoNumber,
          createdAt: sellOrders.createdAt
       })
       .from(sellOrders)
       .leftJoin(users, eq(sellOrders.userId, users.id))
       .where(inArray(sellOrders.status, ['open', 'partially_filled']))
-      .orderBy(asc(sellOrders.createdAt), asc(sellOrders.priority));
+      .orderBy(asc(sellOrders.priority), asc(sellOrders.createdAt), asc(sellOrders.id));
       res.json({ orders });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -2182,12 +2364,13 @@ async function startServer() {
         tokenPrice: sellOrders.tokenPrice,
         status: sellOrders.status,
         priority: sellOrders.priority,
+        fifoNumber: sellOrders.fifoNumber,
         createdAt: sellOrders.createdAt,
       })
       .from(sellOrders)
       .leftJoin(users, eq(sellOrders.userId, users.id))
       .where(inArray(sellOrders.status, ['open', 'partially_filled']))
-      .orderBy(asc(sellOrders.phaseNumber), asc(sellOrders.createdAt), asc(sellOrders.priority), asc(sellOrders.id));
+      .orderBy(asc(sellOrders.phaseNumber), asc(sellOrders.priority), asc(sellOrders.createdAt), asc(sellOrders.id));
 
       const byPhase: Record<number, any[]> = {};
       for (const row of activeOrders) {
@@ -2217,6 +2400,7 @@ async function startServer() {
             tokenPrice: Number(row.tokenPrice || 0),
             status: row.status,
             priority: Number(row.priority || 0),
+            fifoNumber: Number(row.fifoNumber || row.priority || 0),
             position,
             aheadTokens,
             expectedRemainingUsdt: remaining * Number(row.tokenPrice || 0),
@@ -2257,25 +2441,13 @@ async function startServer() {
         where: eq(users.walletAddress, normalizedAddress),
       });
 
-      const confirmedTxHash = txHash || `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}`;
-
-      if (user) {
-        // Record in transactions database
-        await db.insert(transactions).values({
-          userId: user.id,
-          type: 'referral_bonus',
-          amountUsdt: Number(amount),
-          tokenAmount: Number(amount),
-          tokenPrice: 1.0,
-          status: 'completed',
-          txHash: confirmedTxHash,
-        });
-      }
-
-      return res.json({
-        success: true,
-        message: `Instant 1:1 swap executed: ${amount} ${fromToken} ➔ ${amount} ${toToken}`,
-        txHash: confirmedTxHash,
+      // SECURITY: Never create a completed financial transaction from client input.
+      // This endpoint must only be enabled after a server-side, on-chain settlement
+      // implementation is in place (including receipt, sender, recipient, amount,
+      // token, chain-id and replay/duplicate checks).
+      return res.status(501).json({
+        success: false,
+        error: 'Instant swap is temporarily disabled until server-side on-chain verification is enabled.',
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message || "Swap execution failed" });
@@ -2290,10 +2462,13 @@ async function startServer() {
   app.get("/api/presale/allocation/:walletAddress", async (req, res) => {
     try {
       const walletAddress = String(req.params.walletAddress || '').toLowerCase();
+      if (!requireWallet(req, res, walletAddress)) return;
       if (!/^0x[a-f0-9]{40}$/.test(walletAddress)) return res.status(400).json({ error: 'Invalid wallet address.' });
       const user = await db.query.users.findFirst({ where: eq(users.walletAddress, walletAddress) });
       if (!user) return res.json({ success: true, totalPurchasedTokens: 0, allocations: {} });
       const orders = await db.select().from(sellOrders).where(eq(sellOrders.userId, user.id));
+      const liveRows = await db.execute(sql`SELECT COALESCE(SUM(tokens_allocated),0) AS allocated FROM live_hold_allocations WHERE user_id=${user.id} AND status='held'`);
+      const liveHeld = Number(((liveRows as any).rows?.[0] || (liveRows as any)[0])?.allocated || 0);
       const allocations: Record<number, { allocated: number; sold: number }> = {};
       for (const o of orders) {
         const phase = Number(o.phaseNumber);
@@ -2301,7 +2476,8 @@ async function startServer() {
         allocations[phase].allocated += Number(o.amountTokens || 0);
         allocations[phase].sold += Math.max(0, Number(o.amountTokens || 0) - Number(o.remainingTokens || 0));
       }
-      res.json({ success: true, totalPurchasedTokens: Number(user.totalPurchasedTokens || 0), allocations });
+      allocations[6] = { allocated: liveHeld, sold: 0 };
+      res.json({ success: true, totalPurchasedTokens: Number(user.totalPurchasedTokens || 0), allocations, liveHoldTokens: liveHeld });
     } catch (error: any) {
       console.error('Error fetching phase allocation:', error);
       res.status(500).json({ error: 'Failed to load phase allocation.' });
@@ -2318,7 +2494,21 @@ async function startServer() {
       if (!user) return res.json({ success: true, orders: [] });
       const orders = await db.select().from(sellOrders)
         .where(eq(sellOrders.userId, user.id))
-        .orderBy(desc(sellOrders.createdAt), desc(sellOrders.id));
+        .orderBy(asc(sellOrders.priority), asc(sellOrders.createdAt), asc(sellOrders.id));
+      const allActive = await db.select({ id: sellOrders.id, phaseNumber: sellOrders.phaseNumber, fifoNumber: sellOrders.fifoNumber, priority: sellOrders.priority })
+        .from(sellOrders)
+        .where(inArray(sellOrders.status, ['open', 'partially_filled']))
+        .orderBy(asc(sellOrders.phaseNumber), asc(sellOrders.priority), asc(sellOrders.createdAt), asc(sellOrders.id));
+      const positionMap = new Map<number, number>();
+      const runningByPhase = new Map<number, number>();
+      const seenByPhase = new Map<number, number>();
+      for (const o of allActive as any[]) {
+        const phase = Number(o.phaseNumber);
+        if (!runningByPhase.has(phase)) runningByPhase.set(phase, Number(o.fifoNumber || o.priority || 0));
+        const idx = seenByPhase.get(phase) || 0;
+        positionMap.set(Number(o.id), idx);
+        seenByPhase.set(phase, idx + 1);
+      }
       res.json({
         success: true,
         orders: orders.map((o: any) => {
@@ -2366,47 +2556,74 @@ async function startServer() {
 
   app.post("/api/presale/allocation", async (req, res) => {
     try {
+      if (!requireWallet(req, res, String(req.body?.walletAddress || ""))) return;
+      // Each allocation belongs to one verified purchase lot. Same-phase and past-phase
+      // allocation is rejected server-side; LIVE/DEX is a reservation, never FIFO.
+      await db.execute(sql`ALTER TABLE sell_orders ADD COLUMN IF NOT EXISTS purchase_tx_hash TEXT`);
+
       const walletAddress = String(req.body?.walletAddress || '').toLowerCase();
       const allocations = Array.isArray(req.body?.allocations) ? req.body.allocations : [];
       if (!/^0x[a-f0-9]{40}$/.test(walletAddress)) return res.status(400).json({ error: 'Invalid wallet address.' });
-      if (!allocations.length) return res.json({ success: true, orders: [] });
       const user = await db.query.users.findFirst({ where: eq(users.walletAddress, walletAddress) });
       if (!user) return res.status(404).json({ error: 'User not found.' });
-      const totalPurchased = Number(user.totalPurchasedTokens || 0);
-      if (totalPurchased <= 0) return res.status(400).json({ error: 'No verified NXBC purchase is available for allocation.' });
+
+      const liveHoldTokens = Math.max(0, Number(req.body?.liveHoldTokens || 0));
+      const sourceTxHash = typeof req.body?.purchaseTxHash === 'string' && /^0x[a-fA-F0-9]{64}$/.test(req.body.purchaseTxHash) ? req.body.purchaseTxHash : null;
+      if (!sourceTxHash) return res.status(400).json({ error: 'A verified purchase transaction hash is required for allocation.' });
+
+      const sourcePurchase = await db.query.transactions.findFirst({
+        where: and(eq(transactions.txHash, sourceTxHash), eq(transactions.userId, user.id), eq(transactions.type, 'buy_presale'), eq(transactions.status, 'completed'))
+      });
+      if (!sourcePurchase) return res.status(400).json({ error: 'Verified purchase lot not found for this wallet.' });
+      const purchasePhase = Number(sourcePurchase.phaseIndex || 1);
+      const purchaseTokens = Number(sourcePurchase.tokenAmount || 0);
+      if (purchaseTokens <= 0) return res.status(400).json({ error: 'Purchase lot contains no NXBC tokens.' });
 
       const clean = allocations.map((a: any) => ({ phaseNumber: Number(a.phaseNumber), amountTokens: Number(a.amountTokens) }))
-        .filter((a: any) => Number.isInteger(a.phaseNumber) && a.phaseNumber >= 1 && a.phaseNumber <= 6 && Number.isFinite(a.amountTokens) && a.amountTokens > 0);
+        .filter((a: any) => Number.isInteger(a.phaseNumber) && a.phaseNumber >= 2 && a.phaseNumber <= 5 && Number.isFinite(a.amountTokens) && a.amountTokens > 0);
+      if (clean.some((a: any) => a.phaseNumber <= purchasePhase)) {
+        return res.status(400).json({ error: `This purchase was made in Phase ${purchasePhase}. You can allocate only to future phases (P${purchasePhase + 1}-P5) or DEX / LIVE.` });
+      }
       const requested = clean.reduce((sum: number, a: any) => sum + a.amountTokens, 0);
-      if (requested <= 0) return res.status(400).json({ error: 'Allocation must contain at least one positive token amount.' });
+      if (liveHoldTokens <= 0 && requested <= 0) return res.status(400).json({ error: 'Allocation must contain at least one P2-P5 or LIVE/HOLD token amount.' });
+      if (liveHoldTokens > 0 && !sourceTxHash) return res.status(400).json({ error: 'A verified purchase transaction hash is required to permanently reserve LIVE/HOLD tokens.' });
+      const existingLotOrders = await db.execute(sql`SELECT COALESCE(SUM(amount_tokens),0) AS allocated FROM sell_orders WHERE user_id=${user.id} AND purchase_tx_hash=${sourceTxHash} AND status <> 'cancelled'`);
+      const lotAllocated = Number(((existingLotOrders as any).rows?.[0] || (existingLotOrders as any)[0])?.allocated || 0);
+      const existingLive = await db.execute(sql`SELECT COALESCE(SUM(tokens_allocated),0) AS held FROM live_hold_allocations WHERE user_id=${user.id} AND purchase_tx_hash=${sourceTxHash} AND status='held'`);
+      const lotLiveHeld = Number(((existingLive as any).rows?.[0] || (existingLive as any)[0])?.held || 0);
+      const available = Math.max(0, purchaseTokens - lotAllocated - lotLiveHeld);
+      if (available <= 1e-9 && requested <= 1e-9 && liveHoldTokens <= 1e-9) {
+        const existingOrders = await db.select().from(sellOrders).where(and(eq(sellOrders.userId, user.id), eq(sellOrders.purchaseTxHash, sourceTxHash)));
+        const heldRows = await db.execute(sql`SELECT id,tokens_allocated,status FROM live_hold_allocations WHERE user_id=${user.id} AND purchase_tx_hash=${sourceTxHash} AND status='held'`);
+        const existingHeld = (heldRows as any).rows || (heldRows as any);
+        return res.json({ success: true, idempotent: true, orders: existingOrders, liveHold: existingHeld[0] ? { id:Number(existingHeld[0].id), allocated:Number(existingHeld[0].tokens_allocated), status:existingHeld[0].status } : null });
+      }
+      if (requested + liveHoldTokens > available + 1e-9) return res.status(400).json({ error: `Allocation exceeds available NXBC. You can allocate up to ${available} NXBC.`, availableTokens: available });
+      if (Math.abs((requested + liveHoldTokens) - available) > 1e-9) {
+        return res.status(400).json({ error: `For production safety, every purchase lot must be fully allocated to future phases and/or DEX / LIVE. Remaining unallocated NXBC: ${Math.max(0, available - requested - liveHoldTokens)}.` });
+      }
 
-      const existing = await db.select().from(sellOrders).where(eq(sellOrders.userId, user.id));
-      const activeReserved = existing.reduce((sum: number, o: any) => {
-        if (['open', 'partially_filled'].includes(String(o.status))) return sum + Math.max(0, Number(o.remainingTokens || 0));
-        return sum;
-      }, 0);
-      const activeSoldNotReturned = await db.select().from(tokenSellLedgers).where(eq(tokenSellLedgers.userId, user.id));
-      const pendingReturn = activeSoldNotReturned.reduce((sum: number, e: any) => sum + Math.max(0, Number(e.tokensSold || 0) - Number(e.tokensReturned || 0)), 0);
-      const available = Math.max(0, totalPurchased - activeReserved - pendingReturn);
-      if (requested > available + 1e-9) return res.status(400).json({ error: `Allocation exceeds available NXBC. You can allocate up to ${available} NXBC.`, availableTokens: available });
-
-      const phaseRow = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'phases') });
-      const configuredPhases = phaseRow?.value ? JSON.parse(phaseRow.value) : [];
-      const maxPriorityRow = await db.select({ priority: sellOrders.priority }).from(sellOrders).orderBy(desc(sellOrders.priority)).limit(1);
-      let priority = Number(maxPriorityRow[0]?.priority ?? 0);
       const created = [];
       for (const a of clean) {
-        const phase = configuredPhases.find((p: any) => Number(p.phaseNumber) === a.phaseNumber);
-        const price = Number(phase?.rate ?? phase?.tokenPrice ?? 0);
-        if (!price || price <= 0) return res.status(400).json({ error: `Invalid price configuration for Phase ${a.phaseNumber}.` });
-        priority += 1;
+        const phase = LIVE_PRESALE_PHASES.find((p) => p.phaseNumber === a.phaseNumber);
+        const price = Number(phase?.rate ?? 0);
+        if (!price || price <= 0) return res.status(400).json({ error: `Invalid live price configuration for Phase ${a.phaseNumber}.` });
+        const seqRow = await db.execute(sql`SELECT nextval('sell_orders_fifo_seq') AS fifo_number`);
+        const seqValue: any = (seqRow as any).rows?.[0] || (seqRow as any)[0];
+        const fifoNumber = Number(seqValue?.fifo_number || 0);
+        if (!Number.isInteger(fifoNumber) || fifoNumber <= 0) return res.status(500).json({ error: 'Could not allocate a permanent FIFO number.' });
         const [order] = await db.insert(sellOrders).values({
-          userId: user.id, phaseNumber: a.phaseNumber, amountTokens: a.amountTokens, remainingTokens: a.amountTokens,
-          tokenPrice: price, totalUsdtValue: a.amountTokens * price, status: 'open', priority,
+          userId: user.id, purchaseTxHash: sourceTxHash, phaseNumber: a.phaseNumber, amountTokens: a.amountTokens, remainingTokens: a.amountTokens,
+          tokenPrice: price, totalUsdtValue: a.amountTokens * price, status: 'open', priority: fifoNumber, fifoNumber,
         }).returning();
         created.push(order);
       }
-      res.json({ success: true, orders: created });
+      let liveHold:any = null;
+      if (liveHoldTokens > 0) {
+        const result = await db.execute(sql`INSERT INTO live_hold_allocations (user_id,wallet_address,purchase_tx_hash,tokens_allocated,status) VALUES (${user.id},${walletAddress},${sourceTxHash},${liveHoldTokens},'held') RETURNING id,tokens_allocated,status`);
+        liveHold = (result as any).rows?.[0] || (result as any)[0];
+      }
+      res.json({ success: true, orders: created, liveHold: liveHold ? { id:Number(liveHold.id), allocated:Number(liveHold.tokens_allocated), status:liveHold.status } : null });
     } catch (error: any) {
       console.error('Error saving phase allocation:', error);
       res.status(500).json({ error: 'Failed to save phase allocation.' });
@@ -2420,6 +2637,7 @@ async function startServer() {
     }
     try {
       const { walletAddress, amountTokens, tokenPrice } = req.body;
+      const purchaseTxHash = typeof req.body?.purchaseTxHash === 'string' && /^0x[a-fA-F0-9]{64}$/.test(req.body.purchaseTxHash) ? req.body.purchaseTxHash : null;
       const user = await db.query.users.findFirst({
         where: eq(users.walletAddress, walletAddress.toLowerCase()),
       });
@@ -2428,21 +2646,28 @@ async function startServer() {
         return res.status(404).json({ error: "User not found" });
       }
 
-      const phaseNum = req.body.phaseNumber ? Number(req.body.phaseNumber) : 1;
-      let phasePrice = 0;
-      try {
-        const phaseRow = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'phases') });
-        const configuredPhases = phaseRow?.value ? JSON.parse(phaseRow.value) : [];
-        const matchedPhase = configuredPhases.find((p: any) => Number(p.phaseNumber) === phaseNum);
-        phasePrice = Number(matchedPhase?.rate ?? matchedPhase?.tokenPrice ?? 0);
-      } catch {}
-      const price = Number(tokenPrice ?? phasePrice);
+      const phaseNum = req.body.phaseNumber ? Number(req.body.phaseNumber) : 0;
+      if (!Number.isInteger(phaseNum) || phaseNum < 2 || phaseNum > 5) {
+        return res.status(400).json({ error: 'P2-P5 presale sell orders only. Phase 1 and LIVE/DEX holdings cannot be placed in FIFO.' });
+      }
+      if (!purchaseTxHash) return res.status(400).json({ error: 'purchaseTxHash is required. FIFO orders must be tied to a verified purchase lot.' });
+      const sourcePurchase = await db.query.transactions.findFirst({
+        where: and(eq(transactions.txHash, purchaseTxHash), eq(transactions.userId, user.id), eq(transactions.type, 'buy_presale'), eq(transactions.status, 'completed'))
+      });
+      if (!sourcePurchase) return res.status(400).json({ error: 'Verified purchase lot not found.' });
+      const purchasePhase = Number(sourcePurchase.phaseIndex || 1);
+      if (phaseNum <= purchasePhase) return res.status(400).json({ error: `Phase ${purchasePhase} purchases can only be allocated to future phases or DEX / LIVE.` });
+      // FIFO settlement price is authoritative from the deployed presale phase table,
+      // never from a user-supplied price or stale admin UI config.
+      const phasePrice = Number(LIVE_PRESALE_PHASES.find((p) => p.phaseNumber === phaseNum)?.rate ?? 0);
+      const price = phasePrice;
       if (!Number.isFinite(price) || price <= 0) return res.status(400).json({ error: 'Invalid token price/phase price.' });
       const totalUsdt = Number(amountTokens) * price;
       const maxPriorityRow = await db.select({ priority: sellOrders.priority }).from(sellOrders).orderBy(desc(sellOrders.priority)).limit(1);
       const nextPriority = Number(maxPriorityRow[0]?.priority ?? 0) + 1;
       const [order] = await db.insert(sellOrders).values({
         userId: user.id,
+        purchaseTxHash,
         phaseNumber: phaseNum,
         amountTokens: Number(amountTokens),
         remainingTokens: Number(amountTokens),
@@ -2458,53 +2683,9 @@ async function startServer() {
     }
   });
 
-  // -------------------------------------------------------------------------
-  // Admin FIFO controls - persisted in PostgreSQL, not browser/localStorage.
-  // -------------------------------------------------------------------------
-  app.post("/api/admin/sellqueue/reorder", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
-    try {
-      const orderIds = Array.isArray(req.body?.orderIds) ? req.body.orderIds.map(Number).filter(Number.isFinite) : [];
-      if (!orderIds.length) return res.status(400).json({ error: "orderIds is required." });
-      for (let i = 0; i < orderIds.length; i++) {
-        await db.update(sellOrders).set({ priority: orderIds.length - i }).where(eq(sellOrders.id, orderIds[i]));
-      }
-      res.json({ success: true });
-    } catch (error: any) { res.status(500).json({ error: error.message }); }
-  });
-
-  app.post("/api/admin/sellqueue/instant-fulfill", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
-    try {
-      const orderId = Number(req.body?.orderId);
-      if (!Number.isFinite(orderId)) return res.status(400).json({ error: "Valid orderId is required." });
-      const order = await db.query.sellOrders.findFirst({ where: eq(sellOrders.id, orderId) });
-      if (!order) return res.status(404).json({ error: "Sell order not found." });
-      const remaining = Math.max(0, Number(order.remainingTokens));
-      if (remaining <= 0 || order.status === 'completed') return res.json({ success: true, order });
-      const gross = remaining * Number(order.tokenPrice);
-      await db.update(sellOrders).set({ remainingTokens: 0, status: 'completed' }).where(eq(sellOrders.id, order.id));
-      const user = await db.query.users.findFirst({ where: eq(users.id, order.userId) });
-      if (user) {
-        await db.update(users).set({
-          totalEarnedUsdt: Number(user.totalEarnedUsdt || 0) + gross,
-          availableUsdt: Number(user.availableUsdt || 0) + gross,
-          updatedAt: new Date(),
-        }).where(eq(users.id, user.id));
-        await db.insert(tokenSellLedgers).values({
-          userId: user.id, walletAddress: user.walletAddress, phaseIndex: order.phaseNumber,
-          phaseName: `Phase ${order.phaseNumber}`, tokenPrice: Number(order.tokenPrice),
-          tokensSold: remaining, tokensReturned: 0, grossUsdt: gross, withdrawnUsdt: 0,
-          serviceFeeUsdt: 0, status: 'unclaimed'
-        });
-      }
-      res.json({ success: true, orderId: order.id, tokensSold: remaining, grossUsdt: gross });
-    } catch (error: any) { res.status(500).json({ error: error.message }); }
-  });
-
   // System & Admin Configurations (Live Synchronization)
-  // Default PIN is hashed on first use, never stored/compared as plaintext.
-  let inMemoryAdminPinHash = hashPin("7788");
+  // The initial PIN is never hard-coded. It is inserted as a salted hash at startup.
+  let inMemoryAdminPinHash = hashPin(String(process.env.ADMIN_PIN_INITIAL || randomBytes(24).toString('hex')));
   // Verify PIN Endpoint (hashed comparison + brute-force lockout)
   app.post("/api/admin/verify-pin", async (req, res) => {
     try {
@@ -2581,9 +2762,8 @@ async function startServer() {
       }
       recordPinSuccess(ip);
 
-      // Update PIN in database and memory (hashed, never plaintext)
+      // Persist the new hashed PIN first. Never report success if database persistence fails.
       const newHash = hashPin(cleanNew);
-      inMemoryAdminPinHash = newHash;
       try {
         const existing = await db.query.systemConfigs.findFirst({
           where: eq(systemConfigs.key, "admin_pin"),
@@ -2593,8 +2773,10 @@ async function startServer() {
         } else {
           await db.insert(systemConfigs).values({ key: "admin_pin", value: newHash, description: "Master Admin Security PIN (hashed)" });
         }
+        inMemoryAdminPinHash = newHash;
       } catch (dbErr) {
-        console.log("Database PIN update notice:", dbErr);
+        console.error("Database PIN update failed:", dbErr);
+        return res.status(500).json({ error: "PIN change was not saved. Database update failed." });
       }
 
       res.json({ success: true, message: "Admin PIN changed successfully!" });
@@ -2607,51 +2789,75 @@ async function startServer() {
   // Admin configuration remains protected by requireAdmin below.
   app.get("/api/presale/config", async (_req, res) => {
     try {
-      const configRecord = await db.query.systemConfigs.findFirst({
+      const live = await getLivePresaleState();
+      const phaseRecord = await db.query.systemConfigs.findFirst({
         where: eq(systemConfigs.key, "phases"),
       });
-      const phases = configRecord?.value ? JSON.parse(configRecord.value) : [];
+      const dbPhases = phaseRecord?.value ? JSON.parse(phaseRecord.value) : [];
+      const byPhase = new Map<number, any>(
+        Array.isArray(dbPhases) ? dbPhases.map((p: any) => [Number(p.phaseNumber || 0), p]) : []
+      );
+
       const socialRecord = await db.query.systemConfigs.findFirst({
         where: eq(systemConfigs.key, "systemConfig"),
       });
-      let publicSystemConfig: any = {};
+      let publicSystemConfig: any = {
+        tokenName: 'NXBC',
+        tokenSymbol: 'NXBC',
+        contractAddress: process.env.NXBC_TOKEN_ADDRESS || DEFAULT_NXBC_TOKEN_ADDRESS,
+        receivingAddress: process.env.PRESALE_RECEIVING_WALLET || DEFAULT_ADMIN_WALLET,
+        presalePaused: !live.active,
+        withdrawalFeePercent: 2,
+      };
       if (socialRecord?.value) {
         try {
           const parsed = JSON.parse(socialRecord.value);
           publicSystemConfig = {
-            tokenName: parsed.tokenName,
-            tokenSymbol: parsed.tokenSymbol,
-            presalePaused: Boolean(parsed.presalePaused),
+            tokenName: parsed.tokenName || 'NXBC',
+            tokenSymbol: parsed.tokenSymbol || 'NXBC',
+            contractAddress: process.env.NXBC_TOKEN_ADDRESS || DEFAULT_NXBC_TOKEN_ADDRESS,
+            receivingAddress: process.env.PRESALE_RECEIVING_WALLET || DEFAULT_ADMIN_WALLET,
+            presalePaused: !live.active,
+            withdrawalFeePercent: Number.isFinite(Number(parsed.withdrawalFeePercent ?? 2))
+              ? Math.max(0, Math.min(100, Number(parsed.withdrawalFeePercent ?? 2)))
+              : 2,
             socialLinks: parsed.socialLinks || {},
           };
         } catch {}
       }
-      const safePhases = Array.isArray(phases) ? await Promise.all(phases.map(async (p: any) => {
-        const sales = await getPhaseSalesSnapshot(p);
-        const { adminSold, verifiedSold } = sales;
-        const phaseNumber = Number(p.phaseNumber ?? 0);
-        const totalSold = Math.min(Math.max(0, Number(p.totalSupply ?? 0)), sales.totalSold);
+
+      const safePhases = live.phases.map((livePhase: any) => {
+        const configured = byPhase.get(livePhase.phaseNumber) || {};
         return {
-          id: p.id,
-          phaseNumber,
-          name: p.name,
-          shortName: p.shortName,
-          rate: Number(p.rate ?? p.tokenPrice ?? p.price ?? 0),
-          rateLabel: p.rateLabel,
-          totalSupply: Number(p.totalSupply ?? 0),
-          tokensSold: totalSold,
-          adminSold,
-          verifiedSold,
-          status: p.status,
-          multiplier: p.multiplier,
-          unlockRequirement: p.unlockRequirement,
-          targetDate: p.targetDate,
+          id: configured.id || `p${livePhase.phaseNumber}`,
+          phaseNumber: livePhase.phaseNumber,
+          name: livePhase.name,
+          shortName: livePhase.shortName,
+          rate: livePhase.rate,
+          rateLabel: livePhase.rateLabel,
+          totalSupply: livePhase.totalSupply,
+          tokensSold: livePhase.tokensSold,
+          status: livePhase.status,
+          multiplier: configured.multiplier || '',
+          unlockRequirement: livePhase.unlockRequirement,
+          targetDate: configured.targetDate || '',
         };
-      })) : [];
-      res.json({ success: true, phases: safePhases, systemConfig: publicSystemConfig });
+      });
+
+      res.json({
+        success: true,
+        phases: safePhases,
+        currentPhase: live.currentPhase,
+        currentPhasePrice: live.price,
+        currentPhaseRemaining: live.currentRemaining,
+        totalSold: live.totalSold,
+        presaleActive: live.active,
+        presaleNXBCBalance: live.presaleBalance,
+        systemConfig: publicSystemConfig,
+      });
     } catch (error: any) {
       console.error("Error in /api/presale/config:", error);
-      res.status(500).json({ success: false, error: "Failed to load presale configuration." });
+      res.status(500).json({ success: false, error: "Failed to load live presale configuration." });
     }
   });
 
@@ -2768,6 +2974,27 @@ async function startServer() {
     try {
       const { phases, referralLevels, rankRewards, systemConfig, matrixConfig } = req.body;
 
+      // Phase price/supply/active-state is blockchain/server authoritative.
+      // Legacy clients are blocked from changing it through the admin config API.
+      if (phases !== undefined) {
+        return res.status(400).json({ error: 'Presale phases are read-only and advance automatically from verified purchase allocation.' });
+      }
+      if (systemConfig && Object.prototype.hasOwnProperty.call(systemConfig, 'sellQueueSharePercent')) {
+        const share = Number(systemConfig.sellQueueSharePercent);
+        if (!Number.isFinite(share) || share < 0 || share > 100) {
+          return res.status(400).json({ error: 'FIFO seller share must be between 0% and 100%.' });
+        }
+        systemConfig.sellQueueSharePercent = share;
+      }
+
+      if (systemConfig && Object.prototype.hasOwnProperty.call(systemConfig, 'withdrawalFeePercent')) {
+        const fee = Number(systemConfig.withdrawalFeePercent);
+        if (!Number.isFinite(fee) || fee < 0 || fee > 100) {
+          return res.status(400).json({ error: 'Withdrawal fee must be between 0% and 100%.' });
+        }
+        systemConfig.withdrawalFeePercent = fee;
+      }
+
       // Save to database. The admin "Coins Sold" field is a manual/initial
       // sold baseline. Verified blockchain purchases are stored in transactions
       // and are added separately, so saving admin settings can never erase or
@@ -2787,22 +3014,19 @@ async function startServer() {
         { key: "matrixConfig", value: matrixConfig ? JSON.stringify(matrixConfig) : null, desc: "2x2 Matrix System Config" },
       ];
 
-      for (const item of itemsToSave) {
-        if (!item.value) continue;
-        try {
-          const existing = await db.query.systemConfigs.findFirst({
+      await db.transaction(async (tx) => {
+        for (const item of itemsToSave) {
+          if (!item.value) continue;
+          const existing = await tx.query.systemConfigs.findFirst({
             where: eq(systemConfigs.key, item.key),
           });
-
           if (existing) {
-            await db.update(systemConfigs).set({ value: item.value, updatedAt: new Date() }).where(eq(systemConfigs.key, item.key));
+            await tx.update(systemConfigs).set({ value: item.value, updatedAt: new Date() }).where(eq(systemConfigs.key, item.key));
           } else {
-            await db.insert(systemConfigs).values({ key: item.key, value: item.value, description: item.desc });
+            await tx.insert(systemConfigs).values({ key: item.key, value: item.value, description: item.desc });
           }
-        } catch (dbErr) {
-          console.log(`DB config save notice (${item.key}):`, dbErr);
         }
-      }
+      });
 
       console.log("[ADMIN SYNC] Live configurations updated and persisted to PostgreSQL.");
 
@@ -2846,6 +3070,8 @@ async function startServer() {
   }
 
   await ensureTokenWithdrawalSettlementTable();
+  await ensureProductionSafetyTables();
+  await ensureWalletSeparationMigration();
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);

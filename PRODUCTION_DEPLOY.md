@@ -4,7 +4,7 @@
 - Home global presale statistics now use completed verified `buy_presale` database transactions first; if an older deployment has phase counters but no historical transaction rows, the UI shows the PostgreSQL phase totals instead of incorrectly showing zero.
 - User dashboard earnings, level income, matrix income, withdrawals, purchases and transaction history are DB/API authoritative; browser localStorage is no longer used as the source for those financial values.
 - Removed the broken `/api/presale/sync-legacy-data` browser migration path.
-- Fallback phase prices/supplies in the frontend match the deployed NXBC presale contract: P1 $0.01 / 500,000; P2 $0.10 / 2,500,000; P3 $1 / 7,000,000; P4 $10 / 19,500,000; P5 $100 / 40,000,000.
+- Fallback phase prices/supplies in the frontend match the deployed NXBC presale contract: P1 $0.01 / 1,000,000; P2 $0.10 / 2,500,000; P3 $1 / 7,000,000; P4 $10 / 19,500,000; P5 $100 / 40,000,000.
 - CORS is no longer `*`; set `CORS_ORIGIN` only when the API is intentionally served from a different frontend origin.
 - Removed the literal private key from diagnostic scripts; use environment variables only.
 - Presale on-chain USDT verification now parses the full 18-decimal amount.

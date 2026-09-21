@@ -11,7 +11,7 @@ const waitWithTimeout = (promise: Promise<any>, ms: number) => {
 
 
 export const NXBC_TOKEN_CONTRACT = '0x94D064AFDB04E3489C313054260929588b38dF85';
-export const NXBC_PRESALE_CONTRACT = '0x0C4a86691B3937549BFa688211EbF56520B64981'; // UPDATED CONTRACT
+export const NXBC_PRESALE_CONTRACT = '0x0C4a86691B3937549BFa688211EbF56520B64981';
 export const NXBC_CONTRACT = NXBC_TOKEN_CONTRACT; // Standard token import points to the actual BEP-20 token
 export const USDT_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
 export const ADMIN_TREASURY_WALLET = '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261';
@@ -184,8 +184,11 @@ export async function waitForBscTxConfirmation(
     }
   }
 
-  // Fallback: If transaction was broadcasted and not explicitly reverted
-  return { success: true };
+  // Never treat an unconfirmed transaction as successful.
+  return {
+    success: false,
+    error: 'Transaction was not confirmed on BSC within the allotted time. Please check the transaction hash before retrying.',
+  };
 }
 
 /**
@@ -330,9 +333,7 @@ export async function executeSmartContractBuy(
   _dexTokens: number,
   onStatusUpdate: (msg: string) => void
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
-  if (typeof window === 'undefined') {
-    return { success: false, error: 'Web3 window not available' };
-  }
+  if (typeof window === 'undefined') return { success: false, error: 'Web3 window not available' };
 
   const ethProvider =
     (window as any).trustwallet?.ethereum ||
@@ -340,15 +341,16 @@ export async function executeSmartContractBuy(
     (window as any).binancew3w?.ethereum ||
     (window as any).okxwallet;
 
-  if (!ethProvider) {
+  if (!ethProvider || typeof ethProvider.request !== 'function') {
     return { success: false, error: 'Web3 wallet (Trust Wallet / MetaMask / Binance Web3) not detected in browser.' };
   }
 
   try {
-    const provider = new ethers.BrowserProvider(ethProvider);
+    const provider = new ethers.BrowserProvider(ethProvider, 'any');
     let network = await provider.getNetwork();
 
     if (network.chainId !== 56n) {
+      onStatusUpdate('Switching wallet to BNB Smart Chain Mainnet...');
       try {
         await ethProvider.request({
           method: 'wallet_switchEthereumChain',
@@ -367,18 +369,18 @@ export async function executeSmartContractBuy(
             }],
           });
         } else {
-          return { success: false, error: 'Please switch your wallet network to BNB Smart Chain (BSC).' };
+          return { success: false, error: 'Please switch your wallet network to BNB Smart Chain (BSC) before buying.' };
         }
       }
       network = await provider.getNetwork();
       if (network.chainId !== 56n) {
-        return { success: false, error: 'Failed to switch network to BSC Mainnet.' };
+        return { success: false, error: 'Failed to switch network. Please select BNB Smart Chain Mainnet manually.' };
       }
     }
 
     const signer = await provider.getSigner();
     const buyer = await signer.getAddress();
-    const amountWei = ethers.parseUnits(String(amountUsd), 18);
+    const amountWei = ethers.parseUnits(Number(amountUsd).toFixed(18), 18);
 
     const usdtContract = new ethers.Contract(
       USDT_CONTRACT,
@@ -394,61 +396,60 @@ export async function executeSmartContractBuy(
       NXBC_PRESALE_CONTRACT,
       [
         'function buyTokens(uint256 usdtAmount) external',
-        'function currentPhase() external view returns (uint256)',
-        'function currentPhasePrice() external view returns (uint256)',
-        'function currentPhaseRemaining() external view returns (uint256)',
-        'function presaleActive() external view returns (bool)',
-        'function presaleNXBCBalance() external view returns (uint256)',
+        'function currentPhase() view returns (uint256)',
+        'function currentPhasePrice() view returns (uint256)',
+        'function currentPhaseRemaining() view returns (uint256)',
+        'function presaleActive() view returns (bool)',
       ],
       signer
     );
 
-    const active = await presaleContract.presaleActive();
+    const [active, priceRaw, remainingRaw, balanceRaw] = await Promise.all([
+      presaleContract.presaleActive(),
+      presaleContract.currentPhasePrice(),
+      presaleContract.currentPhaseRemaining(),
+      usdtContract.balanceOf(buyer),
+    ]);
+
     if (!active) return { success: false, error: 'Presale is currently inactive.' };
+    if (balanceRaw < amountWei) return { success: false, error: 'Insufficient BSC USDT balance.' };
 
-    const usdtBalance = await usdtContract.balanceOf(buyer);
-    if (usdtBalance < amountWei) {
-      return { success: false, error: `Insufficient USDT. Required ${amountUsd} USDT.` };
+    const phasePrice = Number(ethers.formatUnits(priceRaw, 18));
+    const remainingTokens = Number(ethers.formatUnits(remainingRaw, 18));
+    const expectedTokens = Number(amountUsd) / phasePrice;
+    if (expectedTokens > remainingTokens + 1e-12) {
+      return { success: false, error: `Purchase exceeds current phase remaining supply. Remaining: ${remainingTokens.toLocaleString()} NXBC.` };
     }
 
-    const phase = await presaleContract.currentPhase();
-    const priceWei = await presaleContract.currentPhasePrice();
-    const remainingTokens = await presaleContract.currentPhaseRemaining();
-    const expectedTokens = (amountWei * ethers.parseUnits('1', 18)) / priceWei;
-
-    if (expectedTokens <= 0n) {
-      return { success: false, error: 'Purchase amount is too small for the current phase.' };
-    }
-    if (expectedTokens > remainingTokens) {
-      const remaining = ethers.formatUnits(remainingTokens, 18);
-      return { success: false, error: `Amount exceeds Phase ${phase.toString()} remaining supply. Remaining: ${remaining} NXBC.` };
-    }
-
-    const allowance = await usdtContract.allowance(buyer, NXBC_PRESALE_CONTRACT);
+    let allowance = await usdtContract.allowance(buyer, NXBC_PRESALE_CONTRACT);
     if (allowance < amountWei) {
-      onStatusUpdate(`Approving ${amountUsd.toFixed(2)} USDT...`);
+      onStatusUpdate(`Approving ${Number(amountUsd).toFixed(4)} USDT for the Presale Contract...`);
       const approveTx = await usdtContract.approve(NXBC_PRESALE_CONTRACT, amountWei);
-      onStatusUpdate('Waiting for USDT approval confirmation...');
-      await approveTx.wait();
+      const approveReceipt = await approveTx.wait(1);
+      if (!approveReceipt || approveReceipt.status !== 1) {
+        return { success: false, error: 'USDT approval transaction failed on BSC.' };
+      }
+      allowance = await usdtContract.allowance(buyer, NXBC_PRESALE_CONTRACT);
+      if (allowance < amountWei) {
+        return { success: false, error: 'USDT allowance was not updated. Please try again.' };
+      }
     }
 
-    onStatusUpdate(`Buying NXBC from Phase ${phase.toString()} presale contract...`);
+    onStatusUpdate(`Buying ${expectedTokens.toLocaleString()} NXBC from Phase ${await presaleContract.currentPhase()}...`);
     const buyTx = await presaleContract.buyTokens(amountWei, { gasLimit: 300000 });
+    onStatusUpdate('Waiting for the NXBC purchase transaction to confirm on BSC...');
+    const receipt = await buyTx.wait(1);
 
-    onStatusUpdate(`Transaction submitted: ${buyTx.hash.slice(0, 10)}...`);
-    const receipt = await buyTx.wait();
     if (!receipt || receipt.status !== 1) {
-      return { success: false, error: 'Presale purchase transaction reverted on BSC.' };
+      return { success: false, error: 'NXBC purchase transaction reverted on BSC.' };
     }
 
-    onStatusUpdate('NXBC purchase confirmed on BSC Mainnet.');
-    return { success: true, txHash: receipt.hash };
+    return { success: true, txHash: buyTx.hash };
   } catch (err: any) {
-    console.error('executeSmartContractBuy error:', err);
-    return { success: false, error: err?.shortMessage || err?.reason || err?.message || 'Presale purchase failed.' };
+    console.error('Smart Contract Buy Error:', err);
+    return { success: false, error: err?.shortMessage || err?.reason || err?.message || 'Transaction failed or rejected by user.' };
   }
 }
-
 
 export function buildWithdrawMessage(
   walletAddress: string,

@@ -298,7 +298,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
 
     if (effectiveTokenSellBalance <= 0) {
       setErrorMessage(
-        'Insufficient Token Sell Balance ($0.00)! Only proceeds from completed Phase Auto-Sell (P2–P5 & DEX) accumulate here.'
+        'Insufficient Token Sell Balance ($0.00)! Only proceeds from completed Phase Auto-Sell (P2–P5 only) accumulate here.'
       );
       return;
     }
@@ -527,7 +527,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
               Universal Platform Service Charge
             </span>
             <span className="text-slate-400 font-mono-crypto text-[8.5px]">
-              Dynamic fee live-controlled by smart contracts, applied directly to gross withdrawal amount.
+              Dynamic fee controlled by the Admin panel and applied to the gross withdrawal amount.
             </span>
           </div>
         </div>

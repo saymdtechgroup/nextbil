@@ -8,8 +8,8 @@ contract NXBC {
 
     uint256 public constant TOTAL_SUPPLY = 70_000_000 * 10 ** 18;
     uint256 public totalSupply = TOTAL_SUPPLY;
-    address public owner;
 
+    address public owner;
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
 
@@ -25,7 +25,10 @@ contract NXBC {
     event TradingDisabled();
     event ExclusionUpdated(address indexed account, bool excluded);
 
-    modifier onlyOwner() { require(msg.sender == owner, "Not owner"); _; }
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        _;
+    }
 
     constructor() {
         owner = msg.sender;
@@ -45,8 +48,15 @@ contract NXBC {
         emit ExclusionUpdated(account, excluded);
     }
 
-    function enableTrading() external onlyOwner { tradingOpen = true; emit TradingEnabled(); }
-    function disableTrading() external onlyOwner { tradingOpen = false; emit TradingDisabled(); }
+    function enableTrading() external onlyOwner {
+        tradingOpen = true;
+        emit TradingEnabled();
+    }
+
+    function disableTrading() external onlyOwner {
+        tradingOpen = false;
+        emit TradingDisabled();
+    }
 
     function approve(address spender, uint256 amount) external returns (bool) {
         require(spender != address(0), "Invalid spender");
@@ -73,9 +83,18 @@ contract NXBC {
         require(from != address(0), "Invalid sender");
         require(to != address(0), "Invalid recipient");
         require(balanceOf[from] >= amount, "Insufficient balance");
-        if (!tradingOpen && pancakePair != address(0) && (from == pancakePair || to == pancakePair)) {
-            require(isExcludedFromRestrictions[from] || isExcludedFromRestrictions[to], "Trading not open");
+
+        if (
+            !tradingOpen &&
+            pancakePair != address(0) &&
+            (from == pancakePair || to == pancakePair)
+        ) {
+            require(
+                isExcludedFromRestrictions[from] || isExcludedFromRestrictions[to],
+                "Trading not open"
+            );
         }
+
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
         emit Transfer(from, to, amount);

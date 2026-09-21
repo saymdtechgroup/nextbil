@@ -64,9 +64,7 @@ type AdminSection =
   | 'levels'
   | 'matrix'
   | 'ranks'
-  | 'token_security'
-  | 'simulator'
-  | 'queue';
+  | 'token_security';
 
 export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
   phases,
@@ -89,13 +87,6 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [enteredPin, setEnteredPin] = useState<string>('');
   const [pinError, setPinError] = useState<string>('');
-  const [currentMasterPin, setCurrentMasterPin] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('nxbc_admin_custom_pin') || '7788';
-    }
-    return '7788';
-  });
-
   // Password / PIN Change Form State
   const [currentPinInput, setCurrentPinInput] = useState<string>('');
   const [newPinInput, setNewPinInput] = useState<string>('');
@@ -213,7 +204,6 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
       });
       const data = await res.json();
       if (data.success) {
-        setCurrentMasterPin(cleanNew);
         setPinChangeSuccess('Master Admin PIN successfully updated and secured!');
       } else {
         setPinChangeError(data.error || 'PIN update failed.');
@@ -227,40 +217,6 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
       setNewPinInput('');
       setConfirmPinInput('');
       setTimeout(() => setPinChangeSuccess(''), 5000);
-    }
-  };
-
-  // Phase Handlers
-  const handlePhaseChange = (
-    index: number,
-    field: keyof PhaseConfig,
-    value: string | number
-  ) => {
-    const updated = [...localPhases];
-    updated[index] = {
-      ...updated[index],
-      [field]: value,
-    };
-    if (field === 'rate') {
-      const numRate = typeof value === 'number' ? value : parseFloat(value as string) || 0;
-      updated[index].rateLabel = `$${numRate.toFixed(2)}`;
-      updated[index].rate = numRate;
-      (updated[index] as any).tokenPrice = numRate;
-    }
-    setLocalPhases(updated);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('nxbc_admin_phases', JSON.stringify(updated));
-    }
-  };
-
-  const handleSetActivePhase = (targetId: string) => {
-    const updated = localPhases.map((p) => ({
-      ...p,
-      status: (p.id === targetId ? 'active' : p.phaseNumber < (localPhases.find((x) => x.id === targetId)?.phaseNumber || 0) ? 'completed' : 'locked') as 'active' | 'completed' | 'locked',
-    }));
-    setLocalPhases(updated);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('nxbc_admin_phases', JSON.stringify(updated));
     }
   };
 
@@ -347,27 +303,20 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
     }
   };
 
-  // Save All Changes - Persists locally AND to server for all users & dashboards
+  // Save only approved dynamic controls. Blockchain-authoritative phase data is never written from this page.
   const handleSaveAll = async () => {
-    onUpdatePhases(localPhases);
     onUpdateReferralLevels(localLevels);
     onUpdateRankRewards(localRanks);
-    onUpdateSystemConfig({
-      ...localSystem,
-      matrixConfig: localMatrix,
-    });
+    onUpdateSystemConfig({ ...localSystem, matrixConfig: localMatrix });
     onUpdateMatrixConfig(localMatrix);
 
-    // Save directly to localStorage for instant local access
     if (typeof window !== 'undefined') {
-      localStorage.setItem('nxbc_admin_phases', JSON.stringify(localPhases));
       localStorage.setItem('nxbc_admin_levels', JSON.stringify(localLevels));
       localStorage.setItem('nxbc_admin_ranks', JSON.stringify(localRanks));
       localStorage.setItem('nxbc_admin_system', JSON.stringify(localSystem));
       localStorage.setItem('nxbc_admin_matrix', JSON.stringify(localMatrix));
     }
 
-    // Persist to central API backend
     try {
       const res = await fetch('/api/admin/configs', {
         method: 'POST',
@@ -376,7 +325,6 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
           ...(typeof window !== 'undefined' && localStorage.getItem('nxbc_admin_token') ? { 'x-admin-token': localStorage.getItem('nxbc_admin_token') as string } : {}),
         },
         body: JSON.stringify({
-          phases: localPhases,
           referralLevels: localLevels,
           rankRewards: localRanks,
           systemConfig: localSystem,
@@ -384,49 +332,12 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
         }),
       });
       const data = await res.json();
-      if (data?.success) {
-        // Use the server-reconciled phase counters so a stale admin screen
-        // cannot keep showing 0 after a real purchase already exists.
-        if (Array.isArray(data.phases) && data.phases.length) {
-          setLocalPhases(data.phases);
-          if (typeof window !== 'undefined') localStorage.setItem('nxbc_admin_phases', JSON.stringify(data.phases));
-        }
-        setSaveSuccessMsg('✓ All settings saved & live-updated across all user dashboards!');
-      } else {
-        setSaveSuccessMsg('✓ Settings saved & applied live!');
-      }
-    } catch (err) {
-      setSaveSuccessMsg('✓ Settings applied & saved locally!');
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Settings save failed');
+      setSaveSuccessMsg('✓ Safe settings saved & live-updated.');
+    } catch (err: any) {
+      setSaveSuccessMsg(`✕ Save failed: ${err?.message || 'Server unavailable'}`);
     }
-
-    setTimeout(() => {
-      setSaveSuccessMsg('');
-    }, 4000);
-  };
-
-  // Factory Reset
-  const handleReset = () => {
-    if (
-      window.confirm(
-        'Are you sure you want to reset all settings to factory default parameters?'
-      )
-    ) {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('nxbc_admin_phases');
-        localStorage.removeItem('nxbc_admin_levels');
-        localStorage.removeItem('nxbc_admin_ranks');
-        localStorage.removeItem('nxbc_admin_system');
-        localStorage.removeItem('nxbc_admin_matrix');
-      }
-      onResetToDefaults();
-      setLocalPhases(phases);
-      setLocalLevels(referralLevels);
-      setLocalRanks(rankRewards);
-      setLocalSystem(systemConfig);
-      setLocalMatrix(matrixConfig);
-      setSaveSuccessMsg('Reset to default values successfully.');
-      setTimeout(() => setSaveSuccessMsg(''), 3000);
-    }
+    setTimeout(() => setSaveSuccessMsg(''), 5000);
   };
 
   // Calculations
@@ -554,15 +465,6 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
           )}
 
           <button
-            onClick={handleReset}
-            className="px-3 py-2 rounded-xl bg-purple-950 hover:bg-rose-950 border border-purple-700 hover:border-rose-500 text-purple-300 hover:text-rose-300 text-xs font-mono-crypto flex items-center gap-1 transition-all"
-            title="Reset to Factory Defaults"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Reset Defaults</span>
-          </button>
-
-          <button
             onClick={handleSaveAll}
             className="px-4 sm:px-6 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:opacity-95 text-black font-black text-xs sm:text-sm font-rajdhani uppercase tracking-wider shadow-[0_0_25px_rgba(245,158,11,0.5)] flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
           >
@@ -675,41 +577,6 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
             <span>7. Contract & Security</span>
           </button>
 
-          <button
-            onClick={() => setActiveSection('simulator')}
-            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-bold font-rajdhani uppercase tracking-wider transition-all w-full text-left whitespace-nowrap ${
-              activeSection === 'simulator'
-                ? 'bg-gradient-to-r from-emerald-500/20 to-purple-900/50 text-emerald-300 border border-emerald-400 shadow-md'
-                : 'text-purple-300 hover:text-slate-100 hover:bg-purple-950/40'
-            }`}
-          >
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
-            <span>8. Live Revenue Sandbox</span>
-          </button>
-
-          <button
-            onClick={() => setActiveSection('queue')}
-            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-bold font-rajdhani uppercase tracking-wider transition-all w-full text-left whitespace-nowrap ${
-              activeSection === 'queue'
-                ? 'bg-gradient-to-r from-blue-500/20 to-purple-900/50 text-blue-300 border border-blue-400 shadow-md'
-                : 'text-purple-300 hover:text-slate-100 hover:bg-purple-950/40'
-            }`}
-          >
-            <Database className="w-4 h-4 text-blue-400" />
-            <span>9. Auto-Sell FIFO Queue</span>
-          </button>
-          
-          <button
-            onClick={() => setActiveSection('users')}
-            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-bold font-rajdhani uppercase tracking-wider transition-all w-full text-left whitespace-nowrap ${
-              activeSection === 'users'
-                ? 'bg-gradient-to-r from-rose-500/20 to-purple-900/50 text-rose-300 border border-rose-400 shadow-md'
-                : 'text-purple-300 hover:text-slate-100 hover:bg-purple-950/40'
-            }`}
-          >
-            <Users className="w-4 h-4 text-rose-400" />
-            <span>10. User Management</span>
-          </button>
         </aside>
 
         {/* Right Dynamic Content Container */}
@@ -866,142 +733,41 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                 <div>
                   <h3 className="text-sm font-black text-amber-300 font-cinzel uppercase flex items-center gap-2">
                     <Coins className="w-4 h-4 text-amber-400" />
-                    Coin Presale & 5-Phase Price Manager
+                    Presale Phases — Read Only
                   </h3>
                   <p className="text-[10px] text-purple-300 font-mono-crypto">
-                    Set price per coin, total allocation, coins sold, multiplier, and active live phase
+                    Price, allocation, sold amount and active phase are controlled by the live presale state. No manual phase switching or supply editing is allowed here.
                   </p>
                 </div>
-
-                <div className="flex items-center gap-2 text-xs font-mono-crypto">
-                  <span className="text-purple-300">Total Pool: </span>
-                  <strong className="text-amber-300 font-bold">
-                    {totalPresaleTokens.toLocaleString()} NXBC
-                  </strong>
-                </div>
+                <span className="px-2.5 py-1 rounded-full text-[9px] font-mono-crypto font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                  BLOCKCHAIN / SERVER AUTHORITATIVE
+                </span>
               </div>
-
-              {/* 5 Phases Grid */}
               <div className="space-y-3">
-                {localPhases.map((phase, idx) => {
-                  const isCurrent = phase.status === 'active';
-                  const isSoldOut = phase.status === 'completed';
-
+                {localPhases.map((phase) => {
+                  const remaining = Math.max(0, Number(phase.totalSupply || 0) - Number(phase.tokensSold || 0));
+                  const soldPct = Number(phase.totalSupply || 0) > 0 ? (Number(phase.tokensSold || 0) / Number(phase.totalSupply || 0)) * 100 : 0;
                   return (
-                    <div
-                      key={phase.id}
-                      className={`p-4 rounded-3xl border-2 transition-all space-y-3 ${
-                        isCurrent
-                          ? 'bg-gradient-to-r from-[#210c42] to-[#120629] border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.2)]'
-                          : isSoldOut
-                          ? 'bg-[#091515] border-emerald-500/50'
-                          : 'bg-[#0e0420] border-purple-500/20'
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-purple-500/20">
+                    <div key={phase.id} className={`p-4 rounded-3xl border-2 ${phase.status === 'active' ? 'bg-gradient-to-r from-[#210c42] to-[#120629] border-amber-400' : phase.status === 'completed' ? 'bg-[#091515] border-emerald-500/50' : 'bg-[#0e0420] border-purple-500/20'}`}>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5">
-                          <span className="w-8 h-8 rounded-xl bg-purple-900 text-amber-300 font-black font-rajdhani text-sm flex items-center justify-center border border-purple-700 shadow-sm">
-                            {phase.shortName}
-                          </span>
+                          <span className="w-8 h-8 rounded-xl bg-purple-900 text-amber-300 font-black font-rajdhani text-sm flex items-center justify-center border border-purple-700">{phase.shortName}</span>
                           <div>
-                            <input
-                              type="text"
-                              value={phase.name}
-                              onChange={(e) => handlePhaseChange(idx, 'name', e.target.value)}
-                              className="bg-[#06020c] border border-purple-500/40 rounded-xl px-2.5 py-1 text-xs font-bold text-slate-100 w-36 focus:border-amber-400 focus:outline-none"
-                            />
-                            <span className="text-[8px] text-purple-400 font-mono-crypto block mt-0.5">
-                              Target: {phase.unlockRequirement}
-                            </span>
+                            <div className="text-xs font-bold text-slate-100">{phase.name}</div>
+                            <div className="text-[8px] text-purple-400 font-mono-crypto">{phase.unlockRequirement}</div>
                           </div>
                         </div>
-
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={phase.status}
-                            onChange={(e) => {
-                              const newStatus = e.target.value as 'active' | 'completed' | 'locked';
-                              if (newStatus === 'active') {
-                                handleSetActivePhase(phase.id);
-                              } else {
-                                handlePhaseChange(idx, 'status', newStatus);
-                              }
-                            }}
-                            className={`text-xs font-mono-crypto font-bold px-3 py-1.5 rounded-xl border focus:outline-none ${
-                              isCurrent
-                                ? 'bg-amber-500/20 text-amber-300 border-amber-400'
-                                : isSoldOut
-                                ? 'bg-emerald-950 text-emerald-400 border-emerald-500'
-                                : 'bg-purple-950 text-purple-300 border-purple-700'
-                            }`}
-                          >
-                            <option value="active">● LIVE ACTIVE PHASE</option>
-                            <option value="locked">🔒 LOCKED PHASE</option>
-                            <option value="completed">✓ SOLD OUT</option>
-                          </select>
-
-                          {!isCurrent && (
-                            <button
-                              type="button"
-                              onClick={() => handleSetActivePhase(phase.id)}
-                              className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500 hover:text-black text-xs font-rajdhani font-bold text-amber-300 border border-amber-500/40 transition-all cursor-pointer"
-                            >
-                              Set as Live Phase
-                            </button>
-                          )}
-                        </div>
+                        <span className={`px-3 py-1.5 rounded-xl text-xs font-mono-crypto font-bold border ${phase.status === 'active' ? 'bg-amber-500/20 text-amber-300 border-amber-400' : phase.status === 'completed' ? 'bg-emerald-950 text-emerald-400 border-emerald-500' : 'bg-purple-950 text-purple-300 border-purple-700'}`}>
+                          {phase.status === 'active' ? '● LIVE ACTIVE PHASE' : phase.status === 'completed' ? '✓ SOLD OUT' : 'LOCKED / UPCOMING'}
+                        </span>
                       </div>
-
-                      {/* Inputs Row */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {/* Coin Rate USD */}
-                        <div>
-                          <label className="text-[9px] uppercase text-amber-300 font-rajdhani font-bold block mb-1">
-                            Price Per Coin ($ USD)
-                          </label>
-                          <div className="relative">
-                            <span className="absolute left-2.5 top-2 text-xs text-amber-400 font-bold">$</span>
-                            <input
-                              type="number"
-                              step="0.001"
-                              min="0.0001"
-                              value={phase.rate}
-                              onChange={(e) => handlePhaseChange(idx, 'rate', parseFloat(e.target.value) || 0)}
-                              className="w-full bg-[#06020c] border border-amber-500/50 rounded-xl py-1.5 pl-6 pr-2 text-xs font-black font-mono-crypto text-amber-300 focus:outline-none"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Total Supply for Phase */}
-                        <div>
-                          <label className="text-[9px] uppercase text-purple-300 font-rajdhani font-bold block mb-1">
-                            Total Supply (NXBC)
-                          </label>
-                          <input
-                            type="number"
-                            step="100000"
-                            min="1000"
-                            value={phase.totalSupply}
-                            onChange={(e) => handlePhaseChange(idx, 'totalSupply', parseInt(e.target.value) || 0)}
-                            className="w-full bg-[#06020c] border border-purple-500/50 rounded-xl py-1.5 px-2.5 text-xs font-mono-crypto text-slate-100 focus:outline-none"
-                          />
-                        </div>
-
-                        {/* Coins Sold */}
-                        <div>
-                          <label className="text-[9px] uppercase text-emerald-400 font-rajdhani font-bold block mb-1">
-                            Admin / Initial Sold (NXBC)
-                          </label>
-                          <input
-                            type="number"
-                            step="10000"
-                            min="0"
-                            value={phase.tokensSold}
-                            onChange={(e) => handlePhaseChange(idx, 'tokensSold', parseInt(e.target.value) || 0)}
-                            className="w-full bg-[#06020c] border border-emerald-500/50 rounded-xl py-1.5 px-2.5 text-xs font-mono-crypto text-emerald-300 font-bold focus:outline-none"
-                          />
-                        </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                        <div className="p-2.5 rounded-xl bg-black/20 border border-amber-500/20"><div className="text-[8px] uppercase text-amber-300">Price</div><div className="text-sm font-black text-amber-300 font-mono-crypto">${Number(phase.rate || 0).toFixed(2)}</div></div>
+                        <div className="p-2.5 rounded-xl bg-black/20 border border-purple-500/20"><div className="text-[8px] uppercase text-purple-300">Allocation</div><div className="text-sm font-black text-slate-100 font-mono-crypto">{Number(phase.totalSupply || 0).toLocaleString()} NXBC</div></div>
+                        <div className="p-2.5 rounded-xl bg-black/20 border border-emerald-500/20"><div className="text-[8px] uppercase text-emerald-300">Purchased</div><div className="text-sm font-black text-emerald-300 font-mono-crypto">{Number(phase.tokensSold || 0).toLocaleString()} NXBC</div></div>
+                        <div className="p-2.5 rounded-xl bg-black/20 border border-cyan-500/20"><div className="text-[8px] uppercase text-cyan-300">Remaining</div><div className="text-sm font-black text-cyan-300 font-mono-crypto">{remaining.toLocaleString()} NXBC</div></div>
                       </div>
+                      <div className="mt-3 h-1.5 rounded-full bg-black/30 overflow-hidden"><div className="h-full bg-emerald-400" style={{ width: `${Math.min(100, Math.max(0, soldPct))}%` }} /></div>
                     </div>
                   );
                 })}
@@ -1009,9 +775,6 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
             </div>
           )}
 
-          {/* ========================================================================= */}
-          {/* 3. DIRECT SPONSOR INCOME CONTROL                                          */}
-          {/* ========================================================================= */}
           {activeSection === 'sponsor' && (
             <div className="space-y-4">
               <div className="pb-3 border-b border-purple-500/20">
@@ -1430,291 +1193,54 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
               <div className="pb-3 border-b border-purple-500/20">
                 <h3 className="text-sm font-black text-purple-300 font-cinzel uppercase flex items-center gap-2">
                   <Settings className="w-4 h-4 text-purple-400" />
-                  Smart Contract & Security Controls
+                  Security & Safe System Controls
                 </h3>
-                <p className="text-[10px] text-purple-300 font-mono-crypto">
-                  Change Master PIN, Token Parameters, BEP-20 Contract Address, and Emergency Switches
+                <p className="text-[10px] text-purple-300 font-mono-crypto">Only safe operational controls are editable. Contract addresses, token parameters, phase data and payment routing are not editable here.
                 </p>
               </div>
 
-              {/* Master Admin PIN Management Card */}
               <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-purple-950/60 via-[#13062b] to-[#0d031c] border-2 border-amber-500/40 space-y-4 shadow-xl">
                 <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-purple-500/20">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500 text-black flex items-center justify-center font-black">
-                      <KeyRound className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-amber-300 uppercase font-rajdhani tracking-wider">
-                        Master Admin Security PIN Manager
-                      </h4>
-                      <p className="text-[10px] text-purple-300/80 font-mono-crypto">
-                        Change your secret admin access PIN periodically to ensure maximum platform security
-                      </p>
-                    </div>
+                    <div className="w-8 h-8 rounded-xl bg-amber-500 text-black flex items-center justify-center font-black"><KeyRound className="w-4 h-4" /></div>
+                    <div><h4 className="text-xs font-bold text-amber-300 uppercase font-rajdhani tracking-wider">Master Admin Security PIN</h4><p className="text-[10px] text-purple-300/80 font-mono-crypto">Change the secret admin access PIN.</p></div>
                   </div>
-
-                  <span className="px-2.5 py-1 rounded-full text-[9px] font-mono-crypto font-bold bg-amber-500/20 text-amber-300 border border-amber-400/40">
-                    Protected By 256-Bit Salt
-                  </span>
                 </div>
-
                 <form onSubmit={handleChangePin} className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="text-[9px] uppercase text-purple-300 font-rajdhani font-bold block mb-1">
-                        Current PIN
-                      </label>
-                      <input
-                        type="password"
-                        value={currentPinInput}
-                        onChange={(e) => setCurrentPinInput(e.target.value)}
-                        placeholder="Current PIN"
-                        className="w-full bg-[#06020c] border border-purple-500/40 focus:border-amber-400 rounded-xl py-2 px-3 text-xs font-mono-crypto text-slate-100 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[9px] uppercase text-amber-300 font-rajdhani font-bold block mb-1">
-                        New Secret PIN
-                      </label>
-                      <input
-                        type="password"
-                        value={newPinInput}
-                        onChange={(e) => setNewPinInput(e.target.value)}
-                        placeholder="New PIN (min 4 chars)"
-                        className="w-full bg-[#06020c] border border-amber-500/40 focus:border-amber-400 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[9px] uppercase text-amber-300 font-rajdhani font-bold block mb-1">
-                        Confirm New PIN
-                      </label>
-                      <input
-                        type="password"
-                        value={confirmPinInput}
-                        onChange={(e) => setConfirmPinInput(e.target.value)}
-                        placeholder="Confirm New PIN"
-                        className="w-full bg-[#06020c] border border-amber-500/40 focus:border-amber-400 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 focus:outline-none"
-                      />
-                    </div>
+                    <div><label className="text-[9px] uppercase text-purple-300 font-rajdhani font-bold block mb-1">Current PIN</label><input type="password" value={currentPinInput} onChange={(e) => setCurrentPinInput(e.target.value)} className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-slate-100 focus:outline-none" /></div>
+                    <div><label className="text-[9px] uppercase text-amber-300 font-rajdhani font-bold block mb-1">New PIN</label><input type="password" value={newPinInput} onChange={(e) => setNewPinInput(e.target.value)} className="w-full bg-[#06020c] border border-amber-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 focus:outline-none" /></div>
+                    <div><label className="text-[9px] uppercase text-amber-300 font-rajdhani font-bold block mb-1">Confirm PIN</label><input type="password" value={confirmPinInput} onChange={(e) => setConfirmPinInput(e.target.value)} className="w-full bg-[#06020c] border border-amber-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 focus:outline-none" /></div>
                   </div>
-
-                  {pinChangeError && (
-                    <div className="p-2.5 rounded-xl bg-rose-950/60 border border-rose-500/50 text-rose-300 text-xs font-mono-crypto flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                      <span>{pinChangeError}</span>
-                    </div>
-                  )}
-
-                  {pinChangeSuccess && (
-                    <div className="p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 text-xs font-mono-crypto flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>{pinChangeSuccess}</span>
-                    </div>
-                  )}
-
-                  <div className="flex justify-end pt-1">
-                    <button
-                      type="submit"
-                      disabled={isChangingPin}
-                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-rajdhani font-bold text-xs uppercase tracking-wider shadow-md transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {isChangingPin ? 'Updating PIN...' : 'Update & Save Secret PIN'}
-                    </button>
-                  </div>
+                  {pinChangeError && <div className="p-2.5 rounded-xl bg-rose-950/60 border border-rose-500/50 text-rose-300 text-xs font-mono-crypto">{pinChangeError}</div>}
+                  {pinChangeSuccess && <div className="p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 text-xs font-mono-crypto">{pinChangeSuccess}</div>}
+                  <div className="flex justify-end"><button type="submit" disabled={isChangingPin} className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-rajdhani font-bold text-xs disabled:opacity-50">{isChangingPin ? 'Updating PIN...' : 'Update PIN'}</button></div>
                 </form>
               </div>
 
-              {/* Core Information */}
-              <div className="p-4 rounded-3xl bg-[#120626] border border-purple-500/30 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">
-                      Coin Name
-                    </label>
-                    <input
-                      type="text"
-                      value={localSystem.tokenName}
-                      onChange={(e) => handleUpdateSystem({ tokenName: e.target.value })}
-                      className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-slate-100 focus:border-amber-400 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">
-                      Coin Symbol
-                    </label>
-                    <input
-                      type="text"
-                      value={localSystem.tokenSymbol}
-                      onChange={(e) => handleUpdateSystem({ tokenSymbol: e.target.value })}
-                      className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 font-bold focus:border-amber-400 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">
-                      BEP-20 Smart Contract Address
-                    </label>
-                    <input
-                      type="text"
-                      value={localSystem.contractAddress}
-                      onChange={(e) => handleUpdateSystem({ contractAddress: e.target.value })}
-                      className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-purple-200 focus:border-amber-400 focus:outline-none"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">
-                      Receiving Wallet Address (For USDT Payments)
-                    </label>
-                    <input
-                      type="text"
-                      value={localSystem.receivingAddress || ''}
-                      onChange={(e) => handleUpdateSystem({ receivingAddress: e.target.value })}
-                      className="w-full bg-[#06020c] border border-amber-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 font-bold focus:border-amber-400 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2 pt-3 border-t border-purple-500/20">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <label className="text-[9px] uppercase text-cyan-300 font-bold block">Social Media Links</label>
-                        <p className="text-[9px] text-purple-300/80 font-mono-crypto">These links are stored in PostgreSQL and shown live on the user frontend.</p>
-                      </div>
-                      <span className="text-[9px] text-emerald-300 font-mono-crypto">DATABASE CONTROLLED</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {([
-                        ['x', 'X / Twitter URL'],
-                        ['youtube', 'YouTube URL'],
-                        ['telegram', 'Telegram URL'],
-                        ['facebook', 'Facebook URL'],
-                      ] as const).map(([key, label]) => (
-                        <div key={key}>
-                          <label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">{label}</label>
-                          <input
-                            type="url"
-                            value={localSystem.socialLinks?.[key] || ''}
-                            onChange={(e) => handleUpdateSystem({ socialLinks: { ...(localSystem.socialLinks || {}), [key]: e.target.value } })}
-                            placeholder={`https://${key === 'x' ? 'x.com/yourpage' : key + '.com/yourpage'}`}
-                            className="w-full bg-[#06020c] border border-cyan-500/30 rounded-xl py-2 px-3 text-xs font-mono-crypto text-slate-100 focus:border-amber-400 focus:outline-none"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+              <div className="p-4 rounded-3xl bg-[#120626] border border-cyan-500/20 space-y-3">
+                <div><label className="text-[9px] uppercase text-cyan-300 font-bold block">Social Media Links</label><p className="text-[9px] text-purple-300/80 font-mono-crypto">Stored in PostgreSQL and shown live on the user frontend.</p></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {([['x','X / Twitter URL'],['youtube','YouTube URL'],['telegram','Telegram URL'],['facebook','Facebook URL']] as const).map(([key,label]) => (
+                    <div key={key}><label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">{label}</label><input type="url" value={localSystem.socialLinks?.[key] || ''} onChange={(e) => handleUpdateSystem({ socialLinks: { ...(localSystem.socialLinks || {}), [key]: e.target.value } })} className="w-full bg-[#06020c] border border-cyan-500/30 rounded-xl py-2 px-3 text-xs font-mono-crypto text-slate-100 focus:outline-none" /></div>
+                  ))}
                 </div>
               </div>
 
-              {/* Financial Constraints */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3.5 rounded-2xl bg-[#120626] border border-purple-500/20">
-                  <label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">
-                    Minimum Buy Limit ($ USD)
-                  </label>
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={localSystem.minPurchaseUsd}
-                    onChange={(e) => handleUpdateSystem({ minPurchaseUsd: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-slate-100 focus:border-amber-400 focus:outline-none"
-                  />
+                  <label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">Withdrawal Fee (%)</label>
+                  <input type="number" min="0" max="20" step="0.5" value={localSystem.withdrawalFeePercent} onChange={(e) => handleUpdateSystem({ withdrawalFeePercent: parseFloat(e.target.value) || 0 })} className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 font-bold focus:outline-none" />
                 </div>
-
-                <div className="p-3.5 rounded-2xl bg-[#120626] border border-purple-500/20">
-                  <label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">
-                    Maximum Buy Limit ($ USD)
-                  </label>
-                  <input
-                    type="number"
-                    min="100"
-                    value={localSystem.maxPurchaseUsd}
-                    onChange={(e) => handleUpdateSystem({ maxPurchaseUsd: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-slate-100 focus:border-amber-400 focus:outline-none"
-                  />
+                <div className="p-3.5 rounded-2xl bg-[#120626] border border-cyan-500/20">
+                  <label className="text-[9px] uppercase text-cyan-300 font-bold block mb-1">FIFO Seller Share (%)</label>
+                  <input type="number" min="0" max="100" step="1" value={Number.isFinite(Number(localSystem.sellQueueSharePercent)) ? localSystem.sellQueueSharePercent : 20} onChange={(e) => {
+                    const value = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                    handleUpdateSystem({ sellQueueSharePercent: value });
+                  }} className="w-full bg-[#06020c] border border-cyan-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-cyan-300 font-bold focus:outline-none" />
+                  <p className="text-[8px] text-purple-300/80 font-mono-crypto mt-1">Company share automatically: {100 - (Number(localSystem.sellQueueSharePercent) || 0)}%</p>
                 </div>
-
-                <div className="p-3.5 rounded-2xl bg-[#120626] border border-purple-500/20">
-                  <label className="text-[9px] uppercase text-purple-300 font-bold block mb-1">
-                    Withdrawal Fee (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="20"
-                    step="0.5"
-                    value={localSystem.withdrawalFeePercent}
-                    onChange={(e) => handleUpdateSystem({ withdrawalFeePercent: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 font-bold focus:border-amber-400 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* P2P Liquidity / Order Book Control */}
-              <div className="p-4 rounded-3xl bg-[#120626] border border-fuchsia-500/30 space-y-3">
-                <div>
-                  <h4 className="text-xs font-bold text-fuchsia-300 font-rajdhani uppercase flex items-center gap-1.5">
-                    <RefreshCw className="w-4 h-4 text-fuchsia-400" />
-                    P2P Liquidity Control (Matched Order Book)
-                  </h4>
-                  <p className="text-[10px] text-purple-300 font-mono-crypto mt-1">
-                    System-wide FIFO queue rule: User sell orders are cleared on a First-In, First-Out basis with automated treasury liquidity routing.
-                  </p>
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[9px] uppercase text-fuchsia-300/80 font-bold block mb-1">
-                      User Sell Queue Allocation (%)
-                    </label>
-                    <input
-                      type="number"
-                      disabled
-                      value={20}
-                      className="w-full bg-[#06020c] border border-fuchsia-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-fuchsia-300 font-bold opacity-80 cursor-not-allowed"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[9px] uppercase text-amber-300/80 font-bold block mb-1">
-                      System Treasury Allocation (%)
-                    </label>
-                    <input
-                      type="number"
-                      disabled
-                      value={80}
-                      className="w-full bg-[#06020c] border border-amber-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-amber-300 font-bold opacity-80 cursor-not-allowed"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Emergency Presale Pause Switch */}
-              <div className="p-4 rounded-3xl bg-gradient-to-r from-rose-950/40 to-[#090316] border border-rose-500/40 flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-rose-300 font-rajdhani uppercase flex items-center gap-1.5">
-                    <AlertCircle className="w-4 h-4 text-rose-400" />
-                    Emergency Presale Pause Switch
-                  </h4>
-                  <p className="text-[9px] text-purple-300/80 font-mono-crypto mt-0.5">
-                    Temporarily pauses the presale so no new users can purchase coins.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setLocalSystem({ ...localSystem, presalePaused: !localSystem.presalePaused })}
-                  className={`px-4 py-2 rounded-xl font-mono-crypto text-xs font-bold border transition-all cursor-pointer ${
-                    localSystem.presalePaused
-                      ? 'bg-rose-600 text-white border-rose-400 shadow-[0_0_20px_rgba(225,29,72,0.6)]'
-                      : 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
-                  }`}
-                >
-                  {localSystem.presalePaused ? '🛑 PRESALE PAUSED' : '✓ PRESALE ACTIVE'}
-                </button>
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-rose-950/40 to-[#090316] border border-rose-500/40 flex items-center justify-between"><div><h4 className="text-xs font-bold text-rose-300 font-rajdhani uppercase">Emergency Presale Pause</h4><p className="text-[9px] text-purple-300/80 font-mono-crypto mt-0.5">Temporarily pauses new purchases.</p></div><button type="button" onClick={() => setLocalSystem({ ...localSystem, presalePaused: !localSystem.presalePaused })} className={`px-4 py-2 rounded-xl font-mono-crypto text-xs font-bold border ${localSystem.presalePaused ? 'bg-rose-600 text-white border-rose-400' : 'bg-emerald-950 text-emerald-300 border-emerald-500/50'}`}>{localSystem.presalePaused ? '🛑 PAUSED' : '✓ ACTIVE'}</button></div>
               </div>
             </div>
           )}
@@ -1722,288 +1248,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
           {/* ========================================================================= */}
           {/* 8. LIVE REVENUE & COMMISSION SIMULATOR                                     */}
           {/* ========================================================================= */}
-                    {activeSection === 'queue' && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-purple-500/20">
-                <div>
-                  <h3 className="text-sm font-black text-blue-300 font-cinzel uppercase flex items-center gap-2">
-                    <Database className="w-4 h-4 text-blue-400" />
-                    Global Auto-Sell FIFO Queue & Manual Priority Manager
-                  </h3>
-                  <p className="text-[10px] text-purple-300 font-mono-crypto">
-                    Default: 100% Automatic FIFO (First-In, First-Out). Admin can promote VIP users to #1 in line or manually fulfill orders instantly.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button 
-                    onClick={() => onSimulateExternalBuy && onSimulateExternalBuy(10000)}
-                    className="bg-blue-500/20 text-blue-300 border border-blue-500/50 px-3.5 py-1.5 rounded-xl text-xs font-bold hover:bg-blue-500/40 transition-colors flex items-center gap-1.5 font-mono-crypto"
-                    title="Simulate 10,000 token buy on BSC to test automatic FIFO fulfillment"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Auto-Sell 10K Tokens</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Status Alert */}
-              <div className="flex flex-col sm:flex-row items-center gap-3 justify-between">
-                <div className="w-full sm:w-auto p-3 rounded-2xl bg-blue-950/40 border border-blue-500/30 flex items-center justify-between text-xs flex-1">
-                  <div className="flex items-center gap-2 text-blue-200">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span><strong>Automatic FIFO Active:</strong> Natural buyer volume automatically fulfills top of line.</span>
-                  </div>
-                </div>
-                {/* Search Bar for Queue */}
-                <div className="w-full sm:w-[300px] relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="w-4 h-4 text-blue-400/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
-                  <input
-                    type="text"
-                    value={queueSearch}
-                    onChange={(e) => setQueueSearch(e.target.value)}
-                    placeholder="Search Wallet Address..."
-                    className="w-full pl-9 pr-3 py-2 bg-[#120626] border border-blue-500/30 rounded-xl text-xs text-blue-100 font-mono-crypto focus:outline-none focus:border-blue-400 placeholder:text-blue-500/50"
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-3">
-                {sellQueue && sellQueue.length > 0 ? (
-                  sellQueue.map((entry, idx) => {
-                    const matchId = entry.userId || entry.userAddress || '';
-                    if (queueSearch && matchId && !matchId.toLowerCase().includes(queueSearch.toLowerCase())) {
-                      return null;
-                    }
-                    const progress = Math.min(100, (entry.tokensSold / entry.tokensRequested) * 100);
-                    const isFullySold = entry.tokensSold >= entry.tokensRequested;
-                    return (
-                      <div key={idx} className="bg-[#120626] border border-blue-500/30 rounded-2xl p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all hover:border-blue-400/60 shadow-lg">
-                        <div className="space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono-crypto bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                              Position #{idx + 1}
-                            </span>
-                            <span className="text-xs font-bold font-mono-crypto text-slate-100 select-all">
-                              {matchId || 'Unknown Wallet'}
-                            </span>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300">
-                              Phase {entry.phaseNumber} Target
-                            </span>
-                            {isFullySold && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                                ✓ Fully Settled
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-purple-300 font-mono-crypto flex items-center gap-3">
-                            <span>Requested: <strong className="text-slate-200">{entry.tokensRequested.toLocaleString()} NXBC</strong></span>
-                            <span>Sold: <strong className="text-emerald-400">{entry.tokensSold.toLocaleString()} NXBC</strong></span>
-                            <span>Remaining: <strong className="text-amber-300">{(entry.tokensRequested - entry.tokensSold).toLocaleString()} NXBC</strong></span>
-                          </div>
-                        </div>
-
-                        {/* Progress Bar & Actions */}
-                        <div className="w-full md:w-5/12 space-y-2">
-                          <div className="flex justify-between text-[10px] font-bold font-mono-crypto">
-                            <span className="text-blue-300">Fulfillment Progress</span>
-                            <span className="text-emerald-400">{progress.toFixed(1)}%</span>
-                          </div>
-                          <div className="h-2 w-full bg-[#0d041c] rounded-full overflow-hidden border border-purple-500/20">
-                            <div 
-                              className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 transition-all duration-500" 
-                              style={{ width: `${progress}%` }}
-                            ></div>
-                          </div>
-
-                          {/* Admin Action Buttons: Move Up, Move Down, Instant Fulfill */}
-                          <div className="flex items-center justify-end gap-1.5 pt-1">
-                            {/* Move to Top */}
-                            <button
-                              disabled={idx === 0}
-                              onClick={() => {
-                                if (!onUpdateSellQueue || !sellQueue) return;
-                                const newQueue = [...sellQueue];
-                                const [item] = newQueue.splice(idx, 1);
-                                newQueue.unshift(item);
-                                onUpdateSellQueue(newQueue);
-                              }}
-                              className="px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-500/10 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 disabled:opacity-30 disabled:pointer-events-none transition-all"
-                              title="Make this order #1 in line"
-                            >
-                              ⬆ #1 Top Priority
-                            </button>
-
-                            {/* Instant Fulfill Order */}
-                            <button
-                              onClick={async () => {
-                                 if (!confirm('Instantly fulfill this specific order? The user will be paid out immediately.')) return;
-                                 try {
-                                    const res = await fetch('/api/admin/sellqueue/instant-fulfill', {
-                                       method: 'POST',
-                                       headers: { 'Content-Type': 'application/json' },
-                                       body: JSON.stringify({ orderId: entry.id })
-                                    });
-                                    if (res.ok) {
-                                       if (onUpdateSellQueue && sellQueue) {
-                                          const newQueue = [...sellQueue];
-                                          newQueue[idx].tokensSold = newQueue[idx].tokensRequested;
-                                          onUpdateSellQueue(newQueue);
-                                       }
-                                    }
-                                 } catch(e) {}
-                              }}
-                              className="px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/10 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 transition-all"
-                              title="Instantly fulfill and payout this user"
-                            >
-                              ⚡ Instant Fulfill
-                            </button>
-
-                            {/* Move Up 1 Step */}
-                            <button
-                              disabled={idx === 0}
-                              onClick={() => {
-                                if (!onUpdateSellQueue || !sellQueue) return;
-                                const newQueue = [...sellQueue];
-                                const temp = newQueue[idx - 1];
-                                newQueue[idx - 1] = newQueue[idx];
-                                newQueue[idx] = temp;
-                                onUpdateSellQueue(newQueue);
-                              }}
-                              className="px-2 py-1 rounded-lg text-[10px] font-bold bg-purple-500/20 hover:bg-purple-500/40 text-purple-200 border border-purple-500/40 disabled:opacity-30 disabled:pointer-events-none transition-all"
-                              title="Move up one position"
-                            >
-                              ▲ Up
-                            </button>
-
-                            {/* Move Down 1 Step */}
-                            <button
-                              disabled={idx === sellQueue.length - 1}
-                              onClick={() => {
-                                if (!onUpdateSellQueue || !sellQueue) return;
-                                const newQueue = [...sellQueue];
-                                const temp = newQueue[idx + 1];
-                                newQueue[idx + 1] = newQueue[idx];
-                                newQueue[idx] = temp;
-                                onUpdateSellQueue(newQueue);
-                              }}
-                              className="px-2 py-1 rounded-lg text-[10px] font-bold bg-purple-500/20 hover:bg-purple-500/40 text-purple-200 border border-purple-500/40 disabled:opacity-30 disabled:pointer-events-none transition-all"
-                              title="Move down one position"
-                            >
-                              ▼ Down
-                            </button>
-
-                            {/* Instant 100% Fulfill */}
-                            <button
-                              disabled={isFullySold}
-                              onClick={() => {
-                                if (!onUpdateSellQueue || !sellQueue) return;
-                                const newQueue = [...sellQueue];
-                                newQueue[idx] = {
-                                  ...newQueue[idx],
-                                  tokensSold: newQueue[idx].tokensRequested,
-                                };
-                                onUpdateSellQueue(newQueue);
-                              }}
-                              className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 border border-emerald-500/40 disabled:opacity-30 disabled:pointer-events-none transition-all flex items-center gap-1"
-                              title="Instantly fulfill 100% and unlock user withdrawal"
-                            >
-                              <Zap className="w-3 h-3 text-emerald-400" />
-                              <span>Instant Fulfill</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-center p-8 bg-[#120626] border border-blue-500/20 rounded-2xl">
-                     <Database className="w-8 h-8 mx-auto text-blue-500/30 mb-2" />
-                     <p className="text-xs text-purple-400 font-mono-crypto">The Auto-Sell queue is currently empty.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          
-{activeSection === 'simulator' && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-purple-500/20">
-                <div>
-                  <h3 className="text-sm font-black text-emerald-300 font-cinzel uppercase flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-emerald-400" />
-                    Live Revenue & Commission Simulator Sandbox
-                  </h3>
-                  <p className="text-[10px] text-purple-300 font-mono-crypto">
-                    Enter any test purchase amount to see real-time distribution across all income channels
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-purple-300 font-mono-crypto">Test Purchase:</span>
-                  <div className="relative w-32">
-                    <span className="absolute left-3 top-2 text-xs text-emerald-400 font-bold">$</span>
-                    <input
-                      type="number"
-                      min="10"
-                      step="50"
-                      value={simBuyAmount}
-                      onChange={(e) => setSimBuyAmount(parseFloat(e.target.value) || 0)}
-                      className="w-full bg-[#06020c] border border-emerald-500/50 rounded-xl py-1.5 pl-6 pr-2 text-xs font-bold font-mono-crypto text-emerald-300 focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Simulation Breakdown Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs font-mono-crypto">
-                <div className="p-4 rounded-2xl bg-[#120626] border border-amber-500/30 space-y-1">
-                  <span className="text-[9px] text-amber-300 uppercase block font-bold">1. Direct Sponsor Bonus</span>
-                  <span className="text-lg font-black text-amber-300">
-                    ${((simBuyAmount * localSystem.directSponsorPercent) / 100).toFixed(2)} USD
-                  </span>
-                  <span className="text-[9px] text-purple-400 block">
-                    ({localSystem.directSponsorPercent}% of ${simBuyAmount})
-                  </span>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[#120626] border border-purple-500/30 space-y-1">
-                  <span className="text-[9px] text-purple-300 uppercase block font-bold">2. Level 1 Upline</span>
-                  <span className="text-lg font-black text-purple-200">
-                    ${((simBuyAmount * (localLevels[0]?.commissionPercent || 0)) / 100).toFixed(2)} USD
-                  </span>
-                  <span className="text-[9px] text-purple-400 block">
-                    ({localLevels[0]?.commissionPercent || 0}% of ${simBuyAmount})
-                  </span>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[#120626] border border-fuchsia-500/30 space-y-1">
-                  <span className="text-[9px] text-fuchsia-300 uppercase block font-bold">3. Matrix Parent</span>
-                  <span className="text-lg font-black text-fuchsia-300">
-                    ${(localMatrix.placementIncomeUsd ?? 1.0).toFixed(2)} USD
-                  </span>
-                  <span className="text-[9px] text-purple-400 block">
-                    (Immediate Parent Node)
-                  </span>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[#120626] border border-emerald-500/30 space-y-1">
-                  <span className="text-[9px] text-emerald-300 uppercase block font-bold">4. Matrix 10 Uplines</span>
-                  <span className="text-lg font-black text-emerald-300">
-                    ${(((localMatrix.placementIncomeUsd ?? 1.0) * (localMatrix.uplineSharePercent ?? 10) / 100) * 10).toFixed(2)} USD
-                  </span>
-                  <span className="text-[9px] text-purple-400 block">
-                    (${((localMatrix.placementIncomeUsd ?? 1.0) * (localMatrix.uplineSharePercent ?? 10) / 100).toFixed(2)} x 10 Uplines)
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-        </main>
+                  </main>
       </div>
     </div>
   );

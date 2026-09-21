@@ -40,7 +40,7 @@ interface ScreenTwoAssetsProps {
   walletConnected?: boolean;
 }
 
-type MilestoneVectorKey = 'p2' | 'p3' | 'p4' | 'p5' | 'dex' | 'unallocated';
+type MilestoneVectorKey = 'p2' | 'p3' | 'p4' | 'p5' | 'live' | 'unallocated';
 
 export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   allocation,
@@ -53,12 +53,12 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
 }) => {
   const [showValues, setShowValues] = useState<boolean>(true);
   const [selectedVector, setSelectedVector] = useState<MilestoneVectorKey>('p2');
-  const [simTarget, setSimTarget] = useState<'p2' | 'p3' | 'p4' | 'p5' | 'dex'>('p3');
+  const [simTarget, setSimTarget] = useState<'p2' | 'p3' | 'p4' | 'p5' | 'live'>('p3');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [saleOrders, setSaleOrders] = useState<Array<{
     id: number; phaseNumber: number; amountTokens: number; soldTokens: number;
     remainingTokens: number; tokenPrice: number; expectedUsdt: number;
-    realizedUsdt: number; remainingUsdt: number; status: string; createdAt?: string;
+    realizedUsdt: number; remainingUsdt: number; status: string; fifoNumber?: number; currentRunningFifoNumber?: number | null; positionsAhead?: number; createdAt?: string;
   }>>([]);
   const [globalFifo, setGlobalFifo] = useState<Array<{
     phaseNumber: number; totalOrders: number; totalQueuedTokens: number;
@@ -67,6 +67,26 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
       aheadTokens: number; expectedRemainingUsdt: number; createdAt?: string; }>;
   }>>([]);
   const [fifoLoading, setFifoLoading] = useState(true);
+  const [inviteByOrder, setInviteByOrder] = useState<Record<number, { url: string; expiresAt: string }>>({});
+  const [inviteLoading, setInviteLoading] = useState<number | null>(null);
+
+  const generateDirectBuyerLink = async (orderId: number) => {
+    if (!walletAddress) return;
+    setInviteLoading(orderId);
+    try {
+      const r = await fetch('/api/presale/direct-buyer/invite', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress, orderId }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.success) throw new Error(data.error || 'Could not create Direct Buyer Link.');
+      setInviteByOrder(prev => ({ ...prev, [orderId]: { url: data.shareUrl, expiresAt: data.expiresAt } }));
+      await navigator.clipboard?.writeText(data.shareUrl);
+    } catch (e:any) {
+      console.error(e);
+      alert(e?.message || 'Could not create Direct Buyer Link.');
+    } finally { setInviteLoading(null); }
+  };
 
   const fetchOrders = async () => {
     if (!walletAddress) { setSaleOrders([]); return; }
@@ -118,10 +138,10 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   const p3Tokens = Math.round(totalTokens * (allocation.p3Percent / 100));
   const p4Tokens = Math.round(totalTokens * (allocation.p4Percent / 100));
   const p5Tokens = Math.round(totalTokens * (allocation.p5Percent / 100));
-  const dexTokens = Math.round(totalTokens * (allocation.dexPercent / 100));
+  const liveTokens = Math.round(totalTokens * (allocation.livePercent / 100));
   const unallocatedTokens = Math.max(
     0,
-    totalTokens - (p1Tokens + p2Tokens + p3Tokens + p4Tokens + p5Tokens + dexTokens)
+    totalTokens - (p1Tokens + p2Tokens + p3Tokens + p4Tokens + p5Tokens + liveTokens)
   );
 
   // Projected values per vector
@@ -129,9 +149,9 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   const p3Val = p3Tokens * 1.00;
   const p4Val = p4Tokens * 10.00;
   const p5Val = p5Tokens * 100.00;
-  const dexVal = dexTokens * 1500.00;
+  const liveVal = 0;
 
-  const totalAllocatedUsd = p2Val + p3Val + p4Val + p5Val + dexVal;
+  const totalAllocatedUsd = p2Val + p3Val + p4Val + p5Val + liveVal;
   const initialCostUsd = totalTokens * 0.01;
 
   // Simulator rates & projected holding value
@@ -140,7 +160,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
     p3: { rate: 1.00, label: 'Phase 3 ($1.00)', multiplier: '100x' },
     p4: { rate: 10.00, label: 'Phase 4 ($10.00)', multiplier: '1,000x' },
     p5: { rate: 100.00, label: 'Phase 5 ($100.00)', multiplier: '10,000x' },
-    dex: { rate: 1500.00, label: 'DEX Listing ($1,500.00)', multiplier: '150,000x' },
+    live: { rate: 0, label: 'DEX / LIVE (Market Price)', multiplier: 'TBA' },
   };
 
   const simCurrent = simRates[simTarget];
@@ -169,7 +189,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
       color: 'text-amber-300',
       borderColor: 'border-amber-400/40',
       fifoBadge: 'FIFO Priority Tier 1',
-      desc: 'First exit gate at 10x ROI from Phase 1 entry. 20% of subsequent buyer USDT funds execute orders automatically.',
+      desc: 'First exit gate at 10x ROI from Phase 1 entry. Eligible purchases can automatically match the FIFO queue.',
     },
     p3: {
       title: 'Phase 3 Milestone',
@@ -202,18 +222,18 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
       color: 'text-purple-300',
       borderColor: 'border-purple-400/40',
       fifoBadge: 'FIFO Ultimate Tier',
-      desc: 'Final presale phase before global decentralized exchange deployment with institutional matching.',
+      desc: 'Final presale phase before DEX / LIVE market stage.',
     },
-    dex: {
-      title: 'Live DEX Launch Pool',
-      rate: '$1,500.00 – $3,000.00',
-      multiplier: '150,000x+ Return',
-      tokens: dexTokens,
-      value: dexVal,
+    live: {
+      title: 'DEX / LIVE Wallet',
+      rate: 'Market price on DEX / LIVE',
+      multiplier: 'Market based',
+      tokens: liveTokens,
+      value: liveVal,
       color: 'text-emerald-300',
       borderColor: 'border-emerald-400/40',
-      fifoBadge: 'PancakeSwap / Uniswap AMM',
-      desc: 'Direct decentralized exchange liquidity pool. Unlocked directly for free market trading and staking rewards.',
+      fifoBadge: 'Not in Presale / FIFO',
+      desc: 'DEX / LIVE tokens stay in the user wallet and are never created as a presale/FIFO sell order. They are reserved for the DEX/live market.',
     },
     unallocated: {
       title: 'Unallocated Free Holdings',
@@ -305,7 +325,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               <div className="mt-0.5 text-sm sm:text-base leading-none font-black font-mono-crypto text-cyan-300">
                 $1,500+
               </div>
-              <div className="text-[8px] sm:text-[9px] font-rajdhani text-slate-300 mt-0.5">DEX Pool</div>
+              <div className="text-[8px] sm:text-[9px] font-rajdhani text-slate-300 mt-0.5">DEX / LIVE</div>
             </div>
           </div>
         </div>
@@ -364,7 +384,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               <div style={{ width: `${allocation.p3Percent}%` }} title={`Phase 3: ${allocation.p3Percent}%`} className="h-full bg-yellow-300 transition-all" />
               <div style={{ width: `${allocation.p4Percent}%` }} title={`Phase 4: ${allocation.p4Percent}%`} className="h-full bg-cyan-400 transition-all" />
               <div style={{ width: `${allocation.p5Percent}%` }} title={`Phase 5: ${allocation.p5Percent}%`} className="h-full bg-purple-400 transition-all" />
-              <div style={{ width: `${allocation.dexPercent}%` }} title={`DEX: ${allocation.dexPercent}%`} className="h-full bg-emerald-400 transition-all" />
+              <div style={{ width: `${allocation.livePercent}%` }} title={`DEX / LIVE: ${allocation.livePercent}%`} className="h-full bg-emerald-400 transition-all" />
               <div style={{ width: `${allocation.unallocatedPercent}%` }} title={`Unallocated: ${allocation.unallocatedPercent}%`} className="h-full bg-slate-600 transition-all" />
             </div>
 
@@ -374,7 +394,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               <div className="text-yellow-300">P3 {allocation.p3Percent}%</div>
               <div className="text-cyan-300">P4 {allocation.p4Percent}%</div>
               <div className="text-purple-300">P5 {allocation.p5Percent}%</div>
-              <div className="text-emerald-300">DEX {allocation.dexPercent}%</div>
+              <div className="text-emerald-300">DEX / LIVE {allocation.livePercent}%</div>
             </div>
           </div>
 
@@ -382,7 +402,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
             <div className="mt-2.5 pt-2.5 border-t border-amber-300/10 flex items-center justify-between text-[8px] sm:text-[9px] font-mono-crypto">
               <span className="text-emerald-300 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
-                <span>FIFO Queue Virtually Registered</span>
+                <span>FIFO Queue Registered</span>
               </span>
               <span className="text-slate-300">{allocation.lockedTimestamp || 'Active'}</span>
             </div>
@@ -414,7 +434,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
 
           {/* Simulator Target Selector Pills */}
           <div className="grid grid-cols-5 gap-1.5 p-1 rounded-[14px] bg-[#050b16]/80 border border-white/10 mb-3">
-            {(['p2', 'p3', 'p4', 'p5', 'dex'] as const).map((key) => {
+            {(['p2', 'p3', 'p4', 'p5', 'live'] as const).map((key) => {
               const active = simTarget === key;
               return (
                 <button
@@ -427,7 +447,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                       : 'text-slate-300 hover:text-white hover:bg-white/5'
                   }`}
                 >
-                  {key === 'dex' ? 'DEX' : key.toUpperCase()}
+                  {key === 'live' ? 'DEX / LIVE' : key.toUpperCase()}
                 </button>
               );
             })}
@@ -668,19 +688,19 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               </div>
             </button>
 
-            {/* Box 5: Live DEX */}
+            {/* Box 5: DEX / LIVE */}
             <button
               type="button"
-              onClick={() => setSelectedVector('dex')}
+              onClick={() => setSelectedVector('live')}
               className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
-                selectedVector === 'dex'
+                selectedVector === 'live'
                   ? 'border-2 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
                   : 'border border-emerald-400/30 hover:border-emerald-400/60 shadow-[0_0_15px_rgba(16,185,129,0.06)]'
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] sm:text-[11px] font-black text-emerald-300 font-rajdhani uppercase tracking-wider block">
-                  Live DEX
+                  DEX / LIVE
                 </span>
                 <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-emerald-400/15 text-emerald-300 font-bold border border-emerald-400/30">
                   FIFO #18
@@ -688,15 +708,15 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               </div>
               <div className="my-1 sm:my-1.5">
                 <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block truncate">
-                  {showValues ? `${dexTokens.toLocaleString()} NXBC` : '••••'}
+                  {showValues ? `${liveTokens.toLocaleString()} NXBC` : '••••'}
                 </span>
                 <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-emerald-300 font-semibold block truncate">
-                  @ $1,500 – $3,000
+                  @ DEX / LIVE MARKET PRICE
                 </span>
               </div>
               <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
-                <span>Est. Pool:</span>
-                <span className="text-emerald-300 font-black">${showValues ? dexVal.toFixed(0) : '••'}</span>
+                <span>Market Value:</span>
+                <span className="text-emerald-300 font-black">${showValues ? liveVal.toFixed(0) : '••'}</span>
               </div>
             </button>
 
@@ -772,7 +792,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                   Global FIFO Execution Queue
                 </h2>
                 <p className="text-[7.5px] sm:text-[8.5px] text-slate-300/80 font-mono-crypto">
-                  Algorithmic auto-matching on BSC • 20% buyer flow absorption
+                  Algorithmic FIFO auto-matching on BSC
                 </p>
               </div>
             </div>
@@ -781,23 +801,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
             </div>
           </div>
 
-          {/* FIFO Status Telemetry Badges */}
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            <div className="rounded-[12px] bg-[#050b16]/70 border border-white/10 p-2 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-300 shrink-0" />
-              <div className="min-w-0">
-                <div className="text-[7px] text-slate-400 uppercase font-rajdhani">Buyer Absorption</div>
-                <div className="text-[9px] font-bold text-amber-300 font-mono-crypto">20% Immediate Pool</div>
-              </div>
-            </div>
-            <div className="rounded-[12px] bg-[#050b16]/70 border border-white/10 p-2 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-300 shrink-0" />
-              <div className="min-w-0">
-                <div className="text-[7px] text-slate-400 uppercase font-rajdhani">Reserve Pool Match</div>
-                <div className="text-[9px] font-bold text-emerald-300 font-mono-crypto">80% Admin Queue</div>
-              </div>
-            </div>
-          </div>
+          <div className="mb-3 px-3 py-2 rounded-xl bg-emerald-500/5 border border-emerald-400/15 text-[9px] text-emerald-200 font-mono-crypto">Automatic FIFO matching is system-controlled and cannot be manually reordered from the user dashboard.</div>
 
           {fifoLoading ? (
             <div className="py-4 text-center text-[10px] text-slate-400 font-mono-crypto">Loading global queue...</div>
@@ -858,14 +862,37 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                 Your Queued Orders ({saleOrders.length})
               </div>
               <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                {saleOrders.map((o) => (
-                  <div key={o.id} className="rounded-[10px] border border-white/10 bg-[#071426]/60 p-2 text-[8px] font-mono-crypto flex justify-between items-center">
-                    <div>
-                      <span className="text-amber-300 font-bold">Phase {o.phaseNumber}</span>: {o.amountTokens.toLocaleString()} NXBC
+                {saleOrders.map((o) => {
+                  const invite = inviteByOrder[o.id];
+                  const canInvite = o.phaseNumber >= 2 && o.phaseNumber <= 5 && Number(o.remainingTokens) > 0;
+                  return (
+                    <div key={o.id} className="rounded-[12px] border border-white/10 bg-[#071426]/60 p-2.5 text-[8px] font-mono-crypto space-y-2">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="text-amber-300 font-bold">Phase {o.phaseNumber}</span> · FIFO #{o.fifoNumber || o.id}
+                        </div>
+                        <span className="text-emerald-300 font-bold">{o.status.toUpperCase()}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1 text-slate-300">
+                        <span>Allocation: <b className="text-white">{o.amountTokens.toLocaleString()}</b></span>
+                        <span>Remaining: <b className="text-amber-300">{o.remainingTokens.toLocaleString()}</b></span>
+                        <span>Running: <b className="text-cyan-300">#{o.currentRunningFifoNumber || '—'}</b></span>
+                        <span>Ahead: <b className="text-cyan-300">{o.positionsAhead ?? 0} orders</b></span>
+                        <span>Price: <b className="text-emerald-300">${o.tokenPrice.toFixed(2)}</b></span>
+                      </div>
+                      {canInvite && (
+                        <div className="flex items-center gap-1.5">
+                          <button type="button" onClick={() => generateDirectBuyerLink(o.id)} disabled={inviteLoading === o.id}
+                            className="px-2.5 py-1.5 rounded-lg bg-amber-400/15 border border-amber-300/30 text-amber-200 font-bold hover:bg-amber-400/25 disabled:opacity-50">
+                            {inviteLoading === o.id ? 'Creating...' : 'Generate Direct Buyer Link'}
+                          </button>
+                          {invite && <button type="button" onClick={() => navigator.clipboard?.writeText(invite.url)} className="px-2 py-1.5 rounded-lg bg-cyan-400/10 border border-cyan-300/20 text-cyan-200">Copy</button>}
+                        </div>
+                      )}
+                      {invite && <div className="break-all text-[7px] text-cyan-300/80">{invite.url}</div>}
                     </div>
-                    <span className="text-emerald-300 font-bold">{o.status.toUpperCase()}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

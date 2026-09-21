@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
 import {
   Sparkles,
   Layers,
@@ -44,7 +45,6 @@ import { BuyTokenModal } from './components/BuyTokenModal';
 import { WalletConnectModal } from './components/WalletConnectModal';
 import { TeamPlanModal } from './components/TeamPlanModal';
 import { MatrixPlanModal } from './components/MatrixPlanModal';
-import { AdminPanelModal } from './components/AdminPanelModal';
 import { SecretAdminPage } from './components/SecretAdminPage';
 import { GoldCoinGraphic } from './components/GoldCoinGraphic';
 import {
@@ -55,12 +55,11 @@ import {
 
 
 const INITIAL_PHASES: PhaseConfig[] = [
-  { id: 'p1', phaseNumber: 1, name: 'Phase 1', shortName: 'P1', rate: 0.01, rateLabel: '$0.01', totalSupply: 1000000, tokensSold: 0, status: 'active', multiplier: '10x Phase', unlockRequirement: 'Live Now' },
-  { id: 'p2', phaseNumber: 2, name: 'Phase 2', shortName: 'P2', rate: 0.10, rateLabel: '$0.10', totalSupply: 2500000, tokensSold: 0, status: 'upcoming', multiplier: '15x Phase', unlockRequirement: 'After P1' },
-  { id: 'p3', phaseNumber: 3, name: 'Phase 3', shortName: 'P3', rate: 1.00, rateLabel: '$1.00', totalSupply: 7000000, tokensSold: 0, status: 'upcoming', multiplier: '20x Phase', unlockRequirement: 'After P2' },
-  { id: 'p4', phaseNumber: 4, name: 'Phase 4', shortName: 'P4', rate: 10.00, rateLabel: '$10.00', totalSupply: 19500000, tokensSold: 0, status: 'upcoming', multiplier: '25x Phase', unlockRequirement: 'After P3' },
-  { id: 'p5', phaseNumber: 5, name: 'Phase 5', shortName: 'P5', rate: 100.00, rateLabel: '$100.00', totalSupply: 40000000, tokensSold: 0, status: 'upcoming', multiplier: '30x Phase', unlockRequirement: 'After P4' },
-  { id: 'dex', phaseNumber: 6, name: 'Phase 6 (DEX)', shortName: 'DEX', rate: 0.50, rateLabel: '$0.50', totalSupply: 10000000, tokensSold: 0, status: 'upcoming', multiplier: '50x Phase', unlockRequirement: 'After P5' },
+  { id: 'p1', phaseNumber: 1, name: 'Phase 1', shortName: 'P1', rate: 0.01, rateLabel: '$0.01', totalSupply: 1_000_000, tokensSold: 0, status: 'active', multiplier: 'Base Seed Rate', unlockRequirement: 'Live Now' },
+  { id: 'p2', phaseNumber: 2, name: 'Phase 2', shortName: 'P2', rate: 0.10, rateLabel: '$0.10', totalSupply: 2_500_000, tokensSold: 0, status: 'upcoming', multiplier: '10x Growth', unlockRequirement: 'After P1' },
+  { id: 'p3', phaseNumber: 3, name: 'Phase 3', shortName: 'P3', rate: 1.00, rateLabel: '$1.00', totalSupply: 7_000_000, tokensSold: 0, status: 'upcoming', multiplier: '100x Growth', unlockRequirement: 'After P2' },
+  { id: 'p4', phaseNumber: 4, name: 'Phase 4', shortName: 'P4', rate: 10.00, rateLabel: '$10.00', totalSupply: 19_500_000, tokensSold: 0, status: 'upcoming', multiplier: '1000x Growth', unlockRequirement: 'After P3' },
+  { id: 'p5', phaseNumber: 5, name: 'Phase 5', shortName: 'P5', rate: 100.00, rateLabel: '$100.00', totalSupply: 40_000_000, tokensSold: 0, status: 'upcoming', multiplier: '10000x Growth', unlockRequirement: 'After P4' },
 ];
 
 export default function App() {
@@ -70,6 +69,7 @@ export default function App() {
   const [activeSingleScreen, setActiveSingleScreen] = useState<ActiveScreen>('home');
   const [showSecretAdminPage, setShowSecretAdminPage] = useState<boolean>(false);
   const [showHomeQuickMenu, setShowHomeQuickMenu] = useState(false);
+  const [userAuthToken, setUserAuthToken] = useState<string>(() => localStorage.getItem('nxbc_user_auth_token') || '');
 
   // Centralized navigation for Home shortcut buttons and the mobile navigation bar.
   const handleSingleScreenNavigation = (screen: ActiveScreen) => {
@@ -78,7 +78,7 @@ export default function App() {
     setShowHomeQuickMenu(false);
   };
 
-  // Core State: 6-Phase Sequential Roadmap & Live Status (Admin Managed & Persisted)
+  // Core State: 5-Phase Sequential Presale Roadmap & Live Status (Admin Managed & Persisted)
   const [phases, setPhases] = useState<PhaseConfig[]>(INITIAL_PHASES);
 
   const activePhase = phases.find((p) => p.status === 'active') || phases[0] || {
@@ -86,7 +86,7 @@ export default function App() {
     name: 'Phase 1',
     shortName: 'P1',
     rate: 0.01,
-    totalSupply: 500000,
+    totalSupply: 1_000_000,
     tokensSold: 0
   };
 
@@ -124,10 +124,13 @@ export default function App() {
          if (syncRes.ok) {
             const syncData = await syncRes.json();
             if (syncData.user) {
-               setUserEarnings({
-                  availableUsdt: syncData.user.availableUsdt || 0,
-                  withdrawnUsdt: syncData.user.totalWithdrawnUsdt || 0
-               });
+               setUserEarnings((prev) => ({
+                  ...prev,
+                  availableUsdt: Number(syncData.user.availableUsdt || 0),
+                  mlmAvailableUsdt: Number(syncData.user.availableUsdt || 0),
+                  tokenSellAvailableUsdt: Number(syncData.tokenSaleAvailableUsdt || prev.tokenSellAvailableUsdt || 0),
+                  withdrawnUsdt: Number(syncData.user.totalWithdrawnUsdt || 0),
+               }));
                if (syncData.user.referralCode) {
                   setUserRefCode(syncData.user.referralCode);
                }
@@ -202,6 +205,8 @@ export default function App() {
             setWalletConnected(false);
             setWalletAddress('');
             localStorage.removeItem('nxbc_connected_wallet');
+            localStorage.removeItem('nxbc_user_auth_token');
+            setUserAuthToken('');
           }
         };
 
@@ -210,27 +215,13 @@ export default function App() {
     }
   }, []);
 
-  // Secure URL-Only Admin Access (#admin, /admin, ?admin=true, ?panel=admin, #secret-admin)
+  // Production Admin Access: ONLY the exact /admin route opens the secure admin gate.
+  // Alternate URL tricks such as #admin, ?admin=true, ?panel=admin are intentionally disabled.
   useEffect(() => {
     const checkAdminUrl = () => {
       if (typeof window !== 'undefined') {
-        const fullUrl = window.location.href.toLowerCase();
-        const hash = (window.location.hash || '').toLowerCase();
-        const search = (window.location.search || '').toLowerCase();
-        const pathname = (window.location.pathname || '').toLowerCase();
-
-        if (
-          hash.includes('admin') ||
-          search.includes('admin') ||
-          pathname.includes('/admin') ||
-          pathname.endsWith('admin') ||
-          fullUrl.includes('#admin') ||
-          fullUrl.includes('?admin') ||
-          fullUrl.includes('/admin') ||
-          fullUrl.includes('panel=admin')
-        ) {
-          setShowSecretAdminPage(true);
-        }
+        const pathname = (window.location.pathname || '').toLowerCase().replace(/\/+$/, '') || '/';
+        setShowSecretAdminPage(pathname === '/admin');
       }
     };
 
@@ -319,21 +310,8 @@ export default function App() {
         return;
       }
 
-      if (e.key === 'nxbc_admin_phases' && e.newValue) {
-        try { setPhases(JSON.parse(e.newValue)); } catch (err) {}
-      }
-      if (e.key === 'nxbc_admin_levels' && e.newValue) {
-        try { setReferralLevels(JSON.parse(e.newValue)); } catch (err) {}
-      }
-      if (e.key === 'nxbc_admin_ranks' && e.newValue) {
-        try { setRankRewards(JSON.parse(e.newValue)); } catch (err) {}
-      }
-      if (e.key === 'nxbc_admin_system' && e.newValue) {
-        try { setSystemConfig(JSON.parse(e.newValue)); } catch (err) {}
-      }
-      if (e.key === 'nxbc_admin_matrix' && e.newValue) {
-        try { setMatrixConfig(JSON.parse(e.newValue)); } catch (err) {}
-      }
+      // Admin configuration is server-authoritative. Do not let browser storage
+      // events overwrite live production configuration on a user dashboard.
     };
 
     window.addEventListener('storage', handleStorageEvent);
@@ -344,74 +322,107 @@ export default function App() {
     };
   }, []);
 
-  // Sync user with PostgreSQL backend when wallet connects
-  useEffect(() => {
-    if (walletConnected && walletAddress) {
-      const sponsorRef = typeof window !== 'undefined' ? localStorage.getItem('nxbc_sponsor_ref') : null;
-      fetch('/api/users/sync', {
+  // Authenticate wallet ownership once per connection so private dashboard API calls
+  // cannot be made by simply guessing another user's wallet address.
+  const authenticateDashboardWallet = async (address: string) => {
+    try {
+      const ethereum = (window as any).ethereum;
+      if (!ethereum) throw new Error('Web3 wallet provider not found.');
+      const provider = new ethers.BrowserProvider(ethereum);
+      const signer = await provider.getSigner();
+      const signerAddress = (await signer.getAddress()).toLowerCase();
+      if (signerAddress !== address.toLowerCase()) throw new Error('Connected wallet changed.');
+      const challengeRes = await fetch(`/api/auth/nonce?walletAddress=${encodeURIComponent(address)}`);
+      const challenge = await challengeRes.json();
+      if (!challengeRes.ok) throw new Error(challenge.error || 'Could not start wallet authentication.');
+      const signature = await signer.signMessage(challenge.message);
+      const verifyRes = await fetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          walletAddress,
-          referredBy: sponsorRef || null,
-        }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.user) {
-            console.log('PostgreSQL synced user:', data.user);
-            if (data.user.referralCode) {
-              setUserRefCode(data.user.referralCode);
-            }
-            if (data.user.availableUsdt !== undefined) {
-              setUserEarnings((prev) => ({
-                ...prev,
-                availableUsdt: Number(data.user.availableUsdt || 0),
-                withdrawnUsdt: Number(data.user.totalWithdrawnUsdt || 0),
-              }));
-            }
-            if (data.user.totalInvestedUsdt !== undefined && Number(data.user.totalInvestedUsdt) > 0) {
-              setTotalInvestedUsd(Number(data.user.totalInvestedUsdt));
-            }
-          }
-        })
-        .catch((err) => console.log('PostgreSQL sync notice:', err));
-
-        // Fetch user phase allocations from DB
-        fetch(`/api/presale/allocation/${walletAddress}`)
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.success && data.allocations) {
-              const a = data.allocations;
-              const totalTokens = data.totalPurchasedTokens || 0;
-              
-              setAllocation((prev) => {
-
-                const next = {
-                  ...prev,
-                  totalTokensPurchased: totalTokens,
-                  isLocked: totalTokens > 0,
-                  p1Tokens: a[1] || { allocated: 0, sold: 0 },
-                  p2Tokens: a[2] || { allocated: 0, sold: 0 },
-                  p3Tokens: a[3] || { allocated: 0, sold: 0 },
-                  p4Tokens: a[4] || { allocated: 0, sold: 0 },
-                  p5Tokens: a[5] || { allocated: 0, sold: 0 },
-                  dexTokens: a[6] || { allocated: 0, sold: 0 },
-                };
-                return next;
-              });
-            }
-          })
-          .catch((err) => console.log('PostgreSQL allocation sync error:', err));
+        body: JSON.stringify({ walletAddress: address, timestamp: challenge.timestamp, signature }),
+      });
+      const verified = await verifyRes.json();
+      if (!verifyRes.ok || !verified.token) throw new Error(verified.error || 'Wallet authentication failed.');
+      localStorage.setItem('nxbc_user_auth_token', verified.token);
+      setUserAuthToken(verified.token);
+      return verified.token;
+    } catch (error) {
+      localStorage.removeItem('nxbc_user_auth_token');
+      setUserAuthToken('');
+      throw error;
     }
-  }, [walletConnected, walletAddress]);
+  };
+
+  // Sync user with PostgreSQL backend only after wallet ownership authentication.
+  useEffect(() => {
+    if (!walletConnected || !walletAddress) return;
+    if (!userAuthToken) {
+      authenticateDashboardWallet(walletAddress).catch((err) => console.error('Wallet authentication required:', err));
+      return;
+    }
+
+    const authHeaders = { Authorization: `Bearer ${userAuthToken}` };
+    const sponsorRef = typeof window !== 'undefined' ? localStorage.getItem('nxbc_sponsor_ref') : null;
+
+    fetch('/api/users/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify({ walletAddress, referredBy: sponsorRef || null }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.user) {
+          if (data.user.referralCode) setUserRefCode(data.user.referralCode);
+          if (data.user.availableUsdt !== undefined) {
+            setUserEarnings((prev) => ({ ...prev, availableUsdt: Number(data.user.availableUsdt || 0), withdrawnUsdt: Number(data.user.totalWithdrawnUsdt || 0) }));
+          }
+          if (data.user.totalInvestedUsdt !== undefined && Number(data.user.totalInvestedUsdt) > 0) setTotalInvestedUsd(Number(data.user.totalInvestedUsdt));
+        }
+      })
+      .catch((err) => console.log('PostgreSQL sync notice:', err));
+
+    fetch(`/api/presale/allocation/${walletAddress}`, { headers: authHeaders })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.allocations) {
+          const a = data.allocations;
+          const totalTokens = data.totalPurchasedTokens || 0;
+          setAllocation((prev) => ({
+            ...prev, totalTokensPurchased: totalTokens, isLocked: totalTokens > 0,
+            p1Tokens: a[1] || { allocated: 0, sold: 0 }, p2Tokens: a[2] || { allocated: 0, sold: 0 },
+            p3Tokens: a[3] || { allocated: 0, sold: 0 }, p4Tokens: a[4] || { allocated: 0, sold: 0 },
+            p5Tokens: a[5] || { allocated: 0, sold: 0 },
+            liveTokens: { allocated: Number(data.liveHoldTokens ?? a[6]?.allocated ?? 0), sold: 0 },
+          }));
+        }
+      })
+      .catch((err) => console.log('PostgreSQL allocation sync error:', err));
+  }, [walletConnected, walletAddress, userAuthToken]);
 
   // Transactions History (Persisted in localStorage)
   
   const [allocation, setAllocation] = useState<AllocationState>({
-    p1Percent: 0, p2Percent: 20, p3Percent: 30, p4Percent: 20, p5Percent: 15, dexPercent: 15,
+    p1Percent: 0, p2Percent: 0, p3Percent: 0, p4Percent: 0, p5Percent: 0, livePercent: 0,
     unallocatedPercent: 0, totalTokensPurchased: 0, isLocked: false, lockedTimestamp: ''
   });
+
+  const [directBuyerInviteToken, setDirectBuyerInviteToken] = useState<string>('');
+  const [directBuyerInfo, setDirectBuyerInfo] = useState<any>(null);
+
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('directBuyer') || '';
+    if (!token) return;
+    setDirectBuyerInviteToken(token);
+    fetch(`/api/presale/direct-buyer/invite/${encodeURIComponent(token)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data?.success) {
+          setDirectBuyerInfo({ ...data, sellerWallet: data.sellerWalletMasked || '' });
+          setBuyModalOpen(true);
+        }
+      })
+      .catch(() => setDirectBuyerInfo(null));
+  }, []);
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
@@ -429,38 +440,13 @@ export default function App() {
     { level: 10, commissionPercent: 0.5, directRequirement: 10, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
   ];
 
-  const [referralLevels, setReferralLevels] = useState<ReferralLevel[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nxbc_admin_levels');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (false) {
-            localStorage.setItem('nxbc_admin_levels', JSON.stringify(defaultPlanLevels));
-            return defaultPlanLevels;
-          }
-          return parsed;
-        } catch (e) {}
-      }
-    }
-    return defaultPlanLevels;
-  });
+  const [referralLevels, setReferralLevels] = useState<ReferralLevel[]>(defaultPlanLevels);
 
   // 2x2 Matrix System Config (Dynamic via Admin & Persisted)
-  const [matrixConfig, setMatrixConfig] = useState<MatrixConfig>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nxbc_admin_matrix');
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (e) {}
-      }
-    }
-    return {
-      placementIncomeUsd: 1.00,
-      uplineSharePercent: 10,
-      enabled: true,
-    };
+  const [matrixConfig, setMatrixConfig] = useState<MatrixConfig>({
+    placementIncomeUsd: 1.00,
+    uplineSharePercent: 10,
+    enabled: true,
   });
 
   // Rank Rewards & Leadership Pool (Dynamic via Admin & Persisted)
@@ -542,22 +528,7 @@ export default function App() {
     },
   ];
 
-  const [rankRewards, setRankRewards] = useState<RankReward[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nxbc_admin_ranks');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed?.[0]?.requiredDirectVolume === 50000 || parsed?.[1]?.name === 'Monthly Leadership Salary') {
-             localStorage.setItem('nxbc_admin_ranks', JSON.stringify(defaultRankRewards));
-             return defaultRankRewards;
-          }
-          return parsed;
-        } catch (e) {}
-      }
-    }
-    return defaultRankRewards;
-  });
+  const [rankRewards, setRankRewards] = useState<RankReward[]>(defaultRankRewards);
 
   // General System & Global Parameters (Dynamic via Admin & Persisted)
   const [systemConfig, setSystemConfig] = useState<AdminSystemConfig>({
@@ -571,9 +542,9 @@ export default function App() {
     presalePaused: false,
     directSponsorPercent: 10,
     withdrawalFeePercent: 2,
+    sellQueueSharePercent: 20,
     matrixConfig: { placementIncomeUsd: 1, uplineSharePercent: 100, enabled: true },
     royaltyPoolUsd: 25000,
-    sellQueueSharePercent: 20,
     socialLinks: { x: '', youtube: '', telegram: '', facebook: '' },
   });
 
@@ -593,24 +564,12 @@ export default function App() {
   const [walletModalOpen, setWalletModalOpen] = useState<boolean>(false);
   const [teamModalOpen, setTeamModalOpen] = useState<boolean>(false);
   const [matrixModalOpen, setMatrixModalOpen] = useState<boolean>(false);
-  const [adminModalOpen, setAdminModalOpen] = useState<boolean>(false);
 
   // Token Balances
-  const [nxbcBalance, setNxbcBalance] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const s = localStorage.getItem('nxbc_nxbusd_balance');
-      if (s) return parseFloat(s) || 0;
-    }
-    return 0;
-  });
-
-  const [usdtBalance, setUsdtBalance] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const s = localStorage.getItem('nxbc_usdt_balance');
-      if (s) return parseFloat(s) || 0;
-    }
-    return 0;
-  });
+  // Financial balances are blockchain-authoritative. Browser storage is never
+  // used as a fallback for NXBC or USDT amounts.
+  const [nxbcBalance, setNxbcBalance] = useState<number>(0);
+  const [usdtBalance, setUsdtBalance] = useState<number>(0);
 
   // Automatically fetch live on-chain balances when wallet is connected
   useEffect(() => {
@@ -625,15 +584,8 @@ export default function App() {
         ]);
         if (isMounted) {
           
-          const storedNx = parseFloat(localStorage.getItem('nxbc_nxbusd_balance') || '0');
-          const effectiveNx = Math.max(nxChainBalance, storedNx, 0);
-
-          setNxbcBalance(effectiveNx);
-          setUsdtBalance(uBalance);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('nxbc_nxbusd_balance', effectiveNx.toString());
-            localStorage.setItem('nxbc_usdt_balance', uBalance.toString());
-          }
+          setNxbcBalance(Math.max(0, nxChainBalance));
+          setUsdtBalance(Math.max(0, uBalance));
         }
       } catch (e) {
         console.warn('Failed to sync on-chain balances:', e);
@@ -654,7 +606,7 @@ export default function App() {
     const fetchUserStats = async () => {
       if (!walletAddress) return;
       try {
-        const res = await fetch(`/api/users/${walletAddress}`);
+        const res = await fetch(`/api/users/${walletAddress}`, { headers: userAuthToken ? { Authorization: `Bearer ${userAuthToken}` } : {} });
         const data = await res.json();
         if (data && data.user) {
           setTotalInvestedUsd(data.user.totalInvestedUsdt || 0);
@@ -664,6 +616,8 @@ export default function App() {
           setUserEarnings((prev) => ({
             ...prev,
             availableUsdt: Number(data.user.availableUsdt || 0),
+            mlmAvailableUsdt: Number(data.user.availableUsdt || 0),
+            tokenSellAvailableUsdt: Number(data.tokenSaleAvailableUsdt || 0),
             withdrawnUsdt: Number(data.user.totalWithdrawnUsdt || 0),
           }));
           // The database is authoritative for cumulative earnings and withdrawals.
@@ -708,7 +662,7 @@ export default function App() {
     fetchUserStats();
     const interval = setInterval(fetchUserStats, 5000);
     return () => clearInterval(interval);
-  }, [walletAddress]);
+  }, [walletAddress, userAuthToken]);
 
   // Purchase handler with sequential phase progression & immutable allocation lock
   const handleConfirmPurchase = async (
@@ -720,19 +674,16 @@ export default function App() {
       p3Percent: number;
       p4Percent: number;
       p5Percent: number;
-      dexPercent: number;
+      livePercent: number;
       unallocatedPercent: number;
     },
     txHash?: string,
-    currency: 'USDT' = 'USDT'
+    currency: 'USDT' = 'USDT',
+    inviteToken?: string
   ) => {
-    // Deduct local balance
-    
-      setUsdtBalance((prev) => {
-        const next = Math.max(0, prev - usdAmount);
-        return next;
-      });
-    // Check if presale is paused by Admin
+    // Do not mutate the displayed wallet balance before the blockchain purchase
+    // and server verification both succeed. The next balance refresh is authoritative.
+    // Check if presale is paused by the system
     if (systemConfig.presalePaused) {
       throw new Error('Presale is currently paused by the System.');
     }
@@ -753,12 +704,12 @@ export default function App() {
     }
 
     
-    const p1TokensAllocated = Math.floor(tokenAmount * (sellAlloc.p1Percent / 100));
+    const p1TokensAllocated = 0; // Phase 1 is never a FIFO sell bucket.
     const p2TokensAllocated = Math.floor(tokenAmount * (sellAlloc.p2Percent / 100));
     const p3TokensAllocated = Math.floor(tokenAmount * (sellAlloc.p3Percent / 100));
     const p4TokensAllocated = Math.floor(tokenAmount * (sellAlloc.p4Percent / 100));
     const p5TokensAllocated = Math.floor(tokenAmount * (sellAlloc.p5Percent / 100));
-    const dexTokens = Math.floor(tokenAmount * (sellAlloc.dexPercent / 100));
+    const liveTokens = Math.floor(tokenAmount * (sellAlloc.livePercent / 100));
 
     const updatedAlloc: AllocationState = {
       p1Percent: sellAlloc.p1Percent,
@@ -766,7 +717,7 @@ export default function App() {
       p3Percent: sellAlloc.p3Percent,
       p4Percent: sellAlloc.p4Percent,
       p5Percent: sellAlloc.p5Percent,
-      dexPercent: sellAlloc.dexPercent,
+      livePercent: sellAlloc.livePercent,
       unallocatedPercent: sellAlloc.unallocatedPercent,
       p1Tokens: {
         allocated: (allocation.p1Tokens?.allocated || 0) + p1TokensAllocated,
@@ -788,6 +739,10 @@ export default function App() {
         allocated: (allocation.p5Tokens?.allocated || 0) + p5TokensAllocated,
         sold: allocation.p5Tokens?.sold || 0,
       },
+      liveTokens: {
+        allocated: (allocation.liveTokens?.allocated || 0) + liveTokens,
+        sold: 0,
+      },
       totalTokensPurchased: allocation.totalTokensPurchased + tokenAmount,
       isLocked: true,
       lockedTimestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -808,6 +763,7 @@ export default function App() {
           tokenPrice: activePhase.rate,
           phaseIndex: activePhase.phaseNumber,
           txHash: txHash || undefined,
+          directBuyerInviteToken: inviteToken || undefined,
         }),
       });
       const buyData = await buyResponse.json().catch(() => ({}));
@@ -815,20 +771,21 @@ export default function App() {
         throw new Error(buyData.error || 'Purchase could not be verified and recorded.');
       }
 
+      // Only P1-P5 are real presale phases on the deployed contract.
+      // LIVE/HOLD is never a presale order and is never submitted to the
+      // presale/FIFO queue. It remains in the user's wallet for the live market.
       const allocations = [
-        { phaseNumber: 1, amountTokens: p1TokensAllocated },
         { phaseNumber: 2, amountTokens: p2TokensAllocated },
         { phaseNumber: 3, amountTokens: p3TokensAllocated },
         { phaseNumber: 4, amountTokens: p4TokensAllocated },
         { phaseNumber: 5, amountTokens: p5TokensAllocated },
-        { phaseNumber: 6, amountTokens: dexTokens },
       ].filter((x) => x.amountTokens > 0);
 
-      if (allocations.length) {
+      if (allocations.length || liveTokens > 0) {
         const allocationResponse = await fetch('/api/presale/allocation', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ walletAddress, allocations }),
+          body: JSON.stringify({ walletAddress, allocations, liveHoldTokens: liveTokens, purchaseTxHash: txHash || undefined }),
         });
         const allocationData = await allocationResponse.json().catch(() => ({}));
         if (!allocationResponse.ok || !allocationData.success) {
@@ -840,6 +797,17 @@ export default function App() {
     };
 
     await persistPurchaseAndAllocation();
+    // A Direct Buyer invite is single-use. Clear it immediately after a successful
+    // purchase so a later normal purchase cannot accidentally reuse the invite.
+    if (inviteToken) {
+      setDirectBuyerInviteToken('');
+      setDirectBuyerInfo(null);
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('directBuyer');
+        window.history.replaceState({}, '', url.toString());
+      }
+    }
 
     setAllocation(updatedAlloc);
     if (typeof window !== 'undefined') {
@@ -850,24 +818,7 @@ export default function App() {
     const newTotalInvested = totalInvestedUsd + usdAmount;
     const isNowQualified = newTotalInvested >= minQualify;
     
-    // Record Transaction in PostgreSQL Backend
-    fetch('/api/presale/buy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        walletAddress: walletAddress || '0x71C...a89F',
-        amountUsdt: usdAmount,
-        tokenAmount,
-        tokenPrice: activePhase.rate,
-        phaseIndex: activePhase.phaseNumber,
-        txHash: txHash || undefined,
-      }),
-    })
-      .then((res) => res.json())
-      .then((res) => console.log('PostgreSQL Presale Purchase recorded:', res))
-      .catch((err) => console.log('PostgreSQL purchase notice:', err));
-
-    // (Transactions are now synced from server)
+    // Purchase is already recorded and finalized by persistPurchaseAndAllocation().
   };
 
   // Helper to reset all data back to clean state
@@ -882,11 +833,11 @@ export default function App() {
     }
     setAllocation({
       p1Percent: 0,
-      p2Percent: 20,
-      p3Percent: 30,
-      p4Percent: 20,
-      p5Percent: 15,
-      dexPercent: 15,
+      p2Percent: 0,
+      p3Percent: 0,
+      p4Percent: 0,
+      p5Percent: 0,
+      livePercent: 0,
       unallocatedPercent: 0,
       totalTokensPurchased: 0,
       isLocked: false,
@@ -1054,190 +1005,9 @@ export default function App() {
     }
   };
 
-  // Helper to easily simulate 100% phase completion for sequential demo
-  
-  const handleSimulateExternalBuy = (amount: number) => {
-    if (import.meta.env.PROD) return;
-    // Determine current active phase
-    const activeIdx = phases.findIndex((p) => p.status === 'active');
-    if (activeIdx === -1) return; // No active phase
-    const currentPhase = phases[activeIdx];
-    
-    // Total tokens purchased by the external buyer
-    // 20% of this goes to fulfilling user queued sell orders
-    const userAllocationFulfillment = Math.floor(amount * 0.20);
-    let remainingToFulfill = userAllocationFulfillment;
-    let earnedUsdt = 0;
-
-    setSellQueue((prevQueue) => {
-      let newQueue = [...prevQueue];
-      let queueUpdated = false;
-
-      for (let i = 0; i < newQueue.length; i++) {
-        const entry = newQueue[i];
-        if (entry.phaseNumber === currentPhase.phaseNumber && entry.tokensSold < entry.tokensRequested) {
-          queueUpdated = true;
-          const tokensNeeded = entry.tokensRequested - entry.tokensSold;
-          if (remainingToFulfill >= tokensNeeded) {
-            // Completely fulfill this entry
-            remainingToFulfill -= tokensNeeded;
-            entry.tokensSold = entry.tokensRequested;
-            earnedUsdt += tokensNeeded * currentPhase.rate;
-          } else {
-            // Partially fulfill
-            entry.tokensSold += remainingToFulfill;
-            earnedUsdt += remainingToFulfill * currentPhase.rate;
-            remainingToFulfill = 0;
-            break; // Used up all fulfillment allocation
-          }
-        }
-      }
-      return queueUpdated ? newQueue : prevQueue;
-    });
-
-    if (earnedUsdt > 0) {
-      setUserEarnings((prev) => ({
-        ...prev,
-        availableUsdt: prev.availableUsdt + earnedUsdt
-      }));
-      
-      // Update allocation state sold counts for the user
-      setAllocation((prev) => {
-         const newAlloc = { ...prev };
-         const soldTokens = userAllocationFulfillment - remainingToFulfill;
-         if (currentPhase.phaseNumber === 2 && newAlloc.p2Tokens) newAlloc.p2Tokens.sold += soldTokens;
-         if (currentPhase.phaseNumber === 3 && newAlloc.p3Tokens) newAlloc.p3Tokens.sold += soldTokens;
-         if (currentPhase.phaseNumber === 4 && newAlloc.p4Tokens) newAlloc.p4Tokens.sold += soldTokens;
-         if (currentPhase.phaseNumber === 5 && newAlloc.p5Tokens) newAlloc.p5Tokens.sold += soldTokens;
-         return newAlloc;
-      });
-    }
-    
-    // Also increase total tokens sold in the phase so it moves forward
-    setPhases((prevPhases) => {
-      const updatedPhases = prevPhases.map((p, idx) => {
-        if (idx === activeIdx) {
-           return { ...p, tokensSold: Math.min(p.totalSupply, p.tokensSold + amount) };
-        }
-        return p;
-      });
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('nxbc_admin_phases', JSON.stringify(updatedPhases));
-      }
-      syncConfigsToServer({ phases: updatedPhases });
-      return updatedPhases;
-    });
-  };
-
-  const handleSimulateFillPhase = () => {
-    if (import.meta.env.PROD) return;
-    setPhases((prevPhases) => {
-      const activeIdx = prevPhases.findIndex((p) => p.status === 'active');
-      if (activeIdx === -1 || activeIdx >= prevPhases.length - 1) return prevPhases;
-
-      const currentP = prevPhases[activeIdx];
-      const nextIdx = activeIdx + 1;
-
-      const updatedPhases = prevPhases.map((p, idx) => {
-        if (idx === activeIdx) {
-          return { ...p, tokensSold: p.totalSupply, status: 'completed' as const };
-        }
-        if (idx === nextIdx) {
-          return { ...p, tokensSold: 0, status: 'active' as const };
-        }
-        return p;
-      });
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('nxbc_admin_phases', JSON.stringify(updatedPhases));
-      }
-      syncConfigsToServer({ phases: updatedPhases });
-      return updatedPhases;
-    });
-  };
-
-  // Helper to reset phases back to Phase 1 defaults
+  // Helper to reset phases back to the live 5-phase presale structure.
   const handleResetPhases = () => {
-    const initialPhases: PhaseConfig[] = [
-      {
-        id: 'p1',
-        phaseNumber: 1,
-        name: 'Phase 1',
-        shortName: 'P1',
-        rate: 0.01,
-        rateLabel: '$0.01',
-        totalSupply: 1000000, // 10 Lakh (5 Lakh Sale, 5 Lakh Reserve)
-        tokensSold: 0,
-        status: 'active',
-        multiplier: 'Base Seed Rate',
-        unlockRequirement: 'Live Now (Stage 1)',
-        targetDate: 'Active Now',
-      },
-      {
-        id: 'p2',
-        phaseNumber: 2,
-        name: 'Phase 2',
-        shortName: 'P2',
-        rate: 0.10,
-        rateLabel: '$0.10',
-        totalSupply: 2500000, // 25 Lakh
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: '10x Growth',
-        unlockRequirement: 'Phase 1 must be 100% sold to unlock',
-      },
-      {
-        id: 'p3',
-        phaseNumber: 3,
-        name: 'Phase 3',
-        shortName: 'P3',
-        rate: 1.00,
-        rateLabel: '$1.00',
-        totalSupply: 7000000, // 70 Lakh
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: '100x Growth',
-        unlockRequirement: 'Phase 2 must be 100% sold to unlock',
-      },
-      {
-        id: 'p4',
-        phaseNumber: 4,
-        name: 'Phase 4',
-        shortName: 'P4',
-        rate: 10.00,
-        rateLabel: '$10.00',
-        totalSupply: 19500000, // 195 Lakh
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: '1000x Growth',
-        unlockRequirement: 'Phase 3 must be 100% sold to unlock',
-      },
-      {
-        id: 'p5',
-        phaseNumber: 5,
-        name: 'Phase 5',
-        shortName: 'P5',
-        rate: 100.00,
-        rateLabel: '$100.00',
-        totalSupply: 40000000, // 400 Lakh
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: '10000x Growth',
-        unlockRequirement: 'Phase 4 must be 100% sold to unlock',
-      },
-      {
-        id: 'dex',
-        phaseNumber: 6,
-        name: 'DEX Launch',
-        shortName: 'DEX',
-        rate: 100.00,
-        rateLabel: 'Market Rate',
-        totalSupply: 0,
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: 'Open Market Trading',
-        unlockRequirement: 'Phase 5 must be 100% sold to unlock',
-      },
-    ];
+    const initialPhases: PhaseConfig[] = INITIAL_PHASES.map((p) => ({ ...p }));
     setPhases(initialPhases);
     if (typeof window !== 'undefined') {
       localStorage.setItem('nxbc_admin_phases', JSON.stringify(initialPhases));
@@ -1247,99 +1017,19 @@ export default function App() {
 
   // Reset all to system defaults
   const handleResetToDefaults = () => {
-    const defaultPhases: PhaseConfig[] = [
-      {
-        id: 'p1',
-        phaseNumber: 1,
-        name: 'Phase 1',
-        shortName: 'P1',
-        rate: 0.01,
-        rateLabel: '$0.01',
-        totalSupply: 10000000,
-        tokensSold: 7650000,
-        status: 'active',
-        multiplier: 'Base Seed Rate',
-        unlockRequirement: 'Live Now (Stage 1)',
-        targetDate: 'Ends in 03d 14h 22m',
-      },
-      {
-        id: 'p2',
-        phaseNumber: 2,
-        name: 'Phase 2',
-        shortName: 'P2',
-        rate: 0.10,
-        rateLabel: '$0.10',
-        totalSupply: 15000000,
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: '10x Growth',
-        unlockRequirement: 'Phase 1 must be 100% sold to unlock',
-      },
-      {
-        id: 'p3',
-        phaseNumber: 3,
-        name: 'Phase 3',
-        shortName: 'P3',
-        rate: 1.00,
-        rateLabel: '$1.00',
-        totalSupply: 7000000,
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: '100x Growth',
-        unlockRequirement: 'Phase 2 must be 100% sold to unlock',
-      },
-      {
-        id: 'p4',
-        phaseNumber: 4,
-        name: 'Phase 4',
-        shortName: 'P4',
-        rate: 10.00,
-        rateLabel: '$10.00',
-        totalSupply: 19500000,
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: '1000x Growth',
-        unlockRequirement: 'Phase 3 must be 100% sold to unlock',
-      },
-      {
-        id: 'p5',
-        phaseNumber: 5,
-        name: 'Phase 5',
-        shortName: 'P5',
-        rate: 100.00,
-        rateLabel: '$100.00',
-        totalSupply: 40000000,
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: '10000x Growth',
-        unlockRequirement: 'Phase 4 must be 100% sold to unlock',
-      },
-      {
-        id: 'dex',
-        phaseNumber: 6,
-        name: 'Live DEX Launch',
-        shortName: 'DEX',
-        rate: 1500.00,
-        rateLabel: '$1500 - $3000',
-        totalSupply: 50000000,
-        tokensSold: 0,
-        status: 'locked',
-        multiplier: '50x+ Open Market Trading',
-        unlockRequirement: 'Phase 5 must be 100% sold to unlock',
-      },
-    ];
+    const defaultPhases: PhaseConfig[] = INITIAL_PHASES.map((p) => ({ ...p }));
 
     const defaultLevels: ReferralLevel[] = [
-      { level: 1, commissionPercent: 3, directRequirement: 1, directMembers: 8, totalVolumeUsd: 4500, earnedUsd: 135.00 },
-      { level: 2, commissionPercent: 2, directRequirement: 2, directMembers: 14, totalVolumeUsd: 3800, earnedUsd: 76.00 },
-      { level: 3, commissionPercent: 1, directRequirement: 3, directMembers: 22, totalVolumeUsd: 2900, earnedUsd: 29.00 },
-      { level: 4, commissionPercent: 1, directRequirement: 4, directMembers: 31, totalVolumeUsd: 2200, earnedUsd: 22.00 },
-      { level: 5, commissionPercent: 0.5, directRequirement: 5, directMembers: 18, totalVolumeUsd: 1800, earnedUsd: 9.00 },
-      { level: 6, commissionPercent: 0.5, directRequirement: 6, directMembers: 15, totalVolumeUsd: 1500, earnedUsd: 7.50 },
-      { level: 7, commissionPercent: 0.5, directRequirement: 7, directMembers: 12, totalVolumeUsd: 1200, earnedUsd: 6.00 },
-      { level: 8, commissionPercent: 0.5, directRequirement: 8, directMembers: 10, totalVolumeUsd: 1400, earnedUsd: 7.00 },
-      { level: 9, commissionPercent: 0.5, directRequirement: 9, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 7.50 },
-      { level: 10, commissionPercent: 0.5, directRequirement: 10, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 7.50 },
+      { level: 1, commissionPercent: 3, directRequirement: 1, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 2, commissionPercent: 2, directRequirement: 2, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 3, commissionPercent: 1, directRequirement: 3, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 4, commissionPercent: 1, directRequirement: 4, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 5, commissionPercent: 0.5, directRequirement: 5, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 6, commissionPercent: 0.5, directRequirement: 6, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 7, commissionPercent: 0.5, directRequirement: 7, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 8, commissionPercent: 0.5, directRequirement: 8, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 9, commissionPercent: 0.5, directRequirement: 9, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 10, commissionPercent: 0.5, directRequirement: 10, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
     ];
 
     const defaultMatrix: MatrixConfig = {
@@ -1351,8 +1041,8 @@ export default function App() {
     const defaultSystem: AdminSystemConfig = {
       tokenName: 'NXBC',
       tokenSymbol: 'NXBC',
-      contractAddress: '0x85363386808d1f26BF3805Bb44a093a2Af9E8783',
-      receivingAddress: '0x85363386808d1f26BF3805Bb44a093a2Af9E8783',
+      contractAddress: '0x94D064AFDB04E3489C313054260929588b38dF85',
+      receivingAddress: '0x8d1abCa8Cf0f42799b9a76254710e979bd59c261',
       minPurchaseUsd: 1,
       maxPurchaseUsd: 50000,
       minMlmQualifyUsd: 100,
@@ -1361,7 +1051,7 @@ export default function App() {
       withdrawalFeePercent: 2,
       matrixConfig: defaultMatrix,
       royaltyPoolUsd: 25000,
-    };
+      };
 
     handleUpdatePhases(defaultPhases);
     handleUpdateReferralLevels(defaultLevels);
@@ -1377,7 +1067,7 @@ export default function App() {
     }
 
     if (walletType === 'token_sell') {
-      const availTokenSell = userEarnings?.availableUsdt || 0;
+      const availTokenSell = userEarnings?.tokenSellAvailableUsdt || 0;
       if (amountUsd > availTokenSell) {
         console.warn('Withdrawal rejected: insufficient token sell balance');
         return;
@@ -1385,8 +1075,8 @@ export default function App() {
 
       setUserEarnings(prev => ({
         ...prev,
-        availableUsdt: Math.max(0, (prev.availableUsdt || 0) - amountUsd),
-        withdrawnUsdt: (prev.withdrawnUsdt || 0) + amountUsd,
+        tokenSellAvailableUsdt: Math.max(0, (prev.tokenSellAvailableUsdt || 0) - amountUsd),
+        tokenSellWithdrawnUsdt: (prev.tokenSellWithdrawnUsdt || 0) + amountUsd,
       }));
 
       const newTx: Transaction = {
@@ -1425,24 +1115,6 @@ export default function App() {
     }
   };
 
-
-  // Simulate quick bonus drop
-  const handleAddDemoBonus = () => {
-    if (import.meta.env.PROD) return;
-    const bonus = 300;
-    setClaimableBalanceUsd((prev) => prev + bonus);
-    setLevelIncomeUsd((prev) => prev + bonus);
-    const newTx: Transaction = {
-      id: `tx-${Date.now()}`,
-      type: 'referral_bonus',
-      title: 'Tier 1 Referral Inflow Bonus',
-      amountUsd: bonus,
-      timestamp: 'Just now',
-      status: 'completed',
-      txHash: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
-    };
-    setTransactions((prev) => [newTx, ...prev]);
-  };
 
   // If Secret Admin Page is activated, render full-screen master portal
   if (showSecretAdminPage || activeSingleScreen === 'admin') {
@@ -1569,8 +1241,8 @@ export default function App() {
                   onOpenWalletModal={() => setWalletModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
-                  onSimulateFillPhase={handleSimulateFillPhase}
-                  onSimulateExternalBuy={handleSimulateExternalBuy}
+                  onSimulateFillPhase={undefined}
+                  onSimulateExternalBuy={undefined}
                   onResetPhases={handleResetPhases}
                   onViewFIFO={() => setActiveSingleScreen('assets')}
                   onNavigate={handleSingleScreenNavigation}
@@ -1588,7 +1260,7 @@ export default function App() {
                   phases={phases}
                   sellQueue={sellQueue}
                   onUpdateSellQueue={handleUpdateSellQueue}
-                  onSimulateExternalBuy={handleSimulateExternalBuy}
+                  onSimulateExternalBuy={undefined}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
@@ -1618,7 +1290,7 @@ export default function App() {
                 <ScreenThreeWallet
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
-                  tokenSellBalanceUsd={userEarnings?.availableUsdt || 0}
+                  tokenSellBalanceUsd={userEarnings?.tokenSellAvailableUsdt || 0}
                   mlmBalanceUsd={claimableBalanceUsd}
                   allocation={allocation}
                   levelIncomeUsd={levelIncomeUsd}
@@ -1667,7 +1339,7 @@ export default function App() {
                 {systemConfig.tokenSymbol} Community Presale Platform
               </h2>
               <p className="text-xs text-purple-200/70">
-                Synchronized live state: Define future sell percentages on Screen 1 &bull; Track the 6-box sell schedule on Screen 2 &bull; Execute instant smart-contract withdrawal on Screen 3.
+                Synchronized live state: Track phase allocation & FIFO execution on Screen 2 &bull; Execute secure wallet withdrawal on Screen 3.
               </p>
             </div>
 
@@ -1692,8 +1364,8 @@ export default function App() {
                   onOpenWalletModal={() => setWalletModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
-                  onSimulateFillPhase={handleSimulateFillPhase}
-                  onSimulateExternalBuy={handleSimulateExternalBuy}
+                  onSimulateFillPhase={undefined}
+                  onSimulateExternalBuy={undefined}
                   onResetPhases={handleResetPhases}
                   onViewFIFO={() => {
                     setViewMode('single');
@@ -1730,7 +1402,7 @@ export default function App() {
                   phases={phases}
                   sellQueue={sellQueue}
                   onUpdateSellQueue={handleUpdateSellQueue}
-                  onSimulateExternalBuy={handleSimulateExternalBuy}
+                  onSimulateExternalBuy={undefined}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
@@ -1761,7 +1433,7 @@ export default function App() {
                 <ScreenThreeWallet
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
-                  tokenSellBalanceUsd={userEarnings?.availableUsdt || 0}
+                  tokenSellBalanceUsd={userEarnings?.tokenSellAvailableUsdt || 0}
                   mlmBalanceUsd={claimableBalanceUsd}
                   allocation={allocation}
                   levelIncomeUsd={levelIncomeUsd}
@@ -1810,13 +1482,15 @@ export default function App() {
           totalSupply: activePhase.totalSupply,
           tokensSold: activePhase.tokensSold,
         }}
+        directBuyerInfo={directBuyerInfo}
+        directBuyerInviteToken={directBuyerInviteToken}
         initialAllocation={{
           p1Percent: allocation.p1Percent,
           p2Percent: allocation.p2Percent,
           p3Percent: allocation.p3Percent,
           p4Percent: allocation.p4Percent,
           p5Percent: allocation.p5Percent,
-          dexPercent: allocation.dexPercent,
+          livePercent: allocation.livePercent,
         }}
       />
 
@@ -1849,26 +1523,6 @@ export default function App() {
         matrixConfig={matrixConfig}
       />
 
-      {/* MASTER DYNAMIC ADMIN PANEL MODAL */}
-      <AdminPanelModal
-        isOpen={adminModalOpen}
-        onClose={() => setAdminModalOpen(false)}
-        phases={phases}
-        onUpdatePhases={handleUpdatePhases}
-        levels={referralLevels}
-        onUpdateLevels={handleUpdateReferralLevels}
-        matrixConfig={matrixConfig}
-        onUpdateMatrixConfig={handleUpdateMatrixConfig}
-        rankRewards={rankRewards}
-        onUpdateRankRewards={handleUpdateRankRewards}
-        systemConfig={systemConfig}
-        onUpdateSystemConfig={handleUpdateSystemConfig}
-        onResetToDefaults={handleResetToDefaults}
-        onOpenSecretPage={() => {
-          setAdminModalOpen(false);
-          setShowSecretAdminPage(true);
-        }}
-      />
     </div>
   );
 }

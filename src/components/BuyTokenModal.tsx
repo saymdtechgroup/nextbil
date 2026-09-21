@@ -40,7 +40,7 @@ interface BuyTokenModalProps {
       p3Percent: number;
       p4Percent: number;
       p5Percent: number;
-      dexPercent: number;
+      livePercent: number;
       unallocatedPercent: number;
     },
     txHash?: string
@@ -67,7 +67,7 @@ interface BuyTokenModalProps {
     p3Percent: number;
     p4Percent: number;
     p5Percent: number;
-    dexPercent: number;
+    livePercent: number;
   };
   directBuyerInfo?: {
     phaseNumber: number;
@@ -75,6 +75,7 @@ interface BuyTokenModalProps {
     remainingTokens: number;
     tokenPrice: number;
   } | null;
+  directBuyerInviteToken?: string;
 }
 
 export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
@@ -94,7 +95,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     phaseNumber: 1,
     name: 'Phase 1',
     shortName: 'P1',
-    totalSupply: 10000000,
+    totalSupply: 1000000,
     tokensSold: 0,
   },
   initialAllocation = {
@@ -103,9 +104,10 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     p3Percent: 30,
     p4Percent: 20,
     p5Percent: 15,
-    dexPercent: 15,
+    livePercent: 0,
   },
   directBuyerInfo = null,
+  directBuyerInviteToken = '',
 }) => {
   const [step, setStep] = useState<1 | 2>(1);
   const currency = 'USDT';
@@ -129,7 +131,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
         (window as any).okxwallet;
 
       if (!eth || typeof eth.request !== 'function') {
-        navigator.clipboard.writeText('0x94D064AFDB04E3489C313054260929588b38dF85');
+        navigator.clipboard.writeText(NXBC_CONTRACT);
         setTokenImportNotice('Contract Copied! Paste in SafePal / Trust Wallet > Add Custom Token.');
         setTimeout(() => setTokenImportNotice(null), 5000);
         return;
@@ -140,7 +142,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
         params: {
           type: 'ERC20',
           options: {
-            address: '0x94D064AFDB04E3489C313054260929588b38dF85',
+            address: NXBC_CONTRACT,
             symbol: 'NXBC',
             decimals: 18,
           },
@@ -149,7 +151,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
       setTokenImportNotice('NXBC Token added to your Web3 wallet asset list!');
       setTimeout(() => setTokenImportNotice(null), 5000);
     } catch (e: any) {
-      navigator.clipboard.writeText('0x94D064AFDB04E3489C313054260929588b38dF85');
+      navigator.clipboard.writeText(NXBC_CONTRACT);
       setTokenImportNotice('Contract Copied! Paste in SafePal > Add Custom Token.');
       setTimeout(() => setTokenImportNotice(null), 5000);
     }
@@ -161,7 +163,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   const [p3Tokens, setP3Tokens] = useState<number>(0);
   const [p4Tokens, setP4Tokens] = useState<number>(0);
   const [p5Tokens, setP5Tokens] = useState<number>(0);
-  const [dexTokens, setDexTokens] = useState<number>(0);
+  const [liveTokens, setLiveTokens] = useState<number>(0);
 
   const usdValue = parseFloat(payAmount) || 0;
   const tokenQuantity = Math.floor(usdValue / (currentRate || 0.01));
@@ -222,26 +224,45 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   // Initialize token breakdown whenever tokenQuantity changes or when entering step 2
   useEffect(() => {
     if (tokenQuantity > 0) {
-      const p1 = Math.floor(tokenQuantity * ((initialAllocation.p1Percent || 0) / 100));
-      const p2 = Math.floor(tokenQuantity * (initialAllocation.p2Percent / 100));
-      const p3 = Math.floor(tokenQuantity * (initialAllocation.p3Percent / 100));
-      const p4 = Math.floor(tokenQuantity * (initialAllocation.p4Percent / 100));
-      const p5 = Math.floor(tokenQuantity * (initialAllocation.p5Percent / 100));
-      const dex = Math.floor(tokenQuantity * (initialAllocation.dexPercent / 100));
-      setP1Tokens(p1);
+      // A purchase lot can only be allocated to FUTURE phases or DEX/LIVE.
+      // Normalize the configured default split across only the eligible targets.
+      const purchasePhase = Number(activePhaseInfo.phaseNumber || 1);
+      const weights = [
+        { phase: 2, value: Number(initialAllocation.p2Percent || 0) },
+        { phase: 3, value: Number(initialAllocation.p3Percent || 0) },
+        { phase: 4, value: Number(initialAllocation.p4Percent || 0) },
+        { phase: 5, value: Number(initialAllocation.p5Percent || 0) },
+        { phase: 6, value: Number(initialAllocation.livePercent || 0) },
+      ].filter(x => x.phase > purchasePhase && x.value > 0);
+      const weightTotal = weights.reduce((sum, x) => sum + x.value, 0);
+      const getAmount = (phase: number) => {
+        if (phase <= purchasePhase || weightTotal <= 0) return 0;
+        const weight = weights.find(x => x.phase === phase)?.value || 0;
+        return Math.floor(tokenQuantity * weight / weightTotal);
+      };
+      const p2 = getAmount(2);
+      const p3 = getAmount(3);
+      const p4 = getAmount(4);
+      const p5 = getAmount(5);
+      const live = getAmount(6);
+      const allocated = p2 + p3 + p4 + p5 + live;
+      setP1Tokens(0);
       setP2Tokens(p2);
       setP3Tokens(p3);
       setP4Tokens(p4);
       setP5Tokens(p5);
-      setDexTokens(dex);
+      setLiveTokens(live + Math.max(0, tokenQuantity - allocated));
     }
-  }, [tokenQuantity, isOpen]);
+  }, [tokenQuantity, isOpen, activePhaseInfo.phaseNumber, initialAllocation]);
 
   if (!isOpen) return null;
 
-  const totalAllocatedTokens = p1Tokens + p2Tokens + p3Tokens + p4Tokens + p5Tokens + dexTokens;
+  const purchasePhase = Number(activePhaseInfo.phaseNumber || 1);
+  const isFuturePhase = (phase: number) => phase > purchasePhase;
+  const totalAllocatedTokens = p1Tokens + p2Tokens + p3Tokens + p4Tokens + p5Tokens + liveTokens;
   const remainingTokens = Math.max(0, tokenQuantity - totalAllocatedTokens);
   const isOverAllocated = totalAllocatedTokens > tokenQuantity;
+  const isExactlyAllocated = totalAllocatedTokens === tokenQuantity;
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -251,33 +272,36 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
 
   // Preset Allocation Helpers based on exact token quantity
   const applyPresetEqual = () => {
-    const split = Math.floor(tokenQuantity / 5);
+    const targets = [2, 3, 4, 5].filter(isFuturePhase);
+    const slots = targets.length + 1; // + DEX/LIVE
+    const split = Math.floor(tokenQuantity / Math.max(1, slots));
     setP1Tokens(0);
-    setP2Tokens(split);
-    setP3Tokens(split);
-    setP4Tokens(split);
-    setP5Tokens(split);
-    setDexTokens(tokenQuantity - split * 4);
+    setP2Tokens(isFuturePhase(2) ? split : 0);
+    setP3Tokens(isFuturePhase(3) ? split : 0);
+    setP4Tokens(isFuturePhase(4) ? split : 0);
+    setP5Tokens(isFuturePhase(5) ? split : 0);
+    setLiveTokens(tokenQuantity - split * targets.length);
   };
 
   const applyPresetEarlyProfit = () => {
-    const half = Math.floor(tokenQuantity / 2);
-    setP1Tokens(Math.floor(tokenQuantity * 0.30));
-    setP2Tokens(Math.floor(tokenQuantity * 0.70));
-    setP3Tokens(0);
-    setP4Tokens(0);
-    setP5Tokens(0);
-    setDexTokens(0);
+    const firstFuture = [2, 3, 4, 5].find(isFuturePhase);
+    setP1Tokens(0);
+    setP2Tokens(firstFuture === 2 ? Math.floor(tokenQuantity * 0.70) : 0);
+    setP3Tokens(firstFuture === 3 ? Math.floor(tokenQuantity * 0.70) : 0);
+    setP4Tokens(firstFuture === 4 ? Math.floor(tokenQuantity * 0.70) : 0);
+    setP5Tokens(firstFuture === 5 ? Math.floor(tokenQuantity * 0.70) : 0);
+    setLiveTokens(Math.floor(tokenQuantity * 0.30));
   };
 
   const applyPresetHodl = () => {
-    const part = Math.floor((tokenQuantity * 0.5) / 4);
+    const targets = [2, 3, 4, 5].filter(isFuturePhase);
+    const part = Math.floor((tokenQuantity * 0.5) / Math.max(1, targets.length));
     setP1Tokens(0);
-    setP2Tokens(part);
-    setP3Tokens(part);
-    setP4Tokens(part);
-    setP5Tokens(part);
-    setDexTokens(Math.floor(tokenQuantity * 0.3));
+    setP2Tokens(isFuturePhase(2) ? part : 0);
+    setP3Tokens(isFuturePhase(3) ? part : 0);
+    setP4Tokens(isFuturePhase(4) ? part : 0);
+    setP5Tokens(isFuturePhase(5) ? part : 0);
+    setLiveTokens(Math.max(0, tokenQuantity - part * targets.length));
   };
 
   const applyPresetAllDex = () => {
@@ -286,7 +310,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     setP3Tokens(0);
     setP4Tokens(0);
     setP5Tokens(0);
-    setDexTokens(tokenQuantity);
+    setLiveTokens(tokenQuantity);
   };
 
   const handleProceedToSellSchedule = () => {
@@ -415,7 +439,10 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
   };
 
   const handleFinalConfirmBuy = async () => {
-    if (tokenQuantity <= 0 || isOverAllocated) return;
+    if (tokenQuantity <= 0 || isOverAllocated || !isExactlyAllocated) {
+      setTxErrorMessage('Please allocate 100% of this purchase to eligible future phases and/or DEX / LIVE.');
+      return;
+    }
     if (isInsufficientBalance) {
       setTxErrorMessage(
         `Insufficient ${currency} balance! You only have ${effectiveBalance.toFixed(2)} ${currency}. `
@@ -439,7 +466,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
           p3Tokens,
           p4Tokens,
           p5Tokens,
-          dexTokens,
+          liveTokens,
           (msg) => setPaymentStatusText(msg)
         );
         if (!result.success) throw new Error(result.error);
@@ -462,8 +489,8 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
     const p3Percent = tokenQuantity > 0 ? Math.round((p3Tokens / tokenQuantity) * 100) : 0;
     const p4Percent = tokenQuantity > 0 ? Math.round((p4Tokens / tokenQuantity) * 100) : 0;
     const p5Percent = tokenQuantity > 0 ? Math.round((p5Tokens / tokenQuantity) * 100) : 0;
-    const dexPercent = tokenQuantity > 0 ? Math.round((dexTokens / tokenQuantity) * 100) : 0;
-    const unallocatedPercent = Math.max(0, 100 - (p1Percent + p2Percent + p3Percent + p4Percent + p5Percent + dexPercent));
+    const livePercent = tokenQuantity > 0 ? Math.round((liveTokens / tokenQuantity) * 100) : 0;
+    const unallocatedPercent = Math.max(0, 100 - (p1Percent + p2Percent + p3Percent + p4Percent + p5Percent + livePercent));
 
     try {
         // Execute the confirmation asynchronously without blocking the modal closing
@@ -476,10 +503,12 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             p3Percent,
             p4Percent,
             p5Percent,
-            dexPercent,
+            livePercent,
             unallocatedPercent,
           },
-          recordedTxHash || undefined
+          recordedTxHash || undefined,
+          'USDT',
+          directBuyerInviteToken || undefined
         ));
         
         // Success Path
@@ -540,14 +569,14 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               </h2>
             </div>
 
-            {/* Direct Seller Match Active Banner (FIFO Queue Bypass) */}
+            {/* Direct Seller Match Active Banner (Direct Match Priority) */}
             {directBuyerInfo && (
               <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-cyan-500/20 to-emerald-500/20 border border-amber-400/50 shadow-md animate-fade-in">
                 <div className="flex items-center gap-2 text-amber-300 font-rajdhani font-black text-xs uppercase tracking-wider">
                   <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>⚡ Direct Seller Match Active</span>
                   <span className="text-[8px] px-1.5 py-0.2 rounded bg-amber-400/30 text-amber-200 border border-amber-400/40">
-                    FIFO BYPASS
+                    DIRECT MATCH PRIORITY
                   </span>
                 </div>
                 <p className="text-[9.5px] text-slate-200 font-mono-crypto mt-1 leading-tight">
@@ -683,9 +712,9 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                 </span>
               </div>
               <div className="flex justify-between text-[10px] text-cyan-400 font-mono-crypto">
-                <span>Projected Phase 2 Value:</span>
+                <span>Current Purchase Value:</span>
                 <span className="text-emerald-400 font-bold">
-                  ${(tokenQuantity * 0.10).toLocaleString()} USD (@ $0.10 Rate)
+                  ${usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
                 </span>
               </div>
             </div>
@@ -746,7 +775,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-[10px] text-indigo-200 leading-snug">
                 <p className="font-semibold text-amber-300 mb-1 flex items-center gap-1"><Zap className="w-3 h-3"/> Decentralized Hold & Swap</p>
                 <p>1. <strong className="text-emerald-400">100% of tokens</strong> will be minted directly to your Trust Wallet immediately.</p>
-                <p>2. Allocations below are <strong className="text-amber-200">virtually registered</strong> in our Smart Contract FIFO line.</p>
+                <p>2. Allocations below are <strong className="text-amber-200">registered in the server-side FIFO queue</strong> in our Smart Contract FIFO line.</p>
                 <p>3. When your phase hits, we credit your USDT earnings. At withdrawal, you approve a 1-click swap (Tokens from your wallet for USDT).</p>
               </div>
 
@@ -764,7 +793,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                   onClick={applyPresetEqual}
                   className="py-1 px-1.5 rounded-lg bg-cyan-900/40 hover:bg-cyan-800 border border-cyan-500/30 text-[9px] font-rajdhani font-bold text-cyan-200 cursor-pointer"
                 >
-                  20% Split
+                  Balanced Split
                 </button>
                 <button
                   type="button"
@@ -785,7 +814,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                   onClick={applyPresetAllDex}
                   className="py-1 px-1.5 rounded-lg bg-cyan-950/60 hover:bg-cyan-900 border border-cyan-500/40 text-[9px] font-rajdhani font-bold text-cyan-300 cursor-pointer"
                 >
-                  100% DEX
+                  100% DEX / LIVE
                 </button>
               </div>
             </div>
@@ -794,7 +823,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             <div className="space-y-2 max-h-[36vh] overflow-y-auto pr-1">
               
               {/* Phase 1 ($0.01) */}
-              <div className="bg-[#020811] p-2.5 rounded-xl border border-amber-500/30 space-y-1.5">
+              <div className="hidden">
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-slate-100 font-rajdhani">Phase 1 Sell Amount</span>
@@ -803,26 +832,27 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                     </span>
                   </div>
                   <span className="text-[10px] font-mono-crypto text-emerald-400 font-bold">
-                    Returns: ${(p1Tokens * 0.01).toLocaleString()}
+                    Not available for FIFO sale
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
-                    <input type="number" min="0" max={tokenQuantity} value={p1Tokens || ''}
-                      onChange={(e) => setP1Tokens(Math.max(0, Math.min(tokenQuantity, parseInt(e.target.value) || 0)))}
+                    <input type="number" min="0" max="0" value={0}
+                      disabled
+                      onChange={() => setP1Tokens(0)}
                       placeholder="0" className="w-full bg-[#130728] border border-cyan-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-slate-100 font-bold focus:outline-none" />
                     <span className="absolute right-2 top-2 text-[10px] font-mono-crypto text-cyan-400">NXBC</span>
                   </div>
                   <div className="flex gap-1">
-                    <button type="button" onClick={() => setP1Tokens(Math.floor(tokenQuantity * 0.30))} className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200">30%</button>
-                    <button type="button" onClick={() => setP1Tokens(Math.floor(tokenQuantity * 0.50))} className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200">50%</button>
+                    <button type="button" onClick={() => setP1Tokens(0)} className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200">30%</button>
+                    <button type="button" onClick={() => setP1Tokens(0)} className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200">50%</button>
                     <button type="button" onClick={() => setP1Tokens(0)} className="px-1.5 py-1 rounded bg-cyan-950 text-[9px] font-mono-crypto text-cyan-400 hover:text-rose-300">0</button>
                   </div>
                 </div>
               </div>
 
               {/* Phase 2 ($0.10) */}
-              <div className="bg-[#020811] p-2.5 rounded-xl border border-cyan-500/20 space-y-1.5">
+              <div className={`bg-[#020811] p-2.5 rounded-xl border border-cyan-500/20 space-y-1.5 ${!isFuturePhase(2) ? "hidden" : ""}`}>
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-slate-100 font-rajdhani">Phase 2 Sell Amount</span>
@@ -876,7 +906,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               </div>
 
               {/* Phase 3 ($1.00) */}
-              <div className="bg-[#020811] p-2.5 rounded-xl border border-cyan-500/20 space-y-1.5">
+              <div className={`bg-[#020811] p-2.5 rounded-xl border border-cyan-500/20 space-y-1.5 ${!isFuturePhase(3) ? "hidden" : ""}`}>
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-slate-100 font-rajdhani">Phase 3 Sell Amount</span>
@@ -930,7 +960,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               </div>
 
               {/* Phase 4 ($10.00) */}
-              <div className="bg-[#020811] p-2.5 rounded-xl border border-cyan-500/20 space-y-1.5">
+              <div className={`bg-[#020811] p-2.5 rounded-xl border border-cyan-500/20 space-y-1.5 ${!isFuturePhase(4) ? "hidden" : ""}`}>
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-slate-100 font-rajdhani">Phase 4 Sell Amount</span>
@@ -984,7 +1014,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
               </div>
 
               {/* Phase 5 ($100.00) */}
-              <div className="bg-[#020811] p-2.5 rounded-xl border border-cyan-500/20 space-y-1.5">
+              <div className={`bg-[#020811] p-2.5 rounded-xl border border-cyan-500/20 space-y-1.5 ${!isFuturePhase(5) ? "hidden" : ""}`}>
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-slate-100 font-rajdhani">Phase 5 Sell Amount</span>
@@ -1037,18 +1067,18 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                 </div>
               </div>
 
-              {/* Live DEX Launch */}
+              {/* DEX / LIVE (Not Presale) */}
               <div className="bg-[#020811] p-2.5 rounded-xl border border-cyan-500/20 space-y-1.5">
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-slate-100 font-rajdhani">Live DEX Launch</span>
+                    <span className="font-bold text-slate-100 font-rajdhani">DEX / LIVE (Not Presale)</span>
                     <span className="text-[9px] font-mono-crypto text-cyan-300 font-bold bg-cyan-950 px-1.5 py-0.2 rounded border border-cyan-500/30">
-                      TBA Market Price
+                      No Presale Sale
                     </span>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setDexTokens(remainingTokens + dexTokens)}
+                    onClick={() => setLiveTokens(remainingTokens + liveTokens)}
                     className="text-[9px] font-mono-crypto text-amber-400 underline font-semibold cursor-pointer"
                   >
                     + Add Remaining
@@ -1061,8 +1091,8 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                       type="number"
                       min="0"
                       max={tokenQuantity}
-                      value={dexTokens || ''}
-                      onChange={(e) => setDexTokens(Math.max(0, parseInt(e.target.value) || 0))}
+                      value={liveTokens || ''}
+                      onChange={(e) => setLiveTokens(Math.max(0, parseInt(e.target.value) || 0))}
                       placeholder="0"
                       className="w-full bg-[#130728] border border-cyan-500/30 focus:border-amber-400 rounded-lg py-1.5 px-2.5 text-xs font-mono-crypto text-cyan-200 font-bold focus:outline-none"
                     />
@@ -1072,21 +1102,21 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                   <div className="flex gap-1">
                     <button
                       type="button"
-                      onClick={() => setDexTokens(Math.floor(tokenQuantity * 0.25))}
+                      onClick={() => setLiveTokens(Math.floor(tokenQuantity * 0.25))}
                       className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200"
                     >
                       25%
                     </button>
                     <button
                       type="button"
-                      onClick={() => setDexTokens(Math.floor(tokenQuantity * 0.50))}
+                      onClick={() => setLiveTokens(Math.floor(tokenQuantity * 0.50))}
                       className="px-1.5 py-1 rounded bg-cyan-900/50 hover:bg-cyan-800 text-[9px] font-mono-crypto text-cyan-200"
                     >
                       50%
                     </button>
                     <button
                       type="button"
-                      onClick={() => setDexTokens(0)}
+                      onClick={() => setLiveTokens(0)}
                       className="px-1.5 py-1 rounded bg-cyan-950 text-[9px] font-mono-crypto text-cyan-400 hover:text-rose-300"
                     >
                       0
@@ -1100,14 +1130,14 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
             {/* Live Coin Math Summary Tracker */}
             <div className="p-2.5 rounded-xl bg-cyan-950/70 border border-cyan-500/30 space-y-1.5 text-xs font-mono-crypto">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] text-cyan-300 uppercase">Virtually Locked in Queue:</span>
+                <span className="text-[10px] text-cyan-300 uppercase">Reserved for Future Phase / DEX:</span>
                 <span className={`font-black ${isOverAllocated ? 'text-rose-400' : 'text-amber-300'}`}>
                   {totalAllocatedTokens.toLocaleString()} / {tokenQuantity.toLocaleString()} NXBC
                 </span>
               </div>
               
               <div className="flex justify-between items-center text-[10px]">
-                <span className="text-cyan-300">Free to Trade (Hold in Wallet):</span>
+                <span className="text-cyan-300">DEX / LIVE — Held in Wallet:</span>
                 <span className="text-emerald-400 font-bold">
                   {remainingTokens.toLocaleString()} NXBC ({tokenQuantity > 0 ? Math.round((remainingTokens / tokenQuantity) * 100) : 0}%)
                 </span>

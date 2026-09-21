@@ -66,6 +66,8 @@ export const transactions = pgTable('transactions', {
 export const sellOrders = pgTable('sell_orders', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id).notNull(),
+  // Source purchase lot. New FIFO/LIVE allocations must be tied to the exact verified purchase tx.
+  purchaseTxHash: text('purchase_tx_hash'),
   phaseNumber: integer('phase_number').notNull().default(1),
   amountTokens: doublePrecision('amount_tokens').notNull(),
   remainingTokens: doublePrecision('remaining_tokens').notNull(),
@@ -73,6 +75,7 @@ export const sellOrders = pgTable('sell_orders', {
   totalUsdtValue: doublePrecision('total_usdt_value').notNull(),
   status: text('status').notNull().default('open'), // 'open', 'partially_filled', 'completed', 'cancelled'
   priority: integer('priority').notNull().default(0),
+  fifoNumber: integer('fifo_number').notNull().default(0),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
