@@ -204,7 +204,7 @@ function validateProductionEnvironment() {
   const required = [
     'RPC_URL', 'NXBC_TOKEN_ADDRESS', 'NXBC_PRESALE_CONTRACT_ADDRESS',
     'USDT_CONTRACT_ADDRESS', 'PRESALE_RECEIVING_WALLET', 'NXBC_RETURN_TREASURY_ADDRESS',
-    'PAYOUT_HOT_WALLET_PRIVATE_KEY', 'ADMIN_PIN_INITIAL', 'AUTH_SESSION_SECRET',
+    'PAYOUT_HOT_WALLET_PRIVATE_KEY', 'AUTH_SESSION_SECRET',
   ];
   const missing = required.filter((key) => !String(process.env[key] || '').trim());
   const hasDatabaseUrl = !!String(process.env.DATABASE_URL || '').trim();
@@ -220,8 +220,11 @@ function validateProductionEnvironment() {
   for (const key of ['NXBC_TOKEN_ADDRESS','NXBC_PRESALE_CONTRACT_ADDRESS','USDT_CONTRACT_ADDRESS','PRESALE_RECEIVING_WALLET','NXBC_RETURN_TREASURY_ADDRESS']) {
     try { ethers.getAddress(String(process.env[key])); } catch { throw new Error(`${key} is not a valid EVM address.`); }
   }
-  const pin = String(process.env.ADMIN_PIN_INITIAL || '').trim();
-  if (!/^\d{6,}$/.test(pin)) throw new Error('ADMIN_PIN_INITIAL must be at least 6 numeric digits.');
+  // ADMIN_PIN_INITIAL is intentionally not validated here. Existing deployments
+  // may already have an admin PIN stored in PostgreSQL (including the legacy
+  // 4-digit PIN). ensureInitialAdminPin() only requires ADMIN_PIN_INITIAL when
+  // the database has no admin_pin record yet, and enforces the new 6+ digit
+  // requirement for that first-time initialization.
 }
 
 async function verifyPresalePurchaseOnChain(params: {
@@ -1064,7 +1067,33 @@ async function ensureTokenWithdrawalSettlementTable() {
 async function ensureInitialAdminPin() {
   const existing = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'admin_pin') });
   if (existing?.value) return;
-  const initialPin = String(process.env.ADMIN_PIN_INITIAL || '').trim();
+
+  // Backward-compatible migration for an existing installation that used the
+  // legacy ADMIN_SECRET_PIN (including the old 4-digit PIN). We hash it into
+  // the database on first startup instead of forcing the owner to lose access.
+  const legacyPin = String(process.env.ADMIN_SECRET_PIN || '').trim();
+  const configuredInitialPin = String(process.env.ADMIN_PIN_INITIAL || '').trim();
+  const initialPin = configuredInitialPin || legacyPin;
+  // If an existing installation copied the old 4-digit value into the new
+  // ADMIN_PIN_INITIAL variable, still treat it as a legacy migration rather
+  // than locking the owner out. Brand-new installs without ADMIN_SECRET_PIN
+  // remain subject to the 6+ digit requirement below.
+  const usingLegacyPin = !!legacyPin && (!configuredInitialPin || !/^\d{6,}$/.test(configuredInitialPin));
+
+  if (usingLegacyPin) {
+    if (!/^\d{4,}$/.test(initialPin)) {
+      throw new Error('Legacy ADMIN_SECRET_PIN must contain at least 4 numeric digits.');
+    }
+    await db.insert(systemConfigs).values({
+      key: 'admin_pin',
+      value: hashPin(initialPin),
+      description: 'Master Admin Security PIN (hashed; migrated from legacy environment PIN)',
+    });
+    console.log('[ADMIN] Legacy security PIN migrated to a salted database hash. Change it to a 6+ digit PIN from the Admin Panel.');
+    return;
+  }
+
+  // A brand-new installation must use the stronger 6+ digit initial PIN.
   if (!initialPin || !/^\d{6,}$/.test(initialPin)) {
     throw new Error('ADMIN_PIN_INITIAL is required on first production startup and must be at least 6 digits.');
   }
