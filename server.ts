@@ -6,7 +6,7 @@ import { db } from "./src/db/index.ts";
 import { users, matrixNodes, levelEarnings, transactions, sellOrders, systemConfigs, tokenSellLedgers, rankAchievements } from "./src/db/schema.ts";
 import { eq, desc, asc, and, or, inArray, sql } from "drizzle-orm";
 import { ethers } from "ethers";
-import { scryptSync, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
+import { scryptSync, randomBytes, timingSafeEqual, createHash } from "crypto";
 
 // ---------------------------------------------------------------------------
 // Admin PIN hashing + brute-force lockout
@@ -33,49 +33,6 @@ function verifyPin(pin: string, stored: string): boolean {
 const pinAttempts = new Map<string, { count: number; lockedUntil: number }>();
 const adminSessions = new Map<string, number>();
 const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
-const USER_SESSION_TTL_MS = 30 * 60 * 1000;
-const USER_SIGNATURE_MAX_AGE_MS = 5 * 60 * 1000;
-const USER_AUTH_AUDIENCE = "NXBC-DASHBOARD-V1";
-
-function getAuthSecret(): string {
-  const secret = String(process.env.AUTH_SESSION_SECRET || process.env.DATABASE_URL || "").trim();
-  if (!secret) throw new Error("AUTH_SESSION_SECRET is required for authenticated dashboard access.");
-  return secret;
-}
-
-function makeUserSession(wallet: string, issuedAt: number): string {
-  const payload = `${wallet.toLowerCase()}.${issuedAt}.${USER_SESSION_TTL_MS}`;
-  const sig = createHmac("sha256", getAuthSecret()).update(payload).digest("hex");
-  return Buffer.from(`${payload}.${sig}`).toString("base64url");
-}
-
-function readUserSession(req: express.Request): { wallet: string } | null {
-  const raw = String(req.headers.authorization || "");
-  if (!raw.startsWith("Bearer ")) return null;
-  try {
-    const decoded = Buffer.from(raw.slice(7), "base64url").toString("utf8");
-    const [wallet, issuedAtRaw, ttlRaw, sig] = decoded.split(".");
-    if (!/^0x[a-f0-9]{40}$/.test(wallet) || !sig) return null;
-    const issuedAt = Number(issuedAtRaw);
-    const ttl = Number(ttlRaw);
-    if (!Number.isFinite(issuedAt) || !Number.isFinite(ttl) || Date.now() - issuedAt < 0 || Date.now() - issuedAt > ttl) return null;
-    const payload = `${wallet}.${issuedAt}.${ttl}`;
-    const expected = createHmac("sha256", getAuthSecret()).update(payload).digest("hex");
-    if (sig.length !== expected.length || !timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
-    return { wallet };
-  } catch { return null; }
-}
-
-function requireWallet(req: express.Request, res: express.Response, routeWallet: string): boolean {
-  const session = readUserSession(req);
-  const normalized = String(routeWallet || "").toLowerCase();
-  if (!session || session.wallet !== normalized) {
-    res.status(401).json({ success: false, error: "Wallet authentication required." });
-    return false;
-  }
-  return true;
-}
-
 
 function issueAdminSession(): string {
   const token = randomBytes(32).toString("hex");
@@ -204,7 +161,7 @@ function validateProductionEnvironment() {
   const required = [
     'RPC_URL', 'NXBC_TOKEN_ADDRESS', 'NXBC_PRESALE_CONTRACT_ADDRESS',
     'USDT_CONTRACT_ADDRESS', 'PRESALE_RECEIVING_WALLET', 'NXBC_RETURN_TREASURY_ADDRESS',
-    'PAYOUT_HOT_WALLET_PRIVATE_KEY', 'AUTH_SESSION_SECRET',
+    'PAYOUT_HOT_WALLET_PRIVATE_KEY', 'ADMIN_PIN_INITIAL',
   ];
   const missing = required.filter((key) => !String(process.env[key] || '').trim());
   const hasDatabaseUrl = !!String(process.env.DATABASE_URL || '').trim();
@@ -220,11 +177,8 @@ function validateProductionEnvironment() {
   for (const key of ['NXBC_TOKEN_ADDRESS','NXBC_PRESALE_CONTRACT_ADDRESS','USDT_CONTRACT_ADDRESS','PRESALE_RECEIVING_WALLET','NXBC_RETURN_TREASURY_ADDRESS']) {
     try { ethers.getAddress(String(process.env[key])); } catch { throw new Error(`${key} is not a valid EVM address.`); }
   }
-  // ADMIN_PIN_INITIAL is intentionally not validated here. Existing deployments
-  // may already have an admin PIN stored in PostgreSQL (including the legacy
-  // 4-digit PIN). ensureInitialAdminPin() only requires ADMIN_PIN_INITIAL when
-  // the database has no admin_pin record yet, and enforces the new 6+ digit
-  // requirement for that first-time initialization.
+  const pin = String(process.env.ADMIN_PIN_INITIAL || '').trim();
+  if (!/^\d{6,}$/.test(pin)) throw new Error('ADMIN_PIN_INITIAL must be at least 6 numeric digits.');
 }
 
 async function verifyPresalePurchaseOnChain(params: {
@@ -402,56 +356,84 @@ setInterval(() => {
 }, 30 * 60 * 1000);
 
 async function finalizeConfirmedPurchase(
-  user: any,
+  userSnapshot: any,
   tokenAmount: number,
   amountUsdt: number,
-  phaseIndex: number
-): Promise<{ newInvested: number; isNowMlmQualified: boolean }> {
-      // --- SERVER-SIDE PHASE PROGRESSION ---
-      try {
-        const configRecord = await db.query.systemConfigs.findFirst({
-            where: eq(systemConfigs.key, 'phases')
-        });
-        if (configRecord && configRecord.value) {
-            const phases = JSON.parse(configRecord.value);
-            const activeIdx = phases.findIndex((p: any) => p.status === 'active');
-            if (activeIdx !== -1) {
-                const currentP = phases[activeIdx];
-                const phaseNumber = Number(currentP.phaseNumber || phaseIndex || activeIdx + 1);
-                const sales = await getPhaseSalesSnapshot(currentP);
-                const adminSold = sales.adminSold;
-                const verifiedSold = sales.verifiedSold;
-                const totalSold = sales.totalSold;
-                const cappedSold = Math.min(Math.max(0, Number(currentP.totalSupply || 0)), totalSold);
+  phaseIndex: number,
+  purchaseTxHash?: string,
+  purchaseTransactionId?: number,
+): Promise<{ newInvested: number; isNowMlmQualified: boolean; finalized: boolean }> {
+  return await db.transaction(async (tx) => {
+      // Lock the purchase row and the user row so two workers cannot finalize the
+      // same blockchain purchase or credit the same user twice.
+      if (!purchaseTxHash && !purchaseTransactionId) {
+        throw new Error('Purchase transaction identity is required for atomic finalization.');
+      }
+      let purchaseRow: any = null;
+      if (purchaseTransactionId) {
+        const rows = await tx.execute(sql`SELECT * FROM transactions WHERE id=${purchaseTransactionId} FOR UPDATE`);
+        purchaseRow = (rows as any).rows?.[0] || (rows as any)[0];
+      } else {
+        const rows = await tx.execute(sql`SELECT * FROM transactions WHERE tx_hash=${purchaseTxHash} AND type='buy_presale' LIMIT 1 FOR UPDATE`);
+        purchaseRow = (rows as any).rows?.[0] || (rows as any)[0];
+      }
+      if (!purchaseRow) throw new Error('Purchase transaction record not found.');
+      if (purchaseRow.tx_hash && purchaseTxHash && String(purchaseRow.tx_hash).toLowerCase() !== String(purchaseTxHash).toLowerCase()) {
+        throw new Error('Purchase transaction hash mismatch.');
+      }
+      // If another worker already completed this purchase, do not credit anything again.
+      if (String(purchaseRow.status) === 'completed') {
+        const existingUser = await tx.query.users.findFirst({ where: eq(users.id, userSnapshot.id) });
+        return {
+          newInvested: Number(existingUser?.totalInvestedUsdt || 0),
+          isNowMlmQualified: !!existingUser?.isMlmQualified,
+          finalized: false,
+        };
+      }
+      if (!['pending_verification', 'pending_finalization', 'completed'].includes(String(purchaseRow.status))) {
+        throw new Error(`Purchase is not finalizable from status '${purchaseRow.status}'.`);
+      }
+      await tx.execute(sql`SELECT id FROM users WHERE id=${userSnapshot.id} FOR UPDATE`);
+      const user = await tx.query.users.findFirst({ where: eq(users.id, userSnapshot.id) });
+      if (!user) throw new Error('User not found during atomic purchase finalization.');
 
-                phases[activeIdx].adminSold = adminSold;
-                phases[activeIdx].tokensSold = cappedSold;
-                if (cappedSold >= Number(currentP.totalSupply || 0)) {
-                    phases[activeIdx].status = 'completed';
-                    if (activeIdx + 1 < phases.length) {
-                        phases[activeIdx + 1].status = 'active';
-                        phases[activeIdx + 1].adminSold = Math.max(0, Number(phases[activeIdx + 1].adminSold ?? phases[activeIdx + 1].tokensSold ?? 0));
-                        const nextPhaseNumber = Number(phases[activeIdx + 1].phaseNumber || activeIdx + 2);
-                        const nextVerifiedSold = await getVerifiedPresaleTokensByPhase(nextPhaseNumber);
-                        phases[activeIdx + 1].tokensSold = Math.min(
-                          Math.max(0, Number(phases[activeIdx + 1].totalSupply || 0)),
-                          phases[activeIdx + 1].adminSold + nextVerifiedSold,
-                        );
-                    }
-                }
-                await db.update(systemConfigs).set({ value: JSON.stringify(phases), updatedAt: new Date() }).where(eq(systemConfigs.key, 'phases'));
-                console.log(`[API] Phase progression updated. Phase ${currentP.id}: adminSold=${adminSold}, verifiedSold=${verifiedSold}, totalSold=${cappedSold}`);
+      // --- SERVER-SIDE PHASE PROGRESSION (inside the same DB transaction) ---
+      const phaseRows = await tx.execute(sql`SELECT * FROM system_configs WHERE key='phases' FOR UPDATE`);
+      const phaseRow: any = (phaseRows as any).rows?.[0] || (phaseRows as any)[0];
+      if (phaseRow?.value) {
+        const phases = JSON.parse(phaseRow.value);
+        const activeIdx = phases.findIndex((p: any) => p.status === 'active');
+        if (activeIdx !== -1) {
+          const currentP = phases[activeIdx];
+          const currentPhaseNumber = Number(currentP.phaseNumber || phaseIndex || activeIdx + 1);
+          const soldRows = await tx.execute(sql`
+            SELECT COALESCE(SUM(token_amount),0) AS sold
+            FROM transactions
+            WHERE type='buy_presale' AND status='completed' AND phase_index=${currentPhaseNumber}
+          `);
+          const verifiedSoldBeforeCurrent = Number(((soldRows as any).rows?.[0] || (soldRows as any)[0] || {}).sold || 0);
+          const verifiedSold = verifiedSoldBeforeCurrent + (currentPhaseNumber === Number(phaseIndex) ? Number(tokenAmount) : 0);
+          const adminSold = Math.max(0, Number(currentP.adminSold ?? Math.max(0, Number(currentP.tokensSold || 0) - verifiedSoldBeforeCurrent)));
+          const cappedSold = Math.min(Math.max(0, Number(currentP.totalSupply || 0)), adminSold + verifiedSold);
+          phases[activeIdx].adminSold = adminSold;
+          phases[activeIdx].tokensSold = cappedSold;
+          if (cappedSold >= Number(currentP.totalSupply || 0)) {
+            phases[activeIdx].status = 'completed';
+            if (activeIdx + 1 < phases.length) {
+              phases[activeIdx + 1].status = 'active';
+              phases[activeIdx + 1].adminSold = Math.max(0, Number(phases[activeIdx + 1].adminSold ?? phases[activeIdx + 1].tokensSold ?? 0));
+              phases[activeIdx + 1].tokensSold = Math.min(Math.max(0, Number(phases[activeIdx + 1].totalSupply || 0)), phases[activeIdx + 1].adminSold);
             }
+          }
+          await tx.update(systemConfigs).set({ value: JSON.stringify(phases), updatedAt: new Date() }).where(eq(systemConfigs.key, 'phases'));
         }
-      } catch (phaseErr) {
-        console.error("Error updating phase progression in DB:", phaseErr);
       }
       // --- END PHASE PROGRESSION ---
 
       // Update user investment & qualification from live admin config.
       let liveQualificationUsd = 100;
       try {
-        const sys = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'systemConfig') });
+        const sys = await tx.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'systemConfig') });
         if (sys?.value) {
           const parsed = JSON.parse(sys.value);
           liveQualificationUsd = Math.max(0, Number(parsed.minMlmQualifyUsd ?? 100));
@@ -465,7 +447,7 @@ async function finalizeConfirmedPurchase(
       const isNowMlmQualified = newInvested >= liveQualificationUsd;
 
       // Update user purchased token totals and MLM qualification status
-      await db.update(users)
+      await tx.update(users)
         .set({
           totalPurchasedTokens: user.totalPurchasedTokens + Number(tokenAmount),
           totalInvestedUsdt: newInvested,
@@ -480,7 +462,7 @@ async function finalizeConfirmedPurchase(
         let isDirect = true;
         
         while (tempSponsor) {
-          const upUser = await db.query.users.findFirst({ where: eq(users.referralCode, tempSponsor) });
+          const upUser = await tx.query.users.findFirst({ where: eq(users.referralCode, tempSponsor) });
           if (!upUser) break;
           
           let updatedDirectVol = upUser.totalDirectVolume || 0;
@@ -492,7 +474,7 @@ async function finalizeConfirmedPurchase(
           }
           
           // Parse live Rank Rewards from system configs or fallback to defaults
-          const sysConfRows = await db.select().from(systemConfigs).where(eq(systemConfigs.key, 'rankRewards'));
+          const sysConfRows = await tx.select().from(systemConfigs).where(eq(systemConfigs.key, 'rankRewards'));
           let activeRanks = [
             { rankNumber: 1, requiredDirectVolume: 1000, requiredTeamVolume: 5000, requiredDirects: 3, oneTimeBonusUsd: 50 },
             { rankNumber: 2, requiredDirectVolume: 5000, requiredTeamVolume: 20000, requiredDirects: 5, oneTimeBonusUsd: 200 },
@@ -521,7 +503,7 @@ async function finalizeConfirmedPurchase(
                     newlyAchievedRank = rank.rankNumber;
                     rankBonusToPay += (rank.oneTimeBonusUsd || 0);
                     
-                    await db.insert(rankAchievements).values({
+                    await tx.insert(rankAchievements).values({
                        userId: upUser.id,
                        rankLevel: rank.rankNumber,
                        rewardUsdt: rank.oneTimeBonusUsd || 0
@@ -535,7 +517,7 @@ async function finalizeConfirmedPurchase(
           let newTotalEarned = (upUser.totalEarnedUsdt || 0) + rankBonusToPay;
           let newAvailable = (upUser.availableUsdt || 0) + rankBonusToPay;
           
-          await db.update(users).set({
+          await tx.update(users).set({
             totalDirectVolume: updatedDirectVol,
             totalTeamVolume: updatedTeamVol,
             highestRankAchieved: newlyAchievedRank,
@@ -544,7 +526,7 @@ async function finalizeConfirmedPurchase(
           }).where(eq(users.id, upUser.id));
           
           if (rankBonusToPay > 0) {
-             await db.insert(levelEarnings).values({
+             await tx.insert(levelEarnings).values({
                   beneficiaryId: upUser.id,
                   sourceUserId: user.id,
                   levelNumber: 0, 
@@ -566,7 +548,7 @@ async function finalizeConfirmedPurchase(
         let liveSystemConfig: any = {};
         let liveReferralLevels: any[] = [];
         try {
-          const rows = await db.select().from(systemConfigs);
+          const rows = await tx.select().from(systemConfigs);
           const byKey: Record<string, any> = {};
           for (const row of rows) { try { byKey[row.key] = JSON.parse(row.value); } catch { byKey[row.key] = row.value; } }
           liveSystemConfig = byKey.systemConfig || {};
@@ -581,7 +563,7 @@ async function finalizeConfirmedPurchase(
 
         // 1. Direct Sponsor Bonus (10%)
         if (currentSponsorCode) {
-          const directSponsor = await db.query.users.findFirst({
+          const directSponsor = await tx.query.users.findFirst({
             where: eq(users.referralCode, currentSponsorCode),
           });
 
@@ -590,7 +572,7 @@ async function finalizeConfirmedPurchase(
             if (isDirectQualified) {
               const sponsorBonusAmount = commissionBaseAmount * directSponsorRate;
               if (sponsorBonusAmount > 0) {
-                await db.insert(levelEarnings).values({
+                await tx.insert(levelEarnings).values({
                   beneficiaryId: directSponsor.id,
                   sourceUserId: user.id,
                   levelNumber: 0, // 0 indicates Direct Sponsor
@@ -599,7 +581,7 @@ async function finalizeConfirmedPurchase(
                   txType: 'token_purchase',
                 });
 
-                await db.update(users)
+                await tx.update(users)
                   .set({
                     totalEarnedUsdt: directSponsor.totalEarnedUsdt + sponsorBonusAmount,
                     availableUsdt: directSponsor.availableUsdt + sponsorBonusAmount,
@@ -613,7 +595,7 @@ async function finalizeConfirmedPurchase(
         
         // 2. 10-Level Unilevel Commissions (L1: 3%, L2: 2%, L3: 1%, L4: 1%, L5-10: 0.5%)
         for (let lvl = 0; lvl < levelPercentages.length && currentSponsorCode; lvl++) {
-          const uplineUser = await db.query.users.findFirst({
+          const uplineUser = await tx.query.users.findFirst({
             where: eq(users.referralCode, currentSponsorCode),
           });
 
@@ -625,7 +607,7 @@ async function finalizeConfirmedPurchase(
           if (isUplineQualified) {
             const commissionAmount = commissionBaseAmount * levelPercentages[lvl];
             if (commissionAmount > 0) {
-              await db.insert(levelEarnings).values({
+              await tx.insert(levelEarnings).values({
                 beneficiaryId: uplineUser.id,
                 sourceUserId: user.id,
                 levelNumber: lvl + 1,
@@ -634,7 +616,7 @@ async function finalizeConfirmedPurchase(
                 txType: 'token_purchase',
               });
 
-              await db.update(users)
+              await tx.update(users)
                 .set({
                   totalEarnedUsdt: uplineUser.totalEarnedUsdt + commissionAmount,
                   availableUsdt: uplineUser.availableUsdt + commissionAmount,
@@ -652,14 +634,14 @@ async function finalizeConfirmedPurchase(
       if (!wasMlmQualified && isNowMlmQualified) {
         // 1. Update Direct Sponsor Count & Team Counts
         if (user.referredBy) {
-          const sponsor = await db.query.users.findFirst({ where: eq(users.referralCode, user.referredBy) });
+          const sponsor = await tx.query.users.findFirst({ where: eq(users.referralCode, user.referredBy) });
           if (sponsor) {
-            await db.update(users).set({ directCount: sponsor.directCount + 1 }).where(eq(users.id, sponsor.id));
+            await tx.update(users).set({ directCount: sponsor.directCount + 1 }).where(eq(users.id, sponsor.id));
             let tempCode: string | null = user.referredBy;
             while (tempCode) {
-              const up = await db.query.users.findFirst({ where: eq(users.referralCode, tempCode) });
+              const up = await tx.query.users.findFirst({ where: eq(users.referralCode, tempCode) });
               if (!up) break;
-              await db.update(users).set({ totalTeamCount: up.totalTeamCount + 1 }).where(eq(users.id, up.id));
+              await tx.update(users).set({ totalTeamCount: up.totalTeamCount + 1 }).where(eq(users.id, up.id));
               tempCode = up.referredBy;
             }
           }
@@ -668,27 +650,27 @@ async function finalizeConfirmedPurchase(
         // 2. BFS Matrix Tree Auto-Placement
         let sponsorNodeId = null;
         if (user.referredBy) {
-          const sp = await db.query.users.findFirst({ where: eq(users.referralCode, user.referredBy) });
+          const sp = await tx.query.users.findFirst({ where: eq(users.referralCode, user.referredBy) });
           if (sp) {
-             const spNode = await db.query.matrixNodes.findFirst({ where: eq(matrixNodes.userId, sp.id) });
+             const spNode = await tx.query.matrixNodes.findFirst({ where: eq(matrixNodes.userId, sp.id) });
              if (spNode) sponsorNodeId = spNode.id;
           }
         }
 
-        const existingNodes = await db.select({ id: matrixNodes.id }).from(matrixNodes).limit(1);
+        const existingNodes = await tx.select({ id: matrixNodes.id }).from(matrixNodes).limit(1);
         let placementParentId = null;
         
         if (existingNodes.length > 0) {
             let startNodeId = sponsorNodeId;
             if (!startNodeId) {
-               const rootNode = await db.query.matrixNodes.findFirst({ orderBy: asc(matrixNodes.id) });
+               const rootNode = await tx.query.matrixNodes.findFirst({ orderBy: asc(matrixNodes.id) });
                startNodeId = rootNode?.id || null;
             }
             if (startNodeId) {
               const queue = [startNodeId];
               while (queue.length > 0) {
                 const currentId = queue.shift()!;
-                const children = await db.select().from(matrixNodes).where(eq(matrixNodes.parentId, currentId)).orderBy(asc(matrixNodes.position));
+                const children = await tx.select().from(matrixNodes).where(eq(matrixNodes.parentId, currentId)).orderBy(asc(matrixNodes.position));
                 if (children.length < 2) {
                   placementParentId = currentId;
                   break;
@@ -700,15 +682,15 @@ async function finalizeConfirmedPurchase(
             }
         }
 
-        const childrenCount = placementParentId ? (await db.select().from(matrixNodes).where(eq(matrixNodes.parentId, placementParentId))).length : 0;
+        const childrenCount = placementParentId ? (await tx.select().from(matrixNodes).where(eq(matrixNodes.parentId, placementParentId))).length : 0;
         const newPosition = childrenCount + 1;
         let newLevel = 1;
         if (placementParentId) {
-           const pNode = await db.query.matrixNodes.findFirst({ where: eq(matrixNodes.id, placementParentId) });
+           const pNode = await tx.query.matrixNodes.findFirst({ where: eq(matrixNodes.id, placementParentId) });
            if (pNode) newLevel = pNode.level + 1;
         }
 
-        const [newMatrixNode] = await db.insert(matrixNodes).values({
+        const [newMatrixNode] = await tx.insert(matrixNodes).values({
           userId: user.id,
           parentId: placementParentId,
           level: newLevel,
@@ -717,12 +699,12 @@ async function finalizeConfirmedPurchase(
           earnedFromMatrix: 0
         }).returning();
 
-        await db.update(users).set({ isMatrixActive: true, matrixLevel: 1 }).where(eq(users.id, user.id));
+        await tx.update(users).set({ isMatrixActive: true, matrixLevel: 1 }).where(eq(users.id, user.id));
 
         // 3. Matrix Placement Income Distribution Upward - fully admin controlled
         let matrixConfig: any = { placementIncomeUsd: 1, uplineSharePercent: 100, enabled: true };
         try {
-          const matrixRow = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'matrixConfig') });
+          const matrixRow = await tx.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'matrixConfig') });
           if (matrixRow?.value) matrixConfig = { ...matrixConfig, ...JSON.parse(matrixRow.value) };
         } catch {}
         const matrixEnabled = matrixConfig.enabled !== false;
@@ -732,12 +714,12 @@ async function finalizeConfirmedPurchase(
         let currentMatrixParentId = placementParentId;
         let matrixLvl = 1;
         while (matrixEnabled && currentMatrixParentId && matrixLvl <= 10 && mIncomeUsd > 0) {
-           const parentMatrixNode = await db.query.matrixNodes.findFirst({ where: eq(matrixNodes.id, currentMatrixParentId) });
+           const parentMatrixNode = await tx.query.matrixNodes.findFirst({ where: eq(matrixNodes.id, currentMatrixParentId) });
            if (!parentMatrixNode) break;
            
-           const uplineUser = await db.query.users.findFirst({ where: eq(users.id, parentMatrixNode.userId) });
+           const uplineUser = await tx.query.users.findFirst({ where: eq(users.id, parentMatrixNode.userId) });
            if (uplineUser && uplineUser.isMlmQualified) {
-              await db.insert(levelEarnings).values({
+              await tx.insert(levelEarnings).values({
                 beneficiaryId: uplineUser.id,
                 sourceUserId: user.id,
                 levelNumber: matrixLvl,
@@ -745,14 +727,14 @@ async function finalizeConfirmedPurchase(
                 commissionUsdt: mIncomeUsd,
                 txType: 'matrix_join',
               });
-              await db.update(users)
+              await tx.update(users)
                  .set({
                     totalEarnedUsdt: uplineUser.totalEarnedUsdt + mIncomeUsd,
                     availableUsdt: uplineUser.availableUsdt + mIncomeUsd,
                     updatedAt: new Date()
                  }).where(eq(users.id, uplineUser.id));
               
-              await db.update(matrixNodes).set({
+              await tx.update(matrixNodes).set({
                  earnedFromMatrix: parentMatrixNode.earnedFromMatrix + mIncomeUsd
               }).where(eq(matrixNodes.id, parentMatrixNode.id));
            }
@@ -761,8 +743,16 @@ async function finalizeConfirmedPurchase(
            matrixLvl++;
         }
       }
+      // Mark the purchase completed only after every financial/matrix/rank side-effect
+      // has succeeded. Any thrown error rolls the entire transaction back.
+      await tx.update(transactions)
+        .set({ status: 'completed' })
+        .where(eq(transactions.id, Number(purchaseRow.id)));
+
       // --- END AUTO-PLACEMENT AND MATRIX LOGIC ---
-  return { newInvested, isNowMlmQualified };
+      return { newInvested, isNowMlmQualified, finalized: true };
+
+  });
 }
 
  
@@ -826,28 +816,14 @@ async function finalizeConfirmedPurchase(
     return {matched:filled,unmatched:Math.max(0,share-filled),inviteUsed:true,match:{orderId:Number(order.id),sellerUserId:Number(order.user_id),phaseNumber:Number(order.phase_number),tokensSold:filled,tokenPrice:price,grossUsdt,remainingOrderTokens:nextRemaining,status:nextStatus}};
   }
   async function getFifoShareConfig() {
-    // The FIFO split is an approved admin-controlled operational setting.
-    // It is read from the authoritative PostgreSQL systemConfig on each
-    // settlement, so a change applies to new matching activity without
-    // changing already-completed ledger records.
-    const DEFAULT_SELLER_SHARE = 20;
-    let sellerSharePercent = DEFAULT_SELLER_SHARE;
+    let sellerSharePercent = 20;
     try {
-      const row = await db.query.systemConfigs.findFirst({
-        where: eq(systemConfigs.key, 'systemConfig'),
-      });
-      if (row?.value) {
-        const parsed = JSON.parse(row.value);
-        const configured = Number(parsed?.sellQueueSharePercent);
-        if (Number.isFinite(configured) && configured >= 0 && configured <= 100) {
-          sellerSharePercent = configured;
-        }
-      }
-    } catch (e) {
-      console.warn('[FIFO] Failed to read sellQueueSharePercent; using safe default 20%.', e);
-    }
-    const companySharePercent = 100 - sellerSharePercent;
-    return { sellerSharePercent, companySharePercent };
+      const row = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'systemConfig') });
+      const parsed = row?.value ? JSON.parse(row.value) : {};
+      const candidate = Number(parsed?.sellQueueSharePercent ?? 20);
+      if (Number.isFinite(candidate) && candidate >= 0 && candidate <= 100) sellerSharePercent = candidate;
+    } catch {}
+    return { sellerSharePercent, companySharePercent: 100 - sellerSharePercent };
   }
 
   async function matchVerifiedBuyerToPhaseQueue(params: {
@@ -931,7 +907,7 @@ async function verifyPendingPresalePurchases() {
   let pendingTxs: any[] = [];
   try {
     pendingTxs = await db.select().from(transactions).where(
-      and(eq(transactions.type, 'buy_presale'), eq(transactions.status, 'pending_verification'))
+      and(eq(transactions.type, 'buy_presale'), inArray(transactions.status, ['pending_verification','pending_finalization']))
     );
   } catch (err: any) {
     console.error("[PRESALE VERIFY] Failed to load pending purchases:", err.message);
@@ -984,14 +960,15 @@ async function verifyPendingPresalePurchases() {
         continue;
       }
 
-      await db.update(transactions).set({ status: 'completed' }).where(eq(transactions.id, txRecord.id));
-      await finalizeConfirmedPurchase(user, Number(txRecord.tokenAmount), Number(txRecord.amountUsdt), Number(txRecord.phaseIndex || 1));
-      await matchVerifiedBuyerToPhaseQueue({
-        buyerUserId: user.id,
-        buyerWallet: user.walletAddress,
-        phaseNumber: Number(txRecord.phaseIndex || 1),
-        buyerTokenAmount: Number(txRecord.tokenAmount),
-      });
+      const finalization = await finalizeConfirmedPurchase(user, Number(txRecord.tokenAmount), Number(txRecord.amountUsdt), Number(txRecord.phaseIndex || 1), txRecord.txHash || undefined, txRecord.id);
+      if (finalization.finalized) {
+        await matchVerifiedBuyerToPhaseQueue({
+          buyerUserId: user.id,
+          buyerWallet: user.walletAddress,
+          phaseNumber: Number(txRecord.phaseIndex || 1),
+          buyerTokenAmount: Number(txRecord.tokenAmount),
+        });
+      }
       console.log(`[PRESALE VERIFY] Purchase #${txRecord.id} confirmed on-chain, finalized, and FIFO matched.`);
     } catch (err: any) {
       console.error(`[PRESALE VERIFY] Error checking tx ${txRecord.txHash}:`, err.message);
@@ -1039,6 +1016,9 @@ async function ensureProductionSafetyTables() {
     ON transactions(tx_hash)
     WHERE type='buy_presale' AND tx_hash IS NOT NULL
   `);
+  // Durable idempotency key for MLM withdrawals. Survives PM2/server restarts.
+  await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS withdrawal_request_key TEXT`);
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS transactions_withdrawal_request_uq ON transactions(withdrawal_request_key) WHERE withdrawal_request_key IS NOT NULL`);
 }
 
 async function ensureTokenWithdrawalSettlementTable() {
@@ -1067,33 +1047,7 @@ async function ensureTokenWithdrawalSettlementTable() {
 async function ensureInitialAdminPin() {
   const existing = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'admin_pin') });
   if (existing?.value) return;
-
-  // Backward-compatible migration for an existing installation that used the
-  // legacy ADMIN_SECRET_PIN (including the old 4-digit PIN). We hash it into
-  // the database on first startup instead of forcing the owner to lose access.
-  const legacyPin = String(process.env.ADMIN_SECRET_PIN || '').trim();
-  const configuredInitialPin = String(process.env.ADMIN_PIN_INITIAL || '').trim();
-  const initialPin = configuredInitialPin || legacyPin;
-  // If an existing installation copied the old 4-digit value into the new
-  // ADMIN_PIN_INITIAL variable, still treat it as a legacy migration rather
-  // than locking the owner out. Brand-new installs without ADMIN_SECRET_PIN
-  // remain subject to the 6+ digit requirement below.
-  const usingLegacyPin = !!legacyPin && (!configuredInitialPin || !/^\d{6,}$/.test(configuredInitialPin));
-
-  if (usingLegacyPin) {
-    if (!/^\d{4,}$/.test(initialPin)) {
-      throw new Error('Legacy ADMIN_SECRET_PIN must contain at least 4 numeric digits.');
-    }
-    await db.insert(systemConfigs).values({
-      key: 'admin_pin',
-      value: hashPin(initialPin),
-      description: 'Master Admin Security PIN (hashed; migrated from legacy environment PIN)',
-    });
-    console.log('[ADMIN] Legacy security PIN migrated to a salted database hash. Change it to a 6+ digit PIN from the Admin Panel.');
-    return;
-  }
-
-  // A brand-new installation must use the stronger 6+ digit initial PIN.
+  const initialPin = String(process.env.ADMIN_PIN_INITIAL || '').trim();
   if (!initialPin || !/^\d{6,}$/.test(initialPin)) {
     throw new Error('ADMIN_PIN_INITIAL is required on first production startup and must be at least 6 digits.');
   }
@@ -1231,7 +1185,6 @@ async function startServer() {
   app.get("/api/wallet/token-sell-ledger", async (req, res) => {
     try {
       const { walletAddress } = req.query;
-      if (!requireWallet(req, res, String(walletAddress || ""))) return;
       if (!walletAddress || typeof walletAddress !== "string") {
         return res.status(400).json({ error: "walletAddress is required" });
       }
@@ -1601,6 +1554,43 @@ async function startServer() {
       const decimals = 18;
       const parsedAmount = ethers.parseUnits(netPayout.toFixed(4), decimals);
 
+      // MLM withdrawal reservation: DB is the authority. Funds are reserved before
+      // the blockchain payout, so concurrent requests cannot spend the same balance.
+      // The durable request key also survives PM2/server restarts.
+      let mlmWithdrawalRecord: any = null;
+      let mlmReservationKey = '';
+      if (walletType === 'mlm') {
+        mlmReservationKey = createHash('sha256')
+          .update(`mlm-withdrawal|${normalizedAddress}|${grossAmount.toFixed(4)}|${signature}`)
+          .digest('hex');
+        const existingRows = await db.execute(sql`SELECT * FROM transactions WHERE withdrawal_request_key=${mlmReservationKey} LIMIT 1`);
+        const existing: any = (existingRows as any).rows?.[0] || (existingRows as any)[0];
+        if (existing) {
+          if (String(existing.status) === 'completed') {
+            return res.json({ success: true, message: 'This signed MLM withdrawal was already completed; duplicate payout blocked.', txHash: existing.tx_hash, walletType, transaction: existing });
+          }
+          return res.status(409).json({ error: 'This signed MLM withdrawal is already being processed or requires reconciliation.', transaction: existing });
+        }
+
+        const reservation = await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT id FROM users WHERE id=${user.id} FOR UPDATE`);
+          const lockedUser = await tx.query.users.findFirst({ where: eq(users.id, user.id) });
+          if (!lockedUser) throw new Error('User disappeared while reserving withdrawal balance.');
+          const authoritativeAvailable = Number(lockedUser.availableUsdt || 0);
+          if (authoritativeAvailable + 1e-9 < grossAmount) {
+            throw new Error(`Insufficient MLM wallet balance. Available: $${authoritativeAvailable.toFixed(4)} USDT.`);
+          }
+          await tx.update(users).set({ availableUsdt: authoritativeAvailable - grossAmount, updatedAt: new Date() }).where(eq(users.id, user.id));
+          const [record] = await tx.insert(transactions).values({
+            userId: user.id, type: 'withdrawal', amountUsdt: netPayout, tokenAmount: finalTokensReturned,
+            tokenPrice: 1.0, status: 'pending_payout', txHash: null, withdrawalRequestKey: mlmReservationKey,
+          }).returning();
+          return { record, authoritativeAvailable };
+        });
+        mlmWithdrawalRecord = reservation.record;
+        currentAvailable = reservation.authoritativeAvailable;
+      }
+
       // Token-sale withdrawals get a durable idempotency record keyed by the user's
       // already-verified NXBC return transaction. This is the settlement's unique key.
       let settlement: any = null;
@@ -1830,37 +1820,56 @@ async function startServer() {
         });
       } else {
         // Non-token MLM withdrawals keep the existing real-BSC payout path.
+        // The balance is reserved before broadcast. If broadcast never happened,
+        // release it. If broadcast happened but confirmation is uncertain, keep the
+        // reservation pending for reconciliation rather than risking a double payout.
+        let mlmBroadcasted = false;
         try {
           const tx = await usdtContract.transfer(walletAddress, parsedAmount);
+          mlmBroadcasted = true;
           txHash = tx.hash;
           const payoutReceipt = await tx.wait(1);
           if (!payoutReceipt || payoutReceipt.status !== 1) {
-            return res.status(503).json({ error: "USDT payout transaction was broadcast but did not confirm successfully on BSC.", txHash: tx.hash, serviceFeePercent: withdrawalFeePercent });
+            if (mlmWithdrawalRecord) {
+              await db.transaction(async (tx) => {
+                await tx.execute(sql`SELECT id FROM users WHERE id=${user.id} FOR UPDATE`);
+                await tx.update(users).set({ availableUsdt: sql`${users.availableUsdt} + ${grossAmount}`, updatedAt: new Date() }).where(eq(users.id, user.id));
+                await tx.update(transactions).set({ status: 'failed', txHash: txHash }).where(eq(transactions.id, Number(mlmWithdrawalRecord.id)));
+              });
+            }
+            return res.status(503).json({ error: "USDT payout transaction failed/reverted on BSC. Reserved balance was restored.", txHash: tx.hash, serviceFeePercent: withdrawalFeePercent });
           }
           executionMode = "real_bsc_blockchain";
         } catch (botError: any) {
           console.error("[PAYOUT BOT ERROR] On-chain USDT dispatch failed:", botError.message);
-          return res.status(503).json({ error: `USDT payout failed on BSC: ${botError?.message || 'unknown payout error'}`, serviceFeePercent: withdrawalFeePercent });
+          if (walletType === 'mlm' && mlmWithdrawalRecord && !mlmBroadcasted) {
+            await db.transaction(async (tx) => {
+              await tx.execute(sql`SELECT id FROM users WHERE id=${user.id} FOR UPDATE`);
+              await tx.update(users).set({ availableUsdt: sql`${users.availableUsdt} + ${grossAmount}`, updatedAt: new Date() }).where(eq(users.id, user.id));
+              await tx.update(transactions).set({ status: 'failed' }).where(eq(transactions.id, Number(mlmWithdrawalRecord.id)));
+            });
+          } else if (walletType === 'mlm' && mlmWithdrawalRecord && mlmBroadcasted) {
+            await db.update(transactions).set({ status: 'pending_payout', txHash: txHash || null }).where(eq(transactions.id, Number(mlmWithdrawalRecord.id)));
+          }
+          return res.status(503).json({ error: mlmBroadcasted ? "USDT payout was broadcast but confirmation is uncertain. Withdrawal is locked pending reconciliation; no second payout will be attempted with this signed request." : `USDT payout failed on BSC: ${botError?.message || 'unknown payout error'}`, txHash: txHash || undefined, serviceFeePercent: withdrawalFeePercent });
         }
       }
 
       // Record and finalize legacy MLM/community withdrawals (token_sell was finalized above atomically).
       if (walletType !== 'token_sell') {
         const txTitle = `MLM & Community Earnings Payout (Net $${netPayout.toFixed(2)} after ${withdrawalFeePercent}% Fee)`;
-        const [txRecord] = await db.insert(transactions).values({
-          userId: user.id,
-          type: 'withdrawal',
-          amountUsdt: netPayout,
-          tokenAmount: finalTokensReturned,
-          tokenPrice: 1.0,
-          status: 'completed',
-          txHash: txHash,
-        }).returning();
-        const newAvailable = Math.max(0, currentAvailable - grossAmount);
-        await db.update(users)
-          .set({ availableUsdt: newAvailable, totalWithdrawnUsdt: (user.totalWithdrawnUsdt || 0) + grossAmount, updatedAt: new Date() })
-          .where(eq(users.id, user.id));
-        return res.json({ success: true, message: `${txTitle} processed successfully!`, txHash, walletType, grossAmount, serviceFee, netPayout, tokenReturnTxHash: null, tokensReturned: finalTokensReturned, phaseBreakdown, executionMode, transaction: txRecord, newAvailableBalance: newAvailable });
+        const finalized = await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT id FROM users WHERE id=${user.id} FOR UPDATE`);
+          const lockedUser = await tx.query.users.findFirst({ where: eq(users.id, user.id) });
+          if (!lockedUser) throw new Error('User disappeared while finalizing MLM withdrawal.');
+          await tx.update(users).set({ totalWithdrawnUsdt: Number(lockedUser.totalWithdrawnUsdt || 0) + grossAmount, updatedAt: new Date() }).where(eq(users.id, user.id));
+          const [txRecord] = await tx.update(transactions)
+            .set({ status: 'completed', txHash: txHash })
+            .where(eq(transactions.id, Number(mlmWithdrawalRecord.id)))
+            .returning();
+          return { txRecord, newAvailable: Number(lockedUser.availableUsdt || 0) };
+        });
+        return res.json({ success: true, message: `${txTitle} processed successfully!`, txHash, walletType, grossAmount, serviceFee, netPayout, tokenReturnTxHash: null, tokensReturned: finalTokensReturned, phaseBreakdown, executionMode, transaction: finalized.txRecord, newAvailableBalance: finalized.newAvailable });
       }
 
       const completedSettlementRows = await db.execute(sql`
@@ -1901,42 +1910,10 @@ async function startServer() {
     }
   });
 
-  // Wallet ownership authentication for private dashboard data.
-  app.get("/api/auth/nonce", async (req, res) => {
-    try {
-      const wallet = String(req.query.walletAddress || "").toLowerCase();
-      if (!/^0x[a-f0-9]{40}$/.test(wallet)) return res.status(400).json({ error: "Valid wallet address is required." });
-      const timestamp = Date.now();
-      const message = `${USER_AUTH_AUDIENCE}\nWallet: ${wallet}\nTimestamp: ${timestamp}`;
-      res.json({ wallet, timestamp, message, expiresInMs: USER_SIGNATURE_MAX_AGE_MS });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message || "Failed to create authentication challenge." });
-    }
-  });
-
-  app.post("/api/auth/verify", async (req, res) => {
-    try {
-      const wallet = String(req.body?.walletAddress || "").toLowerCase();
-      const timestamp = Number(req.body?.timestamp);
-      const signature = String(req.body?.signature || "");
-      if (!/^0x[a-f0-9]{40}$/.test(wallet) || !Number.isFinite(timestamp) || !signature) return res.status(400).json({ error: "Invalid authentication request." });
-      const age = Date.now() - timestamp;
-      if (age < 0 || age > USER_SIGNATURE_MAX_AGE_MS) return res.status(401).json({ error: "Authentication signature expired. Please retry." });
-      const message = `${USER_AUTH_AUDIENCE}\nWallet: ${wallet}\nTimestamp: ${timestamp}`;
-      const recovered = ethers.verifyMessage(message, signature).toLowerCase();
-      if (recovered !== wallet) return res.status(401).json({ error: "Wallet signature does not match the connected wallet." });
-      const token = makeUserSession(wallet, Date.now());
-      res.json({ success: true, token, expiresInMs: USER_SESSION_TTL_MS, wallet });
-    } catch (error: any) {
-      res.status(401).json({ error: error.message || "Wallet authentication failed." });
-    }
-  });
-
   // Get or Create User by Wallet Address
   app.post("/api/users/sync", async (req, res) => {
     try {
       const { walletAddress, referredBy } = req.body;
-      if (!requireWallet(req, res, String(walletAddress || ""))) return;
       if (!walletAddress) {
         return res.status(400).json({ error: "walletAddress is required" });
       }
@@ -1987,7 +1964,6 @@ async function startServer() {
   app.get("/api/users/:walletAddress", async (req, res) => {
     try {
       const { walletAddress } = req.params;
-      if (!requireWallet(req, res, walletAddress)) return;
       const user = await db.query.users.findFirst({
         where: eq(users.walletAddress, walletAddress.toLowerCase()),
       });
@@ -2036,7 +2012,6 @@ async function startServer() {
   app.get("/api/team/:walletAddress", async (req, res) => {
     try {
       const walletAddress = String(req.params.walletAddress || '').trim().toLowerCase();
-      if (!requireWallet(req, res, walletAddress)) return;
       if (!walletAddress) return res.status(400).json({ error: "walletAddress is required" });
 
       const leader = await db.query.users.findFirst({ where: eq(users.walletAddress, walletAddress) });
@@ -2238,7 +2213,7 @@ async function startServer() {
       // the real BSC receipt, buyer, exact USDT treasury payment, and exact NXBC
       // delivery from the current presale contract before applying any database
       // side effects (MLM commissions, phase progression, qualification, etc.).
-      let purchaseStatus: 'completed' | 'pending_verification' | 'failed' = 'pending_verification';
+      let purchaseStatus: 'pending_finalization' | 'pending_verification' | 'failed' = 'pending_verification';
       const hasValidTxHash = typeof txHash === 'string' && /^0x[a-fA-F0-9]{64}$/.test(txHash);
       if (hasValidTxHash) {
         const chainCheck = await verifyPresalePurchaseOnChain({
@@ -2247,7 +2222,7 @@ async function startServer() {
           usdtAmount: requestedUsdt,
           nxbcAmount: requestedTokens,
         });
-        if (chainCheck.ok) purchaseStatus = 'completed';
+        if (chainCheck.ok) purchaseStatus = 'pending_finalization';
         else if (chainCheck.pending) purchaseStatus = 'pending_verification';
         else purchaseStatus = 'failed';
       }
@@ -2302,11 +2277,13 @@ async function startServer() {
         return res.status(400).json({ success: false, error: "Purchase transaction could not be verified as a valid payment and NXBC delivery on BSC.", transaction: tx });
       }
 
-      const { newInvested, isNowMlmQualified } = await finalizeConfirmedPurchase(
+      const { newInvested, isNowMlmQualified, finalized: purchaseFinalized } = await finalizeConfirmedPurchase(
         user,
         Number(tokenAmount),
         Number(amountUsdt),
-        activePhaseNumber
+        activePhaseNumber,
+        txHash,
+        tx.id
       );
 
       // VERIFIED PURCHASE -> FIFO MATCHING. This is the only place where a real
@@ -2314,13 +2291,15 @@ async function startServer() {
       // USDT as withdrawable ledger balance; the seller's NXBC remains in their
       // wallet until withdrawal, when the server performs exact on-chain return
       // verification before paying USDT.
-      const fifoSettlement = await matchVerifiedBuyerToPhaseQueue({
-        buyerUserId: user.id,
-        buyerWallet: normalizedAddress,
-        phaseNumber: activePhaseNumber,
-        buyerTokenAmount: Number(tokenAmount),
-        directBuyerInviteToken: typeof directBuyerInviteToken === 'string' ? directBuyerInviteToken : undefined,
-      });
+      const fifoSettlement = purchaseFinalized
+        ? await matchVerifiedBuyerToPhaseQueue({
+            buyerUserId: user.id,
+            buyerWallet: normalizedAddress,
+            phaseNumber: activePhaseNumber,
+            buyerTokenAmount: Number(tokenAmount),
+            directBuyerInviteToken: typeof directBuyerInviteToken === 'string' ? directBuyerInviteToken : undefined,
+          })
+        : { userShareTokens: 0, adminShareTokens: 0, unmatchedUserShareTokens: 0, matches: [], directMatch: null, sellerSharePercent: 0, companySharePercent: 100 };
 
       // SECURITY: NXBC is delivered exclusively by the presale smart contract
       // through the user's wallet transaction. Never perform a second hot-wallet
@@ -2491,7 +2470,6 @@ async function startServer() {
   app.get("/api/presale/allocation/:walletAddress", async (req, res) => {
     try {
       const walletAddress = String(req.params.walletAddress || '').toLowerCase();
-      if (!requireWallet(req, res, walletAddress)) return;
       if (!/^0x[a-f0-9]{40}$/.test(walletAddress)) return res.status(400).json({ error: 'Invalid wallet address.' });
       const user = await db.query.users.findFirst({ where: eq(users.walletAddress, walletAddress) });
       if (!user) return res.json({ success: true, totalPurchasedTokens: 0, allocations: {} });
@@ -2585,7 +2563,6 @@ async function startServer() {
 
   app.post("/api/presale/allocation", async (req, res) => {
     try {
-      if (!requireWallet(req, res, String(req.body?.walletAddress || ""))) return;
       // Each allocation belongs to one verified purchase lot. Same-phase and past-phase
       // allocation is rejected server-side; LIVE/DEX is a reservation, never FIFO.
       await db.execute(sql`ALTER TABLE sell_orders ADD COLUMN IF NOT EXISTS purchase_tx_hash TEXT`);
@@ -2712,6 +2689,47 @@ async function startServer() {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // Admin FIFO controls - persisted in PostgreSQL, not browser/localStorage.
+  // -------------------------------------------------------------------------
+  app.post("/api/admin/sellqueue/reorder", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const orderIds = Array.isArray(req.body?.orderIds) ? req.body.orderIds.map(Number).filter(Number.isFinite) : [];
+      if (!orderIds.length) return res.status(400).json({ error: "orderIds is required." });
+      for (let i = 0; i < orderIds.length; i++) {
+        await db.update(sellOrders).set({ priority: i + 1 }).where(eq(sellOrders.id, orderIds[i]));
+      }
+      res.json({ success: true });
+    } catch (error: any) { res.status(500).json({ error: error.message }); }
+  });
+
+  app.post("/api/admin/sellqueue/instant-fulfill", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const orderId = Number(req.body?.orderId);
+      if (!Number.isFinite(orderId)) return res.status(400).json({ error: "Valid orderId is required." });
+      const order = await db.query.sellOrders.findFirst({ where: eq(sellOrders.id, orderId) });
+      if (!order) return res.status(404).json({ error: "Sell order not found." });
+      const remaining = Math.max(0, Number(order.remainingTokens));
+      if (remaining <= 0 || order.status === 'completed') return res.json({ success: true, order });
+      const gross = remaining * Number(order.tokenPrice);
+      await db.update(sellOrders).set({ remainingTokens: 0, status: 'completed' }).where(eq(sellOrders.id, order.id));
+      const user = await db.query.users.findFirst({ where: eq(users.id, order.userId) });
+      if (user) {
+        // Token-sale proceeds live only in tokenSellLedgers (Token Sale Wallet).
+        await db.update(users).set({ updatedAt: new Date() }).where(eq(users.id, user.id));
+        await db.insert(tokenSellLedgers).values({
+          userId: user.id, walletAddress: user.walletAddress, phaseIndex: order.phaseNumber,
+          phaseName: `Phase ${order.phaseNumber}`, tokenPrice: Number(order.tokenPrice),
+          tokensSold: remaining, tokensReturned: 0, grossUsdt: gross, withdrawnUsdt: 0,
+          serviceFeeUsdt: 0, status: 'unclaimed'
+        });
+      }
+      res.json({ success: true, orderId: order.id, tokensSold: remaining, grossUsdt: gross });
+    } catch (error: any) { res.status(500).json({ error: error.message }); }
+  });
+
   // System & Admin Configurations (Live Synchronization)
   // The initial PIN is never hard-coded. It is inserted as a salted hash at startup.
   let inMemoryAdminPinHash = hashPin(String(process.env.ADMIN_PIN_INITIAL || randomBytes(24).toString('hex')));
@@ -2791,8 +2809,9 @@ async function startServer() {
       }
       recordPinSuccess(ip);
 
-      // Persist the new hashed PIN first. Never report success if database persistence fails.
+      // Update PIN in database and memory (hashed, never plaintext)
       const newHash = hashPin(cleanNew);
+      inMemoryAdminPinHash = newHash;
       try {
         const existing = await db.query.systemConfigs.findFirst({
           where: eq(systemConfigs.key, "admin_pin"),
@@ -2802,10 +2821,8 @@ async function startServer() {
         } else {
           await db.insert(systemConfigs).values({ key: "admin_pin", value: newHash, description: "Master Admin Security PIN (hashed)" });
         }
-        inMemoryAdminPinHash = newHash;
       } catch (dbErr) {
-        console.error("Database PIN update failed:", dbErr);
-        return res.status(500).json({ error: "PIN change was not saved. Database update failed." });
+        console.log("Database PIN update notice:", dbErr);
       }
 
       res.json({ success: true, message: "Admin PIN changed successfully!" });
@@ -2837,6 +2854,7 @@ async function startServer() {
         receivingAddress: process.env.PRESALE_RECEIVING_WALLET || DEFAULT_ADMIN_WALLET,
         presalePaused: !live.active,
         withdrawalFeePercent: 2,
+        sellQueueSharePercent: 20,
       };
       if (socialRecord?.value) {
         try {
@@ -2850,6 +2868,9 @@ async function startServer() {
             withdrawalFeePercent: Number.isFinite(Number(parsed.withdrawalFeePercent ?? 2))
               ? Math.max(0, Math.min(100, Number(parsed.withdrawalFeePercent ?? 2)))
               : 2,
+            sellQueueSharePercent: Number.isFinite(Number(parsed.sellQueueSharePercent ?? 20))
+              ? Math.max(0, Math.min(100, Number(parsed.sellQueueSharePercent ?? 20)))
+              : 20,
             socialLinks: parsed.socialLinks || {},
           };
         } catch {}
@@ -3003,19 +3024,13 @@ async function startServer() {
     try {
       const { phases, referralLevels, rankRewards, systemConfig, matrixConfig } = req.body;
 
-      // Phase price/supply/active-state is blockchain/server authoritative.
-      // Legacy clients are blocked from changing it through the admin config API.
-      if (phases !== undefined) {
-        return res.status(400).json({ error: 'Presale phases are read-only and advance automatically from verified purchase allocation.' });
-      }
       if (systemConfig && Object.prototype.hasOwnProperty.call(systemConfig, 'sellQueueSharePercent')) {
-        const share = Number(systemConfig.sellQueueSharePercent);
-        if (!Number.isFinite(share) || share < 0 || share > 100) {
-          return res.status(400).json({ error: 'FIFO seller share must be between 0% and 100%.' });
+        const sellerShare = Number(systemConfig.sellQueueSharePercent);
+        if (!Number.isFinite(sellerShare) || sellerShare < 0 || sellerShare > 100) {
+          return res.status(400).json({ error: 'User Sell Queue Share must be between 0% and 100%.' });
         }
-        systemConfig.sellQueueSharePercent = share;
+        systemConfig.sellQueueSharePercent = sellerShare;
       }
-
       if (systemConfig && Object.prototype.hasOwnProperty.call(systemConfig, 'withdrawalFeePercent')) {
         const fee = Number(systemConfig.withdrawalFeePercent);
         if (!Number.isFinite(fee) || fee < 0 || fee > 100) {
@@ -3043,19 +3058,22 @@ async function startServer() {
         { key: "matrixConfig", value: matrixConfig ? JSON.stringify(matrixConfig) : null, desc: "2x2 Matrix System Config" },
       ];
 
-      await db.transaction(async (tx) => {
-        for (const item of itemsToSave) {
-          if (!item.value) continue;
-          const existing = await tx.query.systemConfigs.findFirst({
+      for (const item of itemsToSave) {
+        if (!item.value) continue;
+        try {
+          const existing = await db.query.systemConfigs.findFirst({
             where: eq(systemConfigs.key, item.key),
           });
+
           if (existing) {
-            await tx.update(systemConfigs).set({ value: item.value, updatedAt: new Date() }).where(eq(systemConfigs.key, item.key));
+            await db.update(systemConfigs).set({ value: item.value, updatedAt: new Date() }).where(eq(systemConfigs.key, item.key));
           } else {
-            await tx.insert(systemConfigs).values({ key: item.key, value: item.value, description: item.desc });
+            await db.insert(systemConfigs).values({ key: item.key, value: item.value, description: item.desc });
           }
+        } catch (dbErr) {
+          console.log(`DB config save notice (${item.key}):`, dbErr);
         }
-      });
+      }
 
       console.log("[ADMIN SYNC] Live configurations updated and persisted to PostgreSQL.");
 

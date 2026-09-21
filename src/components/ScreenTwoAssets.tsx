@@ -18,6 +18,7 @@ import {
   Zap,
   RefreshCw,
   Activity,
+  Target,
   CheckCircle2,
 } from 'lucide-react';
 import { AllocationState, PhaseConfig, QueueEntry, UserEarnings } from '../types/crypto';
@@ -37,6 +38,7 @@ interface ScreenTwoAssetsProps {
   matrixIncomeUsd: number;
   walletAddress?: string | null;
   walletConnected?: boolean;
+  sellQueueSharePercent?: number;
 }
 
 type MilestoneVectorKey = 'p2' | 'p3' | 'p4' | 'p5' | 'live' | 'unallocated';
@@ -49,6 +51,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   levelIncomeUsd,
   matrixIncomeUsd,
   walletAddress,
+  sellQueueSharePercent = 20,
 }) => {
   const [showValues, setShowValues] = useState<boolean>(true);
   const [selectedVector, setSelectedVector] = useState<MilestoneVectorKey>('p2');
@@ -167,6 +170,87 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   const simGain = Math.max(0, simValuation - initialCostUsd);
   const simRoiPercent = initialCostUsd > 0 ? ((simValuation - initialCostUsd) / initialCostUsd) * 100 : 0;
 
+  // Vector metadata for holographic inspector
+  const vectorDetails: Record<MilestoneVectorKey, {
+    title: string;
+    rate: string;
+    multiplier: string;
+    tokens: number;
+    value: number;
+    color: string;
+    borderColor: string;
+    fifoBadge: string;
+    desc: string;
+  }> = {
+    p2: {
+      title: 'Phase 2 Milestone',
+      rate: '$0.10',
+      multiplier: '10x Return',
+      tokens: allocation.p2Tokens?.allocated || p2Tokens,
+      value: p2Val,
+      color: 'text-amber-300',
+      borderColor: 'border-amber-400/40',
+      fifoBadge: 'FIFO Priority Tier 1',
+      desc: 'First exit gate at 10x ROI from Phase 1 entry. 20% of subsequent buyer USDT funds execute orders automatically.',
+    },
+    p3: {
+      title: 'Phase 3 Milestone',
+      rate: '$1.00',
+      multiplier: '100x Return',
+      tokens: allocation.p3Tokens?.allocated || p3Tokens,
+      value: p3Val,
+      color: 'text-amber-300',
+      borderColor: 'border-amber-400/40',
+      fifoBadge: 'FIFO Priority Tier 2',
+      desc: '100x wealth generation milestone. Token demand backed by on-chain matrix spillover and global buyers.',
+    },
+    p4: {
+      title: 'Phase 4 Milestone',
+      rate: '$10.00',
+      multiplier: '1,000x Return',
+      tokens: allocation.p4Tokens?.allocated || p4Tokens,
+      value: p4Val,
+      color: 'text-cyan-300',
+      borderColor: 'border-cyan-400/40',
+      fifoBadge: 'FIFO Priority Tier 3',
+      desc: 'Four-digit return tier. Auto-clearing FIFO mechanisms ensure continuous on-chain liquidity absorption.',
+    },
+    p5: {
+      title: 'Phase 5 Milestone',
+      rate: '$100.00',
+      multiplier: '10,000x Return',
+      tokens: allocation.p5Tokens?.allocated || p5Tokens,
+      value: p5Val,
+      color: 'text-purple-300',
+      borderColor: 'border-purple-400/40',
+      fifoBadge: 'FIFO Ultimate Tier',
+      desc: 'Final presale phase before DEX / LIVE market stage.',
+    },
+    live: {
+      title: 'DEX / LIVE Wallet',
+      rate: 'Market price on DEX / LIVE',
+      multiplier: 'Market based',
+      tokens: liveTokens,
+      value: liveVal,
+      color: 'text-emerald-300',
+      borderColor: 'border-emerald-400/40',
+      fifoBadge: 'Not in Presale / FIFO',
+      desc: 'DEX / LIVE tokens stay in the user wallet and are never created as a presale/FIFO sell order. They are reserved for the DEX/live market.',
+    },
+    unallocated: {
+      title: 'Unallocated Free Holdings',
+      rate: 'Flexible Market',
+      multiplier: 'Flexible Staking',
+      tokens: unallocatedTokens,
+      value: unallocatedTokens * 0.01,
+      color: 'text-slate-300',
+      borderColor: 'border-slate-600/40',
+      fifoBadge: 'On-Demand Allocation',
+      desc: 'Freely retained NXBC in your wallet. Can be allocated to future milestone locks or held indefinitely.',
+    },
+  };
+
+  const activeVectorDetail = vectorDetails[selectedVector];
 
   return (
     <div className="nxbc-screen flex flex-col w-full max-w-xl mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3 pb-8 sm:pb-12">
@@ -402,7 +486,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
         </div>
       </section>
 
-      {/* 3. PHASE SELL-THROUGH SCHEDULE — 6 SELL VECTORS ONLY */}
+      {/* 3. PHASE SELL-THROUGH SCHEDULE WITH INTERACTIVE VECTOR INSPECTOR */}
       <section className="relative overflow-hidden rounded-[22px] border border-amber-400/30 bg-[radial-gradient(circle_at_80%_15%,rgba(245,158,11,0.07),transparent_25%),linear-gradient(135deg,#071426_0%,#09101c_65%,#151109_100%)] shadow-[0_0_28px_rgba(245,158,11,0.07)]">
         <div className="relative p-3.5 sm:p-4">
           <div className="flex items-center justify-between gap-2 mb-3">
@@ -413,13 +497,67 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                   Phase Sell-Through Schedule
                 </h2>
                 <p className="text-[7.5px] sm:text-[8.5px] text-slate-300/80 font-mono-crypto">
-                  P2 → P5 sell gates + DEX / LIVE + Unallocated
+                  Tap any vector box to inspect execution telemetry
                 </p>
               </div>
             </div>
             <span className="px-2.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-[8px] sm:text-[9px] font-mono-crypto font-bold">
               6 Vectors
             </span>
+          </div>
+
+          {/* User-selected Phase 1 / Phase 2 allocation summary */}
+          <div className="rounded-[18px] border border-amber-400/20 bg-[#050b16]/70 p-3 mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold text-amber-300 font-rajdhani uppercase tracking-wider">
+                Your Phase Sale Allocation
+              </span>
+              <span className="text-[8px] text-emerald-300 font-mono-crypto flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" /> Saved to account
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-[14px] bg-[#071426]/70 border border-amber-400/25 p-2.5">
+                <div className="text-[8px] sm:text-[9px] text-slate-400 font-rajdhani uppercase tracking-wider">Phase 1 Sell</div>
+                <div className="text-sm sm:text-base font-black text-amber-300 font-mono-crypto mt-0.5">
+                  {showValues ? `${(allocation.p1Tokens?.allocated || p1Tokens).toLocaleString()} NXBC` : '••••'}
+                </div>
+                <div className="text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto mt-0.5">
+                  Sold: {showValues ? (allocation.p1Tokens?.sold || 0).toLocaleString() : '••'}
+                </div>
+              </div>
+              <div className="rounded-[14px] bg-[#071426]/70 border border-emerald-400/25 p-2.5">
+                <div className="text-[8px] sm:text-[9px] text-slate-400 font-rajdhani uppercase tracking-wider">Phase 2 Sell</div>
+                <div className="text-sm sm:text-base font-black text-emerald-300 font-mono-crypto mt-0.5">
+                  {showValues ? `${(allocation.p2Tokens?.allocated || p2Tokens).toLocaleString()} NXBC` : '••••'}
+                </div>
+                <div className="text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto mt-0.5">
+                  Sold: {showValues ? (allocation.p2Tokens?.sold || 0).toLocaleString() : '••'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* UNIQUE FEATURE 3: INTERACTIVE VECTOR INSPECTION HUD */}
+          <div className="rounded-[18px] border border-cyan-400/30 bg-[#050b16]/90 p-3 mb-3 shadow-[0_0_18px_rgba(6,182,212,0.08)]">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <div className="flex items-center gap-1.5">
+                <Target className="w-4 h-4 text-cyan-300" />
+                <span className={`text-[11px] sm:text-[12px] font-black font-rajdhani uppercase tracking-wider ${activeVectorDetail.color}`}>
+                  {activeVectorDetail.title} ({activeVectorDetail.rate})
+                </span>
+              </div>
+              <span className="text-[7.5px] sm:text-[8.5px] font-mono-crypto px-2 py-0.5 rounded-full bg-cyan-400/10 border border-cyan-400/30 text-cyan-300 font-bold">
+                {activeVectorDetail.fifoBadge}
+              </span>
+            </div>
+            <p className="text-[8px] sm:text-[9px] text-slate-300/90 font-mono-crypto leading-relaxed">
+              {activeVectorDetail.desc}
+            </p>
+            <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[8px] sm:text-[9px] font-mono-crypto">
+              <span className="text-slate-400">Tokens: <strong className="text-white">{showValues ? activeVectorDetail.tokens.toLocaleString() : '••••'} NXBC</strong></span>
+              <span className="text-emerald-300 font-bold">Expected USDT: ${showValues ? activeVectorDetail.value.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '••••'}</span>
+            </div>
           </div>
 
           {/* 6-Box Grid Container — interactive with selected state */}
@@ -656,7 +794,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                   Global FIFO Execution Queue
                 </h2>
                 <p className="text-[7.5px] sm:text-[8.5px] text-slate-300/80 font-mono-crypto">
-                  Algorithmic FIFO auto-matching on BSC
+                  Algorithmic auto-matching on BSC • {sellQueueSharePercent}% buyer flow absorption
                 </p>
               </div>
             </div>
@@ -665,7 +803,23 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
             </div>
           </div>
 
-          <div className="mb-3 px-3 py-2 rounded-xl bg-emerald-500/5 border border-emerald-400/15 text-[9px] text-emerald-200 font-mono-crypto">Automatic FIFO matching is system-controlled and cannot be manually reordered from the user dashboard.</div>
+          {/* FIFO Status Telemetry Badges */}
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="rounded-[12px] bg-[#050b16]/70 border border-white/10 p-2 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-amber-300 shrink-0" />
+              <div className="min-w-0">
+                <div className="text-[7px] text-slate-400 uppercase font-rajdhani">Buyer Absorption</div>
+                <div className="text-[9px] font-bold text-amber-300 font-mono-crypto">{sellQueueSharePercent}% Immediate Pool</div>
+              </div>
+            </div>
+            <div className="rounded-[12px] bg-[#050b16]/70 border border-white/10 p-2 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-300 shrink-0" />
+              <div className="min-w-0">
+                <div className="text-[7px] text-slate-400 uppercase font-rajdhani">Reserve Pool Match</div>
+                <div className="text-[9px] font-bold text-emerald-300 font-mono-crypto">{Math.max(0, 100 - Number(sellQueueSharePercent))}% Contract Pool</div>
+              </div>
+            </div>
+          </div>
 
           {fifoLoading ? (
             <div className="py-4 text-center text-[10px] text-slate-400 font-mono-crypto">Loading global queue...</div>

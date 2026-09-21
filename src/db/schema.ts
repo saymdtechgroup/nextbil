@@ -59,6 +59,7 @@ export const transactions = pgTable('transactions', {
   phaseIndex: integer('phase_index').default(1), // Phase 1 ($0.10) to Phase 5 ($1.00)
   status: text('status').notNull().default('completed'), // 'pending', 'completed', 'failed'
   txHash: text('tx_hash'),
+  withdrawalRequestKey: text('withdrawal_request_key'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

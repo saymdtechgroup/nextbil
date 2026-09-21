@@ -1170,7 +1170,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     </label>
                     <input
                       type="number"
-                      disabled
                       value={localSystem.sellQueueSharePercent ?? 20}
                       onChange={(e) => setLocalSystem({ ...localSystem, sellQueueSharePercent: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })}
                       className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-fuchsia-300 font-bold"

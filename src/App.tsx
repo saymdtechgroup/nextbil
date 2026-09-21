@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { ethers } from 'ethers';
 import {
   Sparkles,
   Layers,
@@ -45,6 +44,7 @@ import { BuyTokenModal } from './components/BuyTokenModal';
 import { WalletConnectModal } from './components/WalletConnectModal';
 import { TeamPlanModal } from './components/TeamPlanModal';
 import { MatrixPlanModal } from './components/MatrixPlanModal';
+import { AdminPanelModal } from './components/AdminPanelModal';
 import { SecretAdminPage } from './components/SecretAdminPage';
 import { GoldCoinGraphic } from './components/GoldCoinGraphic';
 import {
@@ -69,7 +69,6 @@ export default function App() {
   const [activeSingleScreen, setActiveSingleScreen] = useState<ActiveScreen>('home');
   const [showSecretAdminPage, setShowSecretAdminPage] = useState<boolean>(false);
   const [showHomeQuickMenu, setShowHomeQuickMenu] = useState(false);
-  const [userAuthToken, setUserAuthToken] = useState<string>(() => localStorage.getItem('nxbc_user_auth_token') || '');
 
   // Centralized navigation for Home shortcut buttons and the mobile navigation bar.
   const handleSingleScreenNavigation = (screen: ActiveScreen) => {
@@ -205,8 +204,6 @@ export default function App() {
             setWalletConnected(false);
             setWalletAddress('');
             localStorage.removeItem('nxbc_connected_wallet');
-            localStorage.removeItem('nxbc_user_auth_token');
-            setUserAuthToken('');
           }
         };
 
@@ -215,13 +212,27 @@ export default function App() {
     }
   }, []);
 
-  // Production Admin Access: ONLY the exact /admin route opens the secure admin gate.
-  // Alternate URL tricks such as #admin, ?admin=true, ?panel=admin are intentionally disabled.
+  // Secure URL-Only Admin Access (#admin, /admin, ?admin=true, ?panel=admin, #secret-admin)
   useEffect(() => {
     const checkAdminUrl = () => {
       if (typeof window !== 'undefined') {
-        const pathname = (window.location.pathname || '').toLowerCase().replace(/\/+$/, '') || '/';
-        setShowSecretAdminPage(pathname === '/admin');
+        const fullUrl = window.location.href.toLowerCase();
+        const hash = (window.location.hash || '').toLowerCase();
+        const search = (window.location.search || '').toLowerCase();
+        const pathname = (window.location.pathname || '').toLowerCase();
+
+        if (
+          hash.includes('admin') ||
+          search.includes('admin') ||
+          pathname.includes('/admin') ||
+          pathname.endsWith('admin') ||
+          fullUrl.includes('#admin') ||
+          fullUrl.includes('?admin') ||
+          fullUrl.includes('/admin') ||
+          fullUrl.includes('panel=admin')
+        ) {
+          setShowSecretAdminPage(true);
+        }
       }
     };
 
@@ -322,82 +333,70 @@ export default function App() {
     };
   }, []);
 
-  // Authenticate wallet ownership once per connection so private dashboard API calls
-  // cannot be made by simply guessing another user's wallet address.
-  const authenticateDashboardWallet = async (address: string) => {
-    try {
-      const ethereum = (window as any).ethereum;
-      if (!ethereum) throw new Error('Web3 wallet provider not found.');
-      const provider = new ethers.BrowserProvider(ethereum);
-      const signer = await provider.getSigner();
-      const signerAddress = (await signer.getAddress()).toLowerCase();
-      if (signerAddress !== address.toLowerCase()) throw new Error('Connected wallet changed.');
-      const challengeRes = await fetch(`/api/auth/nonce?walletAddress=${encodeURIComponent(address)}`);
-      const challenge = await challengeRes.json();
-      if (!challengeRes.ok) throw new Error(challenge.error || 'Could not start wallet authentication.');
-      const signature = await signer.signMessage(challenge.message);
-      const verifyRes = await fetch('/api/auth/verify', {
+  // Sync user with PostgreSQL backend when wallet connects
+  useEffect(() => {
+    if (walletConnected && walletAddress) {
+      const sponsorRef = typeof window !== 'undefined' ? localStorage.getItem('nxbc_sponsor_ref') : null;
+      fetch('/api/users/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: address, timestamp: challenge.timestamp, signature }),
-      });
-      const verified = await verifyRes.json();
-      if (!verifyRes.ok || !verified.token) throw new Error(verified.error || 'Wallet authentication failed.');
-      localStorage.setItem('nxbc_user_auth_token', verified.token);
-      setUserAuthToken(verified.token);
-      return verified.token;
-    } catch (error) {
-      localStorage.removeItem('nxbc_user_auth_token');
-      setUserAuthToken('');
-      throw error;
-    }
-  };
-
-  // Sync user with PostgreSQL backend only after wallet ownership authentication.
-  useEffect(() => {
-    if (!walletConnected || !walletAddress) return;
-    if (!userAuthToken) {
-      authenticateDashboardWallet(walletAddress).catch((err) => console.error('Wallet authentication required:', err));
-      return;
-    }
-
-    const authHeaders = { Authorization: `Bearer ${userAuthToken}` };
-    const sponsorRef = typeof window !== 'undefined' ? localStorage.getItem('nxbc_sponsor_ref') : null;
-
-    fetch('/api/users/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders },
-      body: JSON.stringify({ walletAddress, referredBy: sponsorRef || null }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.user) {
-          if (data.user.referralCode) setUserRefCode(data.user.referralCode);
-          if (data.user.availableUsdt !== undefined) {
-            setUserEarnings((prev) => ({ ...prev, availableUsdt: Number(data.user.availableUsdt || 0), withdrawnUsdt: Number(data.user.totalWithdrawnUsdt || 0) }));
+        body: JSON.stringify({
+          walletAddress,
+          referredBy: sponsorRef || null,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.user) {
+            console.log('PostgreSQL synced user:', data.user);
+            if (data.user.referralCode) {
+              setUserRefCode(data.user.referralCode);
+            }
+            if (data.user.availableUsdt !== undefined) {
+              setUserEarnings((prev) => ({
+                ...prev,
+                availableUsdt: Number(data.user.availableUsdt || 0),
+                withdrawnUsdt: Number(data.user.totalWithdrawnUsdt || 0),
+              }));
+            }
+            if (data.user.totalInvestedUsdt !== undefined && Number(data.user.totalInvestedUsdt) > 0) {
+              setTotalInvestedUsd(Number(data.user.totalInvestedUsdt));
+            }
           }
-          if (data.user.totalInvestedUsdt !== undefined && Number(data.user.totalInvestedUsdt) > 0) setTotalInvestedUsd(Number(data.user.totalInvestedUsdt));
-        }
-      })
-      .catch((err) => console.log('PostgreSQL sync notice:', err));
+        })
+        .catch((err) => console.log('PostgreSQL sync notice:', err));
 
-    fetch(`/api/presale/allocation/${walletAddress}`, { headers: authHeaders })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.allocations) {
-          const a = data.allocations;
-          const totalTokens = data.totalPurchasedTokens || 0;
-          setAllocation((prev) => ({
-            ...prev, totalTokensPurchased: totalTokens, isLocked: totalTokens > 0,
-            p1Tokens: a[1] || { allocated: 0, sold: 0 }, p2Tokens: a[2] || { allocated: 0, sold: 0 },
-            p3Tokens: a[3] || { allocated: 0, sold: 0 }, p4Tokens: a[4] || { allocated: 0, sold: 0 },
-            p5Tokens: a[5] || { allocated: 0, sold: 0 },
-            liveTokens: { allocated: Number(data.liveHoldTokens ?? a[6]?.allocated ?? 0), sold: 0 },
-          }));
-        }
-      })
-      .catch((err) => console.log('PostgreSQL allocation sync error:', err));
-  }, [walletConnected, walletAddress, userAuthToken]);
+        // Fetch user phase allocations from DB
+        fetch(`/api/presale/allocation/${walletAddress}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success && data.allocations) {
+              const a = data.allocations;
+              const totalTokens = data.totalPurchasedTokens || 0;
+              
+              setAllocation((prev) => {
+
+                const next = {
+                  ...prev,
+                  totalTokensPurchased: totalTokens,
+                  isLocked: totalTokens > 0,
+                  p1Tokens: a[1] || { allocated: 0, sold: 0 },
+                  p2Tokens: a[2] || { allocated: 0, sold: 0 },
+                  p3Tokens: a[3] || { allocated: 0, sold: 0 },
+                  p4Tokens: a[4] || { allocated: 0, sold: 0 },
+                  p5Tokens: a[5] || { allocated: 0, sold: 0 },
+                  liveTokens: {
+                    allocated: Number(data.liveHoldTokens ?? a[6]?.allocated ?? 0),
+                    sold: 0,
+                  },
+                };
+                return next;
+              });
+            }
+          })
+          .catch((err) => console.log('PostgreSQL allocation sync error:', err));
+    }
+  }, [walletConnected, walletAddress]);
 
   // Transactions History (Persisted in localStorage)
   
@@ -440,13 +439,38 @@ export default function App() {
     { level: 10, commissionPercent: 0.5, directRequirement: 10, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
   ];
 
-  const [referralLevels, setReferralLevels] = useState<ReferralLevel[]>(defaultPlanLevels);
+  const [referralLevels, setReferralLevels] = useState<ReferralLevel[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_admin_levels');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (false) {
+            localStorage.setItem('nxbc_admin_levels', JSON.stringify(defaultPlanLevels));
+            return defaultPlanLevels;
+          }
+          return parsed;
+        } catch (e) {}
+      }
+    }
+    return defaultPlanLevels;
+  });
 
   // 2x2 Matrix System Config (Dynamic via Admin & Persisted)
-  const [matrixConfig, setMatrixConfig] = useState<MatrixConfig>({
-    placementIncomeUsd: 1.00,
-    uplineSharePercent: 10,
-    enabled: true,
+  const [matrixConfig, setMatrixConfig] = useState<MatrixConfig>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_admin_matrix');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+    }
+    return {
+      placementIncomeUsd: 1.00,
+      uplineSharePercent: 10,
+      enabled: true,
+    };
   });
 
   // Rank Rewards & Leadership Pool (Dynamic via Admin & Persisted)
@@ -528,7 +552,22 @@ export default function App() {
     },
   ];
 
-  const [rankRewards, setRankRewards] = useState<RankReward[]>(defaultRankRewards);
+  const [rankRewards, setRankRewards] = useState<RankReward[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nxbc_admin_ranks');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed?.[0]?.requiredDirectVolume === 50000 || parsed?.[1]?.name === 'Monthly Leadership Salary') {
+             localStorage.setItem('nxbc_admin_ranks', JSON.stringify(defaultRankRewards));
+             return defaultRankRewards;
+          }
+          return parsed;
+        } catch (e) {}
+      }
+    }
+    return defaultRankRewards;
+  });
 
   // General System & Global Parameters (Dynamic via Admin & Persisted)
   const [systemConfig, setSystemConfig] = useState<AdminSystemConfig>({
@@ -542,9 +581,9 @@ export default function App() {
     presalePaused: false,
     directSponsorPercent: 10,
     withdrawalFeePercent: 2,
-    sellQueueSharePercent: 20,
     matrixConfig: { placementIncomeUsd: 1, uplineSharePercent: 100, enabled: true },
     royaltyPoolUsd: 25000,
+    sellQueueSharePercent: 20,
     socialLinks: { x: '', youtube: '', telegram: '', facebook: '' },
   });
 
@@ -564,6 +603,7 @@ export default function App() {
   const [walletModalOpen, setWalletModalOpen] = useState<boolean>(false);
   const [teamModalOpen, setTeamModalOpen] = useState<boolean>(false);
   const [matrixModalOpen, setMatrixModalOpen] = useState<boolean>(false);
+  const [adminModalOpen, setAdminModalOpen] = useState<boolean>(false);
 
   // Token Balances
   // Financial balances are blockchain-authoritative. Browser storage is never
@@ -606,7 +646,7 @@ export default function App() {
     const fetchUserStats = async () => {
       if (!walletAddress) return;
       try {
-        const res = await fetch(`/api/users/${walletAddress}`, { headers: userAuthToken ? { Authorization: `Bearer ${userAuthToken}` } : {} });
+        const res = await fetch(`/api/users/${walletAddress}`);
         const data = await res.json();
         if (data && data.user) {
           setTotalInvestedUsd(data.user.totalInvestedUsdt || 0);
@@ -662,7 +702,7 @@ export default function App() {
     fetchUserStats();
     const interval = setInterval(fetchUserStats, 5000);
     return () => clearInterval(interval);
-  }, [walletAddress, userAuthToken]);
+  }, [walletAddress]);
 
   // Purchase handler with sequential phase progression & immutable allocation lock
   const handleConfirmPurchase = async (
@@ -1051,7 +1091,8 @@ export default function App() {
       withdrawalFeePercent: 2,
       matrixConfig: defaultMatrix,
       royaltyPoolUsd: 25000,
-      };
+      sellQueueSharePercent: 20,
+    };
 
     handleUpdatePhases(defaultPhases);
     handleUpdateReferralLevels(defaultLevels);
@@ -1268,6 +1309,7 @@ export default function App() {
                   matrixIncomeUsd={matrixIncomeUsd}
                   walletAddress={walletAddress}
                   walletConnected={walletConnected}
+                  sellQueueSharePercent={Number(systemConfig.sellQueueSharePercent ?? 20)}
                 />
               )}
 
@@ -1310,6 +1352,7 @@ export default function App() {
                 <ScreenMine
                   walletAddress={walletAddress}
                   walletConnected={walletConnected}
+                  sellQueueSharePercent={Number(systemConfig.sellQueueSharePercent ?? 20)}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
                   totalInvestedUsd={totalInvestedUsd}
                   minMlmQualifyUsd={systemConfig.minMlmQualifyUsd || 100}
@@ -1339,7 +1382,7 @@ export default function App() {
                 {systemConfig.tokenSymbol} Community Presale Platform
               </h2>
               <p className="text-xs text-purple-200/70">
-                Synchronized live state: Track phase allocation & FIFO execution on Screen 2 &bull; Execute secure wallet withdrawal on Screen 3.
+                Synchronized live state: Define future sell percentages on Screen 1 &bull; Track the 6-box sell schedule on Screen 2 &bull; Execute instant smart-contract withdrawal on Screen 3.
               </p>
             </div>
 
@@ -1410,6 +1453,7 @@ export default function App() {
                   matrixIncomeUsd={matrixIncomeUsd}
                   walletAddress={walletAddress}
                   walletConnected={walletConnected}
+                  sellQueueSharePercent={Number(systemConfig.sellQueueSharePercent ?? 20)}
                 />
                 <BottomNavBar
                   idPrefix="s2-nav"
@@ -1523,6 +1567,26 @@ export default function App() {
         matrixConfig={matrixConfig}
       />
 
+      {/* MASTER DYNAMIC ADMIN PANEL MODAL */}
+      <AdminPanelModal
+        isOpen={adminModalOpen}
+        onClose={() => setAdminModalOpen(false)}
+        phases={phases}
+        onUpdatePhases={handleUpdatePhases}
+        levels={referralLevels}
+        onUpdateLevels={handleUpdateReferralLevels}
+        matrixConfig={matrixConfig}
+        onUpdateMatrixConfig={handleUpdateMatrixConfig}
+        rankRewards={rankRewards}
+        onUpdateRankRewards={handleUpdateRankRewards}
+        systemConfig={systemConfig}
+        onUpdateSystemConfig={handleUpdateSystemConfig}
+        onResetToDefaults={handleResetToDefaults}
+        onOpenSecretPage={() => {
+          setAdminModalOpen(false);
+          setShowSecretAdminPage(true);
+        }}
+      />
     </div>
   );
 }

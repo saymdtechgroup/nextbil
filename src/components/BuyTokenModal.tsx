@@ -793,7 +793,7 @@ export const BuyTokenModal: React.FC<BuyTokenModalProps> = ({
                   onClick={applyPresetEqual}
                   className="py-1 px-1.5 rounded-lg bg-cyan-900/40 hover:bg-cyan-800 border border-cyan-500/30 text-[9px] font-rajdhani font-bold text-cyan-200 cursor-pointer"
                 >
-                  Balanced Split
+                  20% Split
                 </button>
                 <button
                   type="button"

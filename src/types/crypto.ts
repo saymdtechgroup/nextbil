@@ -89,10 +89,9 @@ export interface AdminSystemConfig {
   presalePaused: boolean;
   directSponsorPercent: number;
   withdrawalFeePercent: number;
-  // Admin-controlled FIFO seller share; company share is automatically 100 - this value.
-  sellQueueSharePercent: number;
   matrixConfig: MatrixConfig;
   royaltyPoolUsd: number;
+  sellQueueSharePercent?: number;
   socialLinks?: { x?: string; youtube?: string; telegram?: string; facebook?: string };
 }
 
