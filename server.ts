@@ -205,26 +205,63 @@ async function verifyPresalePurchaseOnChain(params: {
 
   const usdtAddress = (process.env.USDT_CONTRACT_ADDRESS || DEFAULT_USDT_ADDRESS).toLowerCase();
   const nxbcAddress = (process.env.NXBC_TOKEN_ADDRESS || DEFAULT_NXBC_TOKEN_ADDRESS).toLowerCase();
-  const adminWallet = (process.env.PRESALE_RECEIVING_WALLET || DEFAULT_ADMIN_WALLET).toLowerCase();
   const presaleAddress = (process.env.NXBC_PRESALE_CONTRACT_ADDRESS || process.env.NXBC_PRESALE_CONTRACT || DEFAULT_PRESALE_ADDRESS).toLowerCase();
-  const iface = new ethers.Interface(["event Transfer(address indexed from, address indexed to, uint256 value)"]);
+
+  // The deployed presale contract is the source of truth for the USDT
+  // recipient. This prevents an old/mismatched .env treasury address from
+  // making an otherwise valid on-chain purchase fail verification.
+  let onChainAdminWallet = '';
+  try {
+    const presaleContract = new ethers.Contract(presaleAddress, [
+      'function adminWallet() view returns (address)',
+      'function getAdminWallet() view returns (address)',
+    ], provider);
+
+    try {
+      onChainAdminWallet = String(await presaleContract.adminWallet()).toLowerCase();
+    } catch {
+      onChainAdminWallet = String(await presaleContract.getAdminWallet()).toLowerCase();
+    }
+  } catch (err: any) {
+    return {
+      ok: false,
+      error: `Unable to read the deployed presale admin wallet: ${err?.message || 'RPC error'}`,
+    };
+  }
+
+  if (!/^0x[a-f0-9]{40}$/.test(onChainAdminWallet)) {
+    return { ok: false, error: 'The deployed presale contract returned an invalid admin wallet.' };
+  }
+
   const usdtRaw = ethers.parseUnits(Number(usdtAmount).toFixed(18), 18);
   const nxbcRaw = ethers.parseUnits(Number(nxbcAmount).toFixed(18), 18);
+  const buyerLower = buyer.toLowerCase();
   let usdtPaid = false;
   let nxbcDelivered = false;
 
+  // Decode standard ERC-20 Transfer events directly from topics/data.
+  // This is more robust than Interface.parseLog across different RPC providers.
   for (const log of receipt.logs) {
     if (!log.topics?.[0] || log.topics[0].toLowerCase() !== ERC20_TRANSFER_TOPIC.toLowerCase()) continue;
-    if (log.address.toLowerCase() !== usdtAddress && log.address.toLowerCase() !== nxbcAddress) continue;
+    const logAddress = log.address.toLowerCase();
+    if (logAddress !== usdtAddress && logAddress !== nxbcAddress) continue;
+    if (log.topics.length < 3) continue;
+
     try {
-      const parsed = iface.parseLog(log);
-      if (!parsed || parsed.name !== "Transfer") continue;
-      const from = String(parsed.args.from).toLowerCase();
-      const to = String(parsed.args.to).toLowerCase();
-      const value = parsed.args.value as bigint;
-      if (log.address.toLowerCase() === usdtAddress && from === buyer.toLowerCase() && to === adminWallet && value === usdtRaw) usdtPaid = true;
-      if (log.address.toLowerCase() === nxbcAddress && from === presaleAddress && to === buyer.toLowerCase() && value === nxbcRaw) nxbcDelivered = true;
-    } catch {}
+      const from = ethers.getAddress('0x' + log.topics[1].slice(-40)).toLowerCase();
+      const to = ethers.getAddress('0x' + log.topics[2].slice(-40)).toLowerCase();
+      const value = BigInt(log.data);
+
+      if (logAddress === usdtAddress && from === buyerLower && to === onChainAdminWallet && value === usdtRaw) {
+        usdtPaid = true;
+      }
+
+      if (logAddress === nxbcAddress && from === presaleAddress && to === buyerLower && value === nxbcRaw) {
+        nxbcDelivered = true;
+      }
+    } catch {
+      // Ignore unrelated/malformed logs and continue checking the receipt.
+    }
   }
   if (!usdtPaid) return { ok: false, error: "The BSC transaction does not contain the required USDT payment to the presale treasury." };
   if (!nxbcDelivered) return { ok: false, error: "The BSC transaction does not contain the expected NXBC delivery from the current presale contract." };
@@ -2214,9 +2251,10 @@ async function startServer() {
       // delivery from the current presale contract before applying any database
       // side effects (MLM commissions, phase progression, qualification, etc.).
       let purchaseStatus: 'pending_finalization' | 'pending_verification' | 'failed' = 'pending_verification';
+      let chainCheck: { ok: boolean; pending?: boolean; error?: string } | null = null;
       const hasValidTxHash = typeof txHash === 'string' && /^0x[a-fA-F0-9]{64}$/.test(txHash);
       if (hasValidTxHash) {
-        const chainCheck = await verifyPresalePurchaseOnChain({
+        chainCheck = await verifyPresalePurchaseOnChain({
           txHash,
           buyer: walletAddress,
           usdtAmount: requestedUsdt,
@@ -2274,7 +2312,11 @@ async function startServer() {
         });
       }
       if (purchaseStatus === 'failed') {
-        return res.status(400).json({ success: false, error: "Purchase transaction could not be verified as a valid payment and NXBC delivery on BSC.", transaction: tx });
+        return res.status(400).json({
+          success: false,
+          error: chainCheck?.error || "Purchase transaction could not be verified as a valid payment and NXBC delivery on BSC.",
+          transaction: tx,
+        });
       }
 
       const { newInvested, isNowMlmQualified, finalized: purchaseFinalized } = await finalizeConfirmedPurchase(
