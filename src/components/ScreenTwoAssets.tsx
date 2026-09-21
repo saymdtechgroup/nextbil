@@ -41,7 +41,7 @@ interface ScreenTwoAssetsProps {
   sellQueueSharePercent?: number;
 }
 
-type MilestoneVectorKey = 'p2' | 'p3' | 'p4' | 'p5' | 'live' | 'unallocated';
+type MilestoneVectorKey = 'p2' | 'p3' | 'p4' | 'p5' | 'live';
 
 export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   allocation,
@@ -134,19 +134,19 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   };
 
   // Compute token amounts for each vector
-  const totalTokens = allocation.totalTokensPurchased;
-  const p1Tokens = Math.round(totalTokens * ((allocation.p1Percent || 0) / 100));
-  const p2Tokens = Math.round(totalTokens * (allocation.p2Percent / 100));
-  const p3Tokens = Math.round(totalTokens * (allocation.p3Percent / 100));
-  const p4Tokens = Math.round(totalTokens * (allocation.p4Percent / 100));
-  const p5Tokens = Math.round(totalTokens * (allocation.p5Percent / 100));
-  const liveTokens = Math.round(totalTokens * (allocation.livePercent / 100));
-  const unallocatedTokens = Math.max(
-    0,
-    totalTokens - (p1Tokens + p2Tokens + p3Tokens + p4Tokens + p5Tokens + liveTokens)
-  );
+  const totalTokens = Math.max(0, Number(allocation.totalTokensPurchased || 0));
 
-  // Projected values per vector
+  // The persisted per-phase token amounts are authoritative. Percentages are only
+  // a fallback for older accounts that do not yet have token-level allocation data.
+  const p2Tokens = Number(allocation.p2Tokens?.allocated ?? Math.round(totalTokens * ((allocation.p2Percent || 0) / 100)));
+  const p3Tokens = Number(allocation.p3Tokens?.allocated ?? Math.round(totalTokens * ((allocation.p3Percent || 0) / 100)));
+  const p4Tokens = Number(allocation.p4Tokens?.allocated ?? Math.round(totalTokens * ((allocation.p4Percent || 0) / 100)));
+  const p5Tokens = Number(allocation.p5Tokens?.allocated ?? Math.round(totalTokens * ((allocation.p5Percent || 0) / 100)));
+  const liveTokens = Number(allocation.liveTokens ?? Math.round(totalTokens * ((allocation.livePercent || 0) / 100)));
+
+  // Projected values are based on the actual allocated token quantities, not
+  // percentages. This prevents the Assets page from showing $0 when allocation
+  // token records exist but percentage fields are stale/legacy.
   const p2Val = p2Tokens * 0.10;
   const p3Val = p3Tokens * 1.00;
   const p4Val = p4Tokens * 10.00;
@@ -155,6 +155,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
 
   const totalAllocatedUsd = p2Val + p3Val + p4Val + p5Val + liveVal;
   const initialCostUsd = totalTokens * 0.01;
+  const projectedReturnUsd = Math.max(0, totalAllocatedUsd - initialCostUsd);
 
   // Simulator rates & projected holding value
   const simRates: Record<string, { rate: number; label: string; multiplier: string }> = {
@@ -235,22 +236,11 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
       color: 'text-emerald-300',
       borderColor: 'border-emerald-400/40',
       fifoBadge: 'Not in Presale / FIFO',
-      desc: 'DEX / LIVE tokens stay in the user wallet and are never created as a presale/FIFO sell order. They are reserved for the DEX/live market.',
+      desc: 'These tokens stay in your wallet and are reserved for the future DEX / LIVE market. They are not placed in the presale FIFO queue.',
     },
-    unallocated: {
-      title: 'Unallocated Free Holdings',
-      rate: 'Flexible Market',
-      multiplier: 'Flexible Staking',
-      tokens: unallocatedTokens,
-      value: unallocatedTokens * 0.01,
-      color: 'text-slate-300',
-      borderColor: 'border-slate-600/40',
-      fifoBadge: 'On-Demand Allocation',
-      desc: 'Freely retained NXBC in your wallet. Can be allocated to future milestone locks or held indefinitely.',
-    },
+
   };
 
-  const activeVectorDetail = vectorDetails[selectedVector];
 
   return (
     <div className="nxbc-screen flex flex-col w-full max-w-xl mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3 pb-8 sm:pb-12">
@@ -315,11 +305,11 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
             </div>
 
             <div className="min-w-0 rounded-[15px] border border-amber-400/20 bg-[#050b16]/65 px-1.5 py-2 sm:px-2.5 sm:py-2.5 text-center flex flex-col justify-center">
-              <div className="text-[7px] sm:text-[8px] font-rajdhani uppercase tracking-wider text-amber-300/90">Milestones</div>
+              <div className="text-[7px] sm:text-[8px] font-rajdhani uppercase tracking-wider text-amber-300/90">Asset Buckets</div>
               <div className="mt-0.5 text-sm sm:text-base leading-none font-black font-mono-crypto text-amber-300">
-                06 VECTORS
+                05 VECTORS
               </div>
-              <div className="text-[8px] sm:text-[9px] font-rajdhani text-slate-300 mt-0.5">Phases</div>
+              <div className="text-[8px] sm:text-[9px] font-rajdhani text-slate-300 mt-0.5">Buckets</div>
             </div>
 
             <div className="min-w-0 rounded-[15px] border border-cyan-400/20 bg-[#050b16]/65 px-1.5 py-2 sm:px-2.5 sm:py-2.5 text-center flex flex-col justify-center">
@@ -381,18 +371,15 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
             </div>
 
             <div className="h-3 rounded-full bg-black/60 border border-white/10 overflow-hidden flex p-[1px]">
-              <div style={{ width: `${allocation.p1Percent || 0}%` }} title={`Phase 1: ${allocation.p1Percent}%`} className="h-full bg-amber-600 transition-all" />
-              <div style={{ width: `${allocation.p2Percent}%` }} title={`Phase 2: ${allocation.p2Percent}%`} className="h-full bg-amber-400 transition-all" />
-              <div style={{ width: `${allocation.p3Percent}%` }} title={`Phase 3: ${allocation.p3Percent}%`} className="h-full bg-yellow-300 transition-all" />
-              <div style={{ width: `${allocation.p4Percent}%` }} title={`Phase 4: ${allocation.p4Percent}%`} className="h-full bg-cyan-400 transition-all" />
-              <div style={{ width: `${allocation.p5Percent}%` }} title={`Phase 5: ${allocation.p5Percent}%`} className="h-full bg-purple-400 transition-all" />
-              <div style={{ width: `${allocation.livePercent}%` }} title={`DEX / LIVE: ${allocation.livePercent}%`} className="h-full bg-emerald-400 transition-all" />
-              <div style={{ width: `${allocation.unallocatedPercent}%` }} title={`Unallocated: ${allocation.unallocatedPercent}%`} className="h-full bg-slate-600 transition-all" />
+              <div style={{ width: `${allocation.p2Percent || 0}%` }} title={`Phase 2: ${allocation.p2Percent || 0}%`} className="h-full bg-amber-400 transition-all" />
+              <div style={{ width: `${allocation.p3Percent || 0}%` }} title={`Phase 3: ${allocation.p3Percent || 0}%`} className="h-full bg-yellow-300 transition-all" />
+              <div style={{ width: `${allocation.p4Percent || 0}%` }} title={`Phase 4: ${allocation.p4Percent || 0}%`} className="h-full bg-cyan-400 transition-all" />
+              <div style={{ width: `${allocation.p5Percent || 0}%` }} title={`Phase 5: ${allocation.p5Percent || 0}%`} className="h-full bg-purple-400 transition-all" />
+              <div style={{ width: `${allocation.livePercent || 0}%` }} title={`DEX / LIVE: ${allocation.livePercent || 0}%`} className="h-full bg-emerald-400 transition-all" />
             </div>
 
-            <div className="mt-1.5 grid grid-cols-6 gap-1 text-[7px] sm:text-[8px] font-mono-crypto text-center">
-              <div className="text-amber-500">P1 {allocation.p1Percent || 0}%</div>
-              <div className="text-amber-300">P2 {allocation.p2Percent}%</div>
+            <div className="mt-1.5 grid grid-cols-5 gap-1 text-[7px] sm:text-[8px] font-mono-crypto text-center">
+              <div className="text-amber-300">P2 {allocation.p2Percent || 0}%</div>
               <div className="text-yellow-300">P3 {allocation.p3Percent}%</div>
               <div className="text-cyan-300">P4 {allocation.p4Percent}%</div>
               <div className="text-purple-300">P5 {allocation.p5Percent}%</div>
@@ -497,262 +484,182 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                   Phase Sell-Through Schedule
                 </h2>
                 <p className="text-[7.5px] sm:text-[8.5px] text-slate-300/80 font-mono-crypto">
-                  Tap any vector box to inspect execution telemetry
+                  Phase 2-5 FIFO + DEX reserve
                 </p>
               </div>
             </div>
             <span className="px-2.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-[8px] sm:text-[9px] font-mono-crypto font-bold">
-              6 Vectors
+              5 Asset Buckets
             </span>
           </div>
 
-          {/* User-selected Phase 1 / Phase 2 allocation summary */}
-          <div className="rounded-[18px] border border-amber-400/20 bg-[#050b16]/70 p-3 mb-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold text-amber-300 font-rajdhani uppercase tracking-wider">
-                Your Phase Sale Allocation
-              </span>
-              <span className="text-[8px] text-emerald-300 font-mono-crypto flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" /> Saved to account
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-[14px] bg-[#071426]/70 border border-amber-400/25 p-2.5">
-                <div className="text-[8px] sm:text-[9px] text-slate-400 font-rajdhani uppercase tracking-wider">Phase 1 Sell</div>
-                <div className="text-sm sm:text-base font-black text-amber-300 font-mono-crypto mt-0.5">
-                  {showValues ? `${(allocation.p1Tokens?.allocated || p1Tokens).toLocaleString()} NXBC` : '••••'}
-                </div>
-                <div className="text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto mt-0.5">
-                  Sold: {showValues ? (allocation.p1Tokens?.sold || 0).toLocaleString() : '••'}
-                </div>
-              </div>
-              <div className="rounded-[14px] bg-[#071426]/70 border border-emerald-400/25 p-2.5">
-                <div className="text-[8px] sm:text-[9px] text-slate-400 font-rajdhani uppercase tracking-wider">Phase 2 Sell</div>
-                <div className="text-sm sm:text-base font-black text-emerald-300 font-mono-crypto mt-0.5">
-                  {showValues ? `${(allocation.p2Tokens?.allocated || p2Tokens).toLocaleString()} NXBC` : '••••'}
-                </div>
-                <div className="text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto mt-0.5">
-                  Sold: {showValues ? (allocation.p2Tokens?.sold || 0).toLocaleString() : '••'}
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* 5-Box Personal Allocation & FIFO Report */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {(['p2', 'p3', 'p4', 'p5', 'live'] as MilestoneVectorKey[]).map((key) => {
+              const detail = vectorDetails[key];
+              const phaseNumber = key === 'live' ? 6 : Number(key.replace('p', ''));
+              const allocated = key === 'p2'
+                ? p2Tokens
+                : key === 'p3'
+                  ? p3Tokens
+                  : key === 'p4'
+                    ? p4Tokens
+                    : key === 'p5'
+                      ? p5Tokens
+                      : liveTokens;
 
-          {/* UNIQUE FEATURE 3: INTERACTIVE VECTOR INSPECTION HUD */}
-          <div className="rounded-[18px] border border-cyan-400/30 bg-[#050b16]/90 p-3 mb-3 shadow-[0_0_18px_rgba(6,182,212,0.08)]">
-            <div className="flex items-center justify-between gap-2 mb-1.5">
-              <div className="flex items-center gap-1.5">
-                <Target className="w-4 h-4 text-cyan-300" />
-                <span className={`text-[11px] sm:text-[12px] font-black font-rajdhani uppercase tracking-wider ${activeVectorDetail.color}`}>
-                  {activeVectorDetail.title} ({activeVectorDetail.rate})
-                </span>
-              </div>
-              <span className="text-[7.5px] sm:text-[8.5px] font-mono-crypto px-2 py-0.5 rounded-full bg-cyan-400/10 border border-cyan-400/30 text-cyan-300 font-bold">
-                {activeVectorDetail.fifoBadge}
-              </span>
-            </div>
-            <p className="text-[8px] sm:text-[9px] text-slate-300/90 font-mono-crypto leading-relaxed">
-              {activeVectorDetail.desc}
-            </p>
-            <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[8px] sm:text-[9px] font-mono-crypto">
-              <span className="text-slate-400">Tokens: <strong className="text-white">{showValues ? activeVectorDetail.tokens.toLocaleString() : '••••'} NXBC</strong></span>
-              <span className="text-emerald-300 font-bold">Expected USDT: ${showValues ? activeVectorDetail.value.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '••••'}</span>
-            </div>
-          </div>
+              // Only real backend sale orders are allowed to provide FIFO/sold data.
+              // No demo FIFO number is ever generated on the frontend.
+              const phaseOrders = key === 'live'
+                ? []
+                : saleOrders.filter((o) => Number(o.phaseNumber) === phaseNumber);
 
-          {/* 6-Box Grid Container — interactive with selected state */}
-          <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
-            {/* Box 1: P2 SELL */}
-            <button
-              type="button"
-              onClick={() => setSelectedVector('p2')}
-              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
-                selectedVector === 'p2'
-                  ? 'border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.25)]'
-                  : 'border border-amber-400/30 hover:border-amber-400/60 shadow-[0_0_15px_rgba(245,158,11,0.06)]'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-[11px] font-black text-amber-300 font-rajdhani uppercase tracking-wider block">
-                  P2 SELL
-                </span>
-                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-300 font-bold border border-amber-400/30">
-                  FIFO #5
-                </span>
-              </div>
-              <div className="my-1 sm:my-1.5">
-                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
-                  {showValues ? `${(allocation.p2Tokens?.allocated || p2Tokens).toLocaleString()} NXBC` : '••••'}
-                </span>
-                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-amber-400/90 font-semibold">
-                  @ $0.10 Rate
-                </span>
-              </div>
-              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
-                <span>Est. Return:</span>
-                <span className="text-emerald-300 font-black">${showValues ? p2Val.toFixed(0) : '••'}</span>
-              </div>
-            </button>
+              const sold = key === 'live'
+                ? 0
+                : phaseOrders.reduce((sum, o) => sum + Math.max(0, Number(o.soldTokens || 0)), 0);
 
-            {/* Box 2: P3 SELL */}
-            <button
-              type="button"
-              onClick={() => setSelectedVector('p3')}
-              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
-                selectedVector === 'p3'
-                  ? 'border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.25)]'
-                  : 'border border-amber-400/30 hover:border-amber-400/60 shadow-[0_0_15px_rgba(245,158,11,0.06)]'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-[11px] font-black text-amber-300 font-rajdhani uppercase tracking-wider block">
-                  P3 SELL
-                </span>
-                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-300 font-bold border border-amber-400/30">
-                  FIFO #7
-                </span>
-              </div>
-              <div className="my-1 sm:my-1.5">
-                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
-                  {showValues ? `${(allocation.p3Tokens?.allocated || p3Tokens).toLocaleString()} NXBC` : '••••'}
-                </span>
-                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-amber-400/90 font-semibold">
-                  @ $1.00 Rate
-                </span>
-              </div>
-              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
-                <span>Est. Return:</span>
-                <span className="text-emerald-300 font-black">${showValues ? p3Val.toFixed(0) : '••'}</span>
-              </div>
-            </button>
+              const remaining = key === 'live'
+                ? Math.max(0, liveTokens)
+                : phaseOrders.length > 0
+                  ? phaseOrders.reduce((sum, o) => sum + Math.max(0, Number(o.remainingTokens || 0)), 0)
+                  : Math.max(0, allocated);
 
-            {/* Box 3: P4 SELL */}
-            <button
-              type="button"
-              onClick={() => setSelectedVector('p4')}
-              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
-                selectedVector === 'p4'
-                  ? 'border-2 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.25)]'
-                  : 'border border-cyan-400/30 hover:border-cyan-400/60 shadow-[0_0_15px_rgba(6,182,212,0.06)]'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-[11px] font-black text-cyan-300 font-rajdhani uppercase tracking-wider block">
-                  P4 SELL
-                </span>
-                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-cyan-400/15 text-cyan-300 font-bold border border-cyan-400/30">
-                  FIFO #12
-                </span>
-              </div>
-              <div className="my-1 sm:my-1.5">
-                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
-                  {showValues ? `${(allocation.p4Tokens?.allocated || p4Tokens).toLocaleString()} NXBC` : '••••'}
-                </span>
-                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-cyan-300/90 font-semibold">
-                  @ $10.00 Rate
-                </span>
-              </div>
-              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
-                <span>Est. Return:</span>
-                <span className="text-emerald-300 font-black">${showValues ? p4Val.toFixed(0) : '••'}</span>
-              </div>
-            </button>
+              const fifoNumbers = key === 'live'
+                ? []
+                : phaseOrders
+                    .map((o) => Number(o.fifoNumber || 0))
+                    .filter((n) => n > 0)
+                    .sort((a, b) => a - b);
 
-            {/* Box 4: P5 SELL */}
-            <button
-              type="button"
-              onClick={() => setSelectedVector('p5')}
-              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
-                selectedVector === 'p5'
-                  ? 'border-2 border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.25)]'
-                  : 'border border-purple-400/30 hover:border-purple-400/60 shadow-[0_0_15px_rgba(168,85,247,0.06)]'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-[11px] font-black text-purple-300 font-rajdhani uppercase tracking-wider block">
-                  P5 SELL
-                </span>
-                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-purple-400/15 text-purple-300 font-bold border border-purple-400/30">
-                  FIFO #15
-                </span>
-              </div>
-              <div className="my-1 sm:my-1.5">
-                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
-                  {showValues ? `${(allocation.p5Tokens?.allocated || p5Tokens).toLocaleString()} NXBC` : '••••'}
-                </span>
-                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-purple-300 font-semibold">
-                  @ $100.00 Rate
-                </span>
-              </div>
-              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
-                <span>Est. Return:</span>
-                <span className="text-emerald-300 font-black">${showValues ? p5Val.toFixed(0) : '••'}</span>
-              </div>
-            </button>
+              const fifoText = key === 'live'
+                ? '—'
+                : fifoNumbers.length > 0
+                  ? fifoNumbers.map((n) => `#${n}`).join(', ')
+                  : '0';
 
-            {/* Box 5: DEX / LIVE */}
-            <button
-              type="button"
-              onClick={() => setSelectedVector('live')}
-              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
-                selectedVector === 'live'
-                  ? 'border-2 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
-                  : 'border border-emerald-400/30 hover:border-emerald-400/60 shadow-[0_0_15px_rgba(16,185,129,0.06)]'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-[11px] font-black text-emerald-300 font-rajdhani uppercase tracking-wider block">
-                  DEX / LIVE
-                </span>
-                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-emerald-400/15 text-emerald-300 font-bold border border-emerald-400/30">
-                  FIFO #18
-                </span>
-              </div>
-              <div className="my-1 sm:my-1.5">
-                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block truncate">
-                  {showValues ? `${liveTokens.toLocaleString()} NXBC` : '••••'}
-                </span>
-                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-emerald-300 font-semibold block truncate">
-                  @ DEX / LIVE MARKET PRICE
-                </span>
-              </div>
-              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
-                <span>Market Value:</span>
-                <span className="text-emerald-300 font-black">${showValues ? liveVal.toFixed(0) : '••'}</span>
-              </div>
-            </button>
+              const price = key === 'p2'
+                ? 0.10
+                : key === 'p3'
+                  ? 1
+                  : key === 'p4'
+                    ? 10
+                    : key === 'p5'
+                      ? 100
+                      : 0;
 
-            {/* Box 6: Unallocated */}
-            <button
-              type="button"
-              onClick={() => setSelectedVector('unallocated')}
-              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
-                selectedVector === 'unallocated'
-                  ? 'border-2 border-slate-400 shadow-[0_0_20px_rgba(148,163,184,0.25)]'
-                  : 'border border-slate-700/60 hover:border-slate-500 shadow-[0_0_15px_rgba(100,116,139,0.06)]'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-[11px] font-black text-slate-300 font-rajdhani uppercase tracking-wider block">
-                  Unallocated
-                </span>
-                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-slate-700/40 text-slate-300 font-bold border border-slate-600/40">
-                  Hold
-                </span>
-              </div>
-              <div className="my-1 sm:my-1.5">
-                <span className="text-xs sm:text-sm font-black font-mono-crypto text-slate-300 block truncate">
-                  {showValues ? `${unallocatedTokens.toLocaleString()} NXBC` : '••••'}
-                </span>
-                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-slate-400 font-medium">
-                  Hold / Flexible
-                </span>
-              </div>
-              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
-                <span>Status:</span>
-                <span className="text-amber-300 font-semibold">{allocation.unallocatedPercent}% Free</span>
-              </div>
-            </button>
+              const realized = key === 'live'
+                ? 0
+                : phaseOrders.reduce((sum, o) => sum + Math.max(0, Number(o.realizedUsdt || 0)), 0);
+
+              const pending = key === 'live'
+                ? 0
+                : phaseOrders.length > 0
+                  ? phaseOrders.reduce((sum, o) => sum + Math.max(0, Number(o.remainingUsdt || 0)), 0)
+                  : remaining * price;
+
+              const isSold = key !== 'live' && allocated > 0 && remaining <= 0 && sold > 0;
+              const status = key === 'live'
+                ? (allocated > 0 ? 'DEX RESERVE' : '0 TOKENS')
+                : isSold
+                  ? 'SOLD'
+                  : allocated <= 0
+                    ? 'NO ALLOCATION'
+                    : sold > 0
+                      ? 'PARTIALLY SOLD'
+                      : 'WAITING FIFO';
+
+              const statusClass = isSold
+                ? 'text-emerald-300'
+                : sold > 0
+                  ? 'text-yellow-300'
+                  : allocated > 0
+                    ? 'text-amber-300'
+                    : 'text-slate-500';
+
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSelectedVector(key)}
+                  className={`rounded-[18px] bg-[#050b16]/90 text-left p-3 transition-all relative overflow-hidden group ${
+                    selectedVector === key
+                      ? `${detail.borderColor} border-2 shadow-[0_0_20px_rgba(245,158,11,0.16)]`
+                      : `border ${detail.borderColor} hover:opacity-95`
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-[11px] sm:text-[12px] font-black ${detail.color} font-rajdhani uppercase tracking-wider`}>
+                      {key === 'live' ? 'DEX / LIVE' : `P${phaseNumber} SELL`}
+                    </span>
+                    <span className={`text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full font-bold border ${
+                      key === 'live'
+                        ? 'bg-emerald-400/15 text-emerald-300 border-emerald-400/30'
+                        : 'bg-amber-400/15 text-amber-300 border-amber-400/30'
+                    }`}>
+                      {key === 'live' ? 'NO FIFO' : `FIFO ${fifoText}`}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 text-[8px] sm:text-[8.5px] font-mono-crypto">
+                    <div className="text-white font-black text-[15px] sm:text-[16px]">
+                      {showValues ? allocated.toLocaleString() : '••••'} NXBC
+                    </div>
+                    <div className={`mt-1 font-bold ${detail.color}`}>
+                      {key === 'live' ? 'Market Price' : `@ $${price.toFixed(2)} Rate`}
+                    </div>
+                  </div>
+
+                  <div className="mt-2.5 pt-2 border-t border-white/10 grid grid-cols-2 gap-x-2 gap-y-1.5 text-[8px] font-mono-crypto">
+                    <div>
+                      <span className="text-slate-500">Allocated</span>
+                      <div className="text-white font-bold mt-0.5">
+                        {showValues ? allocated.toLocaleString() : '••••'}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">FIFO</span>
+                      <div className={`font-bold mt-0.5 ${fifoNumbers.length ? 'text-amber-300' : 'text-slate-300'}`}>
+                        {showValues ? fifoText : '••••'}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Sold</span>
+                      <div className="text-emerald-300 font-bold mt-0.5">
+                        {showValues ? sold.toLocaleString() : '••••'} NXBC
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Remaining</span>
+                      <div className="text-cyan-300 font-bold mt-0.5">
+                        {showValues ? remaining.toLocaleString() : '••••'} NXBC
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between gap-2">
+                    <span className={`text-[8px] font-black font-mono-crypto ${statusClass}`}>
+                      {status}
+                    </span>
+                    <span className="text-[8px] text-slate-400 font-mono-crypto">
+                      {key === 'live' ? 'Wallet Reserve' : `Rate $${price.toFixed(2)}`}
+                    </span>
+                  </div>
+
+                  {key !== 'live' && allocated > 0 && (
+                    <div className="mt-1.5 flex items-center justify-between gap-2 text-[7.5px] text-slate-400 font-mono-crypto">
+                      <span>Sold Value: <b className="text-emerald-300">${showValues ? realized.toFixed(2) : '••'}</b></span>
+                      <span>Pending: <b className="text-cyan-300">${showValues ? pending.toFixed(2) : '••'}</b></span>
+                    </div>
+                  )}
+
+                  {key !== 'live' && allocated > 0 && phaseOrders.length === 0 && (
+                    <div className="mt-1 text-[7px] text-slate-500 font-mono-crypto">
+                      Real FIFO not assigned yet → 0
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -931,11 +838,11 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
           <div className="p-3 rounded-[15px] bg-[#050b16]/80 border border-emerald-400/25 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between text-emerald-300 mb-1">
-                <span className="text-[10px] font-bold uppercase font-rajdhani">Total Return</span>
+                <span className="text-[10px] font-bold uppercase font-rajdhani">Projected Total Return</span>
                 <TrendingUp className="w-3.5 h-3.5" />
               </div>
               <div className="text-sm sm:text-base font-black font-mono-crypto text-emerald-300">
-                {showValues ? `+$${Math.max(0, totalAllocatedUsd - initialCostUsd).toLocaleString()}` : '••••'}
+                {showValues ? `+$${projectedReturnUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '••••'}
               </div>
             </div>
             
@@ -945,7 +852,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                 <path d="M0,20 Q25,18 45,10 T80,5 T100,2 L100,25 L0,25 Z" />
                 <path d="M0,20 Q25,18 45,10 T80,5 T100,2" fill="none" strokeWidth="2" />
               </svg>
-              <span className="text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto">Max 40x on P5</span>
+              <span className="text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto">Based on your current allocation</span>
             </div>
           </div>
 
