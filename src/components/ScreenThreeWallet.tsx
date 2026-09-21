@@ -527,7 +527,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
               Universal Platform Service Charge
             </span>
             <span className="text-slate-400 font-mono-crypto text-[8.5px]">
-              Dynamic fee controlled by the Admin panel and applied to the gross withdrawal amount.
+              Dynamic fee controlled by the Contract and applied to the gross withdrawal amount.
             </span>
           </div>
         </div>
