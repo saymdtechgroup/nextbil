@@ -380,7 +380,7 @@ export async function executeSmartContractBuy(
 
     const signer = await provider.getSigner();
     const buyer = await signer.getAddress();
-    const amountWei = ethers.parseUnits(Number(amountUsd).toFixed(18), 18);
+    const amountWei = ethers.parseUnits(Number(amountUsd).toFixed(12), 18);
 
     const usdtContract = new ethers.Contract(
       USDT_CONTRACT,

@@ -241,8 +241,16 @@ async function verifyPresalePurchaseOnChain(params: {
     "event TokensPurchased(address indexed buyer, uint256 indexed phase, uint256 usdtAmount, uint256 nxbcAmount)"
   ]);
 
-  const usdtRaw = ethers.parseUnits(Number(usdtAmount).toFixed(18), 18);
-  const nxbcRaw = ethers.parseUnits(Number(nxbcAmount).toFixed(18), 18);
+  // Never build ERC-20 amounts from the binary representation of a JS Number.
+  // The frontend sends decimal money values (e.g. 0.10), so normalize the
+  // human decimal first. The small tolerance also accepts legacy transactions
+  // created before this fix that contain a few wei of floating-point drift.
+  const usdtRaw = ethers.parseUnits(Number(usdtAmount).toFixed(12), 18);
+  const nxbcRaw = ethers.parseUnits(Number(nxbcAmount).toFixed(12), 18);
+  const USDT_DRIFT_TOLERANCE = 1_000_000n; // 0.000000000001 USDT
+  const NXBC_DRIFT_TOLERANCE = 1_000_000n; // 0.000000000001 NXBC
+  const withinTolerance = (actual: bigint, expected: bigint, tolerance: bigint) =>
+    actual >= expected - tolerance && actual <= expected + tolerance;
   let usdtPaid = false;
   let nxbcDelivered = false;
   let purchaseEventMatched = false;
@@ -262,14 +270,14 @@ async function verifyPresalePurchaseOnChain(params: {
             if (logAddress === usdtAddress &&
                 from === buyer.toLowerCase() &&
                 to === adminWallet &&
-                value === usdtRaw) {
+                withinTolerance(value, usdtRaw, USDT_DRIFT_TOLERANCE)) {
               usdtPaid = true;
             }
 
             if (logAddress === nxbcAddress &&
                 from === presaleAddress &&
                 to === buyer.toLowerCase() &&
-                value === nxbcRaw) {
+                withinTolerance(value, nxbcRaw, NXBC_DRIFT_TOLERANCE)) {
               nxbcDelivered = true;
             }
           }
@@ -288,7 +296,9 @@ async function verifyPresalePurchaseOnChain(params: {
           const eventBuyer = String(parsed.args.buyer).toLowerCase();
           const eventUsdt = parsed.args.usdtAmount as bigint;
           const eventNxbc = parsed.args.nxbcAmount as bigint;
-          if (eventBuyer === buyer.toLowerCase() && eventUsdt === usdtRaw && eventNxbc === nxbcRaw) {
+          if (eventBuyer === buyer.toLowerCase() &&
+              withinTolerance(eventUsdt, usdtRaw, USDT_DRIFT_TOLERANCE) &&
+              withinTolerance(eventNxbc, nxbcRaw, NXBC_DRIFT_TOLERANCE)) {
             purchaseEventMatched = true;
           }
         }
