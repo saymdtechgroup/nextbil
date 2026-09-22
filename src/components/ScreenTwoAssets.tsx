@@ -38,6 +38,8 @@ interface ScreenTwoAssetsProps {
   walletAddress?: string | null;
   walletConnected?: boolean;
   sellQueueSharePercent?: number;
+  teamDirects?: number;
+  teamCount?: number;
 }
 
 export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
@@ -49,6 +51,8 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   matrixIncomeUsd,
   walletAddress,
   sellQueueSharePercent = 20,
+  teamDirects,
+  teamCount,
 }) => {
   const [showValues, setShowValues] = useState<boolean>(true);
   const [simTarget, setSimTarget] = useState<'p2' | 'p3' | 'p4' | 'p5' | 'live'>('p3');
@@ -67,6 +71,29 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   const [fifoLoading, setFifoLoading] = useState(true);
   const [inviteByOrder, setInviteByOrder] = useState<Record<number, { url: string; expiresAt: string }>>({});
   const [inviteLoading, setInviteLoading] = useState<number | null>(null);
+  const [teamStats, setTeamStats] = useState<{ directs: number; team: number }>({ directs: 0, team: 0 });
+
+  // Auto-fetched team/community stats. If the parent already passes
+  // teamDirects/teamCount as props, those win — this fetch is only a
+  // fallback so the card is never hardcoded to 0.
+  // NOTE: adjust this URL to whatever your backend actually exposes for
+  // team/downline counts (e.g. it may already be returned as part of
+  // your existing team-plan or matrix endpoint instead of a new route).
+  const fetchTeamStats = async () => {
+    if (!walletAddress) { setTeamStats({ directs: 0, team: 0 }); return; }
+    try {
+      const r = await fetch(`/api/presale/team-stats/${walletAddress}`);
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.success) {
+        setTeamStats({
+          directs: Number(data.directs ?? data.directCount ?? 0),
+          team: Number(data.team ?? data.teamCount ?? data.totalTeam ?? 0),
+        });
+      }
+    } catch (e) {
+      console.error('Failed to load team stats:', e);
+    }
+  };
 
   const generateDirectBuyerLink = async (orderId: number) => {
     if (!walletAddress) return;
@@ -123,11 +150,22 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    fetchTeamStats();
+    const timer = setInterval(fetchTeamStats, 15000);
+    return () => clearInterval(timer);
+  }, [walletAddress]);
+
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
-    await Promise.all([fetchOrders(), fetchGlobalFifo()]);
+    await Promise.all([fetchOrders(), fetchGlobalFifo(), fetchTeamStats()]);
     setTimeout(() => setIsRefreshing(false), 600);
   };
+
+  // Prop values (if the parent supplies them) always take priority over
+  // the internally fetched fallback.
+  const displayDirects = teamDirects ?? teamStats.directs;
+  const displayTeam = teamCount ?? teamStats.team;
 
   // Compute token amounts for each vector
   const totalTokens = Math.max(0, Number(allocation.totalTokensPurchased || 0));
@@ -459,13 +497,16 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                       {item.label}
                     </span>
                     <span className={`text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full ${badgeBg} ${text} font-bold`}>
-                      FIFO {fifoText}
+                      {fifoNumbers.length ? `FIFO ${fifoText}` : 'FIFO 0'}
                     </span>
                   </div>
 
                   <div className="my-1 sm:my-1.5">
                     <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
                       {showValues ? `${allocated.toLocaleString()} NXBC` : '••••'}
+                    </span>
+                    <span className="text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto block mt-0.5">
+                      Allocated
                     </span>
                     <span className={`text-[8.5px] sm:text-[9.5px] font-mono-crypto ${text} font-semibold`}>
                       @ ${item.rate.toFixed(2)} Rate
@@ -643,7 +684,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                     <div key={o.id} className="rounded-[12px] border border-white/10 bg-[#071426]/60 p-2.5 text-[8px] font-mono-crypto space-y-2">
                       <div className="flex justify-between items-center">
                         <div>
-                          <span className="text-amber-300 font-bold">Phase {o.phaseNumber}</span> · FIFO #{o.fifoNumber || o.id}
+                          <span className="text-amber-300 font-bold">Phase {o.phaseNumber}</span> · FIFO {o.fifoNumber && Number(o.fifoNumber) > 0 ? `#{o.fifoNumber}` : '0'}
                         </div>
                         <span className="text-emerald-300 font-bold">{o.status.toUpperCase()}</span>
                       </div>
@@ -716,7 +757,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                 <Users className="w-3.5 h-3.5" />
               </div>
               <div className="text-sm sm:text-base font-black font-mono-crypto text-white">
-                0 Directs / 0 Team
+                {showValues ? `${displayDirects.toLocaleString()} Directs / ${displayTeam.toLocaleString()} Team` : '•••• / ••••'}
               </div>
             </div>
 
