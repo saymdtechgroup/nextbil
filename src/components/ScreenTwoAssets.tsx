@@ -241,6 +241,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
 
   };
 
+  const activeVectorDetail = vectorDetails[selectedVector];
 
   return (
     <div className="nxbc-screen flex flex-col w-full max-w-xl mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3 pb-8 sm:pb-12">
@@ -493,173 +494,190 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
             </span>
           </div>
 
-          {/* 5-Box Personal Allocation & FIFO Report */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {(['p2', 'p3', 'p4', 'p5', 'live'] as MilestoneVectorKey[]).map((key) => {
-              const detail = vectorDetails[key];
-              const phaseNumber = key === 'live' ? 6 : Number(key.replace('p', ''));
-              const allocated = key === 'p2'
-                ? p2Tokens
-                : key === 'p3'
-                  ? p3Tokens
-                  : key === 'p4'
-                    ? p4Tokens
-                    : key === 'p5'
-                      ? p5Tokens
-                      : liveTokens;
+          {/* UNIQUE FEATURE 3: INTERACTIVE VECTOR INSPECTION HUD */}
+          <div className="rounded-[18px] border border-cyan-400/30 bg-[#050b16]/90 p-3 mb-3 shadow-[0_0_18px_rgba(6,182,212,0.08)]">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <div className="flex items-center gap-1.5">
+                <Target className="w-4 h-4 text-cyan-300" />
+                <span className={`text-[11px] sm:text-[12px] font-black font-rajdhani uppercase tracking-wider ${activeVectorDetail.color}`}>
+                  {activeVectorDetail.title} ({activeVectorDetail.rate})
+                </span>
+              </div>
+              <span className="text-[7.5px] sm:text-[8.5px] font-mono-crypto px-2 py-0.5 rounded-full bg-cyan-400/10 border border-cyan-400/30 text-cyan-300 font-bold">
+                {activeVectorDetail.fifoBadge}
+              </span>
+            </div>
+            <p className="text-[8px] sm:text-[9px] text-slate-300/90 font-mono-crypto leading-relaxed">
+              {activeVectorDetail.desc}
+            </p>
+            <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[8px] sm:text-[9px] font-mono-crypto">
+              <span className="text-slate-400">Tokens: <strong className="text-white">{showValues ? activeVectorDetail.tokens.toLocaleString() : '••••'} NXBC</strong></span>
+              <span className="text-emerald-300 font-bold">Expected USDT: ${showValues ? activeVectorDetail.value.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '••••'}</span>
+            </div>
+          </div>
 
-              // Only real backend sale orders are allowed to provide FIFO/sold data.
-              // No demo FIFO number is ever generated on the frontend.
-              const phaseOrders = key === 'live'
-                ? []
-                : saleOrders.filter((o) => Number(o.phaseNumber) === phaseNumber);
+          {/* 6-Box Grid Container — interactive with selected state */}
+          <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+            {/* Box 1: P2 SELL */}
+            <button
+              type="button"
+              onClick={() => setSelectedVector('p2')}
+              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
+                selectedVector === 'p2'
+                  ? 'border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.25)]'
+                  : 'border border-amber-400/30 hover:border-amber-400/60 shadow-[0_0_15px_rgba(245,158,11,0.06)]'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] sm:text-[11px] font-black text-amber-300 font-rajdhani uppercase tracking-wider block">
+                  P2 SELL
+                </span>
+                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-300 font-bold border border-amber-400/30">
+                  FIFO
+                </span>
+              </div>
+              <div className="my-1 sm:my-1.5">
+                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
+                  {showValues ? `${(allocation.p2Tokens?.allocated || p2Tokens).toLocaleString()} NXBC` : '••••'}
+                </span>
+                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-amber-400/90 font-semibold">
+                  @ $0.10 Rate
+                </span>
+              </div>
+              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
+                <span>Est. Return:</span>
+                <span className="text-emerald-300 font-black">${showValues ? p2Val.toFixed(0) : '••'}</span>
+              </div>
+            </button>
 
-              const sold = key === 'live'
-                ? 0
-                : phaseOrders.reduce((sum, o) => sum + Math.max(0, Number(o.soldTokens || 0)), 0);
+            {/* Box 2: P3 SELL */}
+            <button
+              type="button"
+              onClick={() => setSelectedVector('p3')}
+              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
+                selectedVector === 'p3'
+                  ? 'border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.25)]'
+                  : 'border border-amber-400/30 hover:border-amber-400/60 shadow-[0_0_15px_rgba(245,158,11,0.06)]'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] sm:text-[11px] font-black text-amber-300 font-rajdhani uppercase tracking-wider block">
+                  P3 SELL
+                </span>
+                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-300 font-bold border border-amber-400/30">
+                  FIFO
+                </span>
+              </div>
+              <div className="my-1 sm:my-1.5">
+                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
+                  {showValues ? `${(allocation.p3Tokens?.allocated || p3Tokens).toLocaleString()} NXBC` : '••••'}
+                </span>
+                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-amber-400/90 font-semibold">
+                  @ $1.00 Rate
+                </span>
+              </div>
+              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
+                <span>Est. Return:</span>
+                <span className="text-emerald-300 font-black">${showValues ? p3Val.toFixed(0) : '••'}</span>
+              </div>
+            </button>
 
-              const remaining = key === 'live'
-                ? Math.max(0, liveTokens)
-                : phaseOrders.length > 0
-                  ? phaseOrders.reduce((sum, o) => sum + Math.max(0, Number(o.remainingTokens || 0)), 0)
-                  : Math.max(0, allocated);
+            {/* Box 3: P4 SELL */}
+            <button
+              type="button"
+              onClick={() => setSelectedVector('p4')}
+              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
+                selectedVector === 'p4'
+                  ? 'border-2 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.25)]'
+                  : 'border border-cyan-400/30 hover:border-cyan-400/60 shadow-[0_0_15px_rgba(6,182,212,0.06)]'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] sm:text-[11px] font-black text-cyan-300 font-rajdhani uppercase tracking-wider block">
+                  P4 SELL
+                </span>
+                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-cyan-400/15 text-cyan-300 font-bold border border-cyan-400/30">
+                  FIFO
+                </span>
+              </div>
+              <div className="my-1 sm:my-1.5">
+                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
+                  {showValues ? `${(allocation.p4Tokens?.allocated || p4Tokens).toLocaleString()} NXBC` : '••••'}
+                </span>
+                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-cyan-300/90 font-semibold">
+                  @ $10.00 Rate
+                </span>
+              </div>
+              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
+                <span>Est. Return:</span>
+                <span className="text-emerald-300 font-black">${showValues ? p4Val.toFixed(0) : '••'}</span>
+              </div>
+            </button>
 
-              const fifoNumbers = key === 'live'
-                ? []
-                : phaseOrders
-                    .map((o) => Number(o.fifoNumber || 0))
-                    .filter((n) => n > 0)
-                    .sort((a, b) => a - b);
+            {/* Box 4: P5 SELL */}
+            <button
+              type="button"
+              onClick={() => setSelectedVector('p5')}
+              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
+                selectedVector === 'p5'
+                  ? 'border-2 border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.25)]'
+                  : 'border border-purple-400/30 hover:border-purple-400/60 shadow-[0_0_15px_rgba(168,85,247,0.06)]'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] sm:text-[11px] font-black text-purple-300 font-rajdhani uppercase tracking-wider block">
+                  P5 SELL
+                </span>
+                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-purple-400/15 text-purple-300 font-bold border border-purple-400/30">
+                  FIFO
+                </span>
+              </div>
+              <div className="my-1 sm:my-1.5">
+                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
+                  {showValues ? `${(allocation.p5Tokens?.allocated || p5Tokens).toLocaleString()} NXBC` : '••••'}
+                </span>
+                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-purple-300 font-semibold">
+                  @ $100.00 Rate
+                </span>
+              </div>
+              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
+                <span>Est. Return:</span>
+                <span className="text-emerald-300 font-black">${showValues ? p5Val.toFixed(0) : '••'}</span>
+              </div>
+            </button>
 
-              const fifoText = key === 'live'
-                ? '—'
-                : fifoNumbers.length > 0
-                  ? fifoNumbers.map((n) => `#${n}`).join(', ')
-                  : '0';
+            {/* Box 5: DEX / LIVE */}
+            <button
+              type="button"
+              onClick={() => setSelectedVector('live')}
+              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
+                selectedVector === 'live'
+                  ? 'border-2 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
+                  : 'border border-emerald-400/30 hover:border-emerald-400/60 shadow-[0_0_15px_rgba(16,185,129,0.06)]'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] sm:text-[11px] font-black text-emerald-300 font-rajdhani uppercase tracking-wider block">
+                  DEX / LIVE
+                </span>
+                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-emerald-400/15 text-emerald-300 font-bold border border-emerald-400/30">
+                  WALLET
+                </span>
+              </div>
+              <div className="my-1 sm:my-1.5">
+                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block truncate">
+                  {showValues ? `${liveTokens.toLocaleString()} NXBC` : '••••'}
+                </span>
+                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-emerald-300 font-semibold block truncate">
+                  @ DEX / LIVE MARKET PRICE
+                </span>
+              </div>
+              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
+                <span>Market Value:</span>
+                <span className="text-emerald-300 font-black">${showValues ? liveVal.toFixed(0) : '••'}</span>
+              </div>
+            </button>
 
-              const price = key === 'p2'
-                ? 0.10
-                : key === 'p3'
-                  ? 1
-                  : key === 'p4'
-                    ? 10
-                    : key === 'p5'
-                      ? 100
-                      : 0;
-
-              const realized = key === 'live'
-                ? 0
-                : phaseOrders.reduce((sum, o) => sum + Math.max(0, Number(o.realizedUsdt || 0)), 0);
-
-              const pending = key === 'live'
-                ? 0
-                : phaseOrders.length > 0
-                  ? phaseOrders.reduce((sum, o) => sum + Math.max(0, Number(o.remainingUsdt || 0)), 0)
-                  : remaining * price;
-
-              const isSold = key !== 'live' && allocated > 0 && remaining <= 0 && sold > 0;
-              const status = key === 'live'
-                ? (allocated > 0 ? 'DEX RESERVE' : '0 TOKENS')
-                : isSold
-                  ? 'SOLD'
-                  : allocated <= 0
-                    ? 'NO ALLOCATION'
-                    : sold > 0
-                      ? 'PARTIALLY SOLD'
-                      : 'WAITING FIFO';
-
-              const statusClass = isSold
-                ? 'text-emerald-300'
-                : sold > 0
-                  ? 'text-yellow-300'
-                  : allocated > 0
-                    ? 'text-amber-300'
-                    : 'text-slate-500';
-
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setSelectedVector(key)}
-                  className={`rounded-[18px] bg-[#050b16]/90 text-left p-3 transition-all relative overflow-hidden group ${
-                    selectedVector === key
-                      ? `${detail.borderColor} border-2 shadow-[0_0_20px_rgba(245,158,11,0.16)]`
-                      : `border ${detail.borderColor} hover:opacity-95`
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={`text-[11px] sm:text-[12px] font-black ${detail.color} font-rajdhani uppercase tracking-wider`}>
-                      {key === 'live' ? 'DEX / LIVE' : `P${phaseNumber} SELL`}
-                    </span>
-                    <span className={`text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full font-bold border ${
-                      key === 'live'
-                        ? 'bg-emerald-400/15 text-emerald-300 border-emerald-400/30'
-                        : 'bg-amber-400/15 text-amber-300 border-amber-400/30'
-                    }`}>
-                      {key === 'live' ? 'NO FIFO' : `FIFO ${fifoText}`}
-                    </span>
-                  </div>
-
-                  <div className="mt-2 text-[8px] sm:text-[8.5px] font-mono-crypto">
-                    <div className="text-white font-black text-[15px] sm:text-[16px]">
-                      {showValues ? allocated.toLocaleString() : '••••'} NXBC
-                    </div>
-                    <div className={`mt-1 font-bold ${detail.color}`}>
-                      {key === 'live' ? 'Market Price' : `@ $${price.toFixed(2)} Rate`}
-                    </div>
-                  </div>
-
-                  <div className="mt-2.5 pt-2 border-t border-white/10 grid grid-cols-2 gap-x-2 gap-y-1.5 text-[8px] font-mono-crypto">
-                    <div>
-                      <span className="text-slate-500">Allocated</span>
-                      <div className="text-white font-bold mt-0.5">
-                        {showValues ? allocated.toLocaleString() : '••••'}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">FIFO</span>
-                      <div className={`font-bold mt-0.5 ${fifoNumbers.length ? 'text-amber-300' : 'text-slate-300'}`}>
-                        {showValues ? fifoText : '••••'}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">Sold</span>
-                      <div className="text-emerald-300 font-bold mt-0.5">
-                        {showValues ? sold.toLocaleString() : '••••'} NXBC
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">Remaining</span>
-                      <div className="text-cyan-300 font-bold mt-0.5">
-                        {showValues ? remaining.toLocaleString() : '••••'} NXBC
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between gap-2">
-                    <span className={`text-[8px] font-black font-mono-crypto ${statusClass}`}>
-                      {status}
-                    </span>
-                    <span className="text-[8px] text-slate-400 font-mono-crypto">
-                      {key === 'live' ? 'Wallet Reserve' : `Rate $${price.toFixed(2)}`}
-                    </span>
-                  </div>
-
-                  {key !== 'live' && allocated > 0 && (
-                    <div className="mt-1.5 flex items-center justify-between gap-2 text-[7.5px] text-slate-400 font-mono-crypto">
-                      <span>Sold Value: <b className="text-emerald-300">${showValues ? realized.toFixed(2) : '••'}</b></span>
-                      <span>Pending: <b className="text-cyan-300">${showValues ? pending.toFixed(2) : '••'}</b></span>
-                    </div>
-                  )}
-
-                  {key !== 'live' && allocated > 0 && phaseOrders.length === 0 && (
-                    <div className="mt-1 text-[7px] text-slate-500 font-mono-crypto">
-                      Real FIFO not assigned yet → 0
-                    </div>
-                  )}
-                </button>
-              );
-            })}
           </div>
         </div>
       </section>
