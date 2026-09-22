@@ -18,7 +18,6 @@ import {
   Zap,
   RefreshCw,
   Activity,
-  Target,
   CheckCircle2,
 } from 'lucide-react';
 import { AllocationState, PhaseConfig, QueueEntry, UserEarnings } from '../types/crypto';
@@ -41,8 +40,6 @@ interface ScreenTwoAssetsProps {
   sellQueueSharePercent?: number;
 }
 
-type MilestoneVectorKey = 'p2' | 'p3' | 'p4' | 'p5' | 'live';
-
 export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   allocation,
   onOpenBuyModal,
@@ -54,7 +51,6 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   sellQueueSharePercent = 20,
 }) => {
   const [showValues, setShowValues] = useState<boolean>(true);
-  const [selectedVector, setSelectedVector] = useState<MilestoneVectorKey>('p2');
   const [simTarget, setSimTarget] = useState<'p2' | 'p3' | 'p4' | 'p5' | 'live'>('p3');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [saleOrders, setSaleOrders] = useState<Array<{
@@ -170,78 +166,6 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   const simValuation = totalTokens * simCurrent.rate;
   const simGain = Math.max(0, simValuation - initialCostUsd);
   const simRoiPercent = initialCostUsd > 0 ? ((simValuation - initialCostUsd) / initialCostUsd) * 100 : 0;
-
-  // Vector metadata for holographic inspector
-  const vectorDetails: Record<MilestoneVectorKey, {
-    title: string;
-    rate: string;
-    multiplier: string;
-    tokens: number;
-    value: number;
-    color: string;
-    borderColor: string;
-    fifoBadge: string;
-    desc: string;
-  }> = {
-    p2: {
-      title: 'Phase 2 Milestone',
-      rate: '$0.10',
-      multiplier: '10x Return',
-      tokens: allocation.p2Tokens?.allocated || p2Tokens,
-      value: p2Val,
-      color: 'text-amber-300',
-      borderColor: 'border-amber-400/40',
-      fifoBadge: 'FIFO Priority Tier 1',
-      desc: 'First exit gate at 10x ROI from Phase 1 entry. 20% of subsequent buyer USDT funds execute orders automatically.',
-    },
-    p3: {
-      title: 'Phase 3 Milestone',
-      rate: '$1.00',
-      multiplier: '100x Return',
-      tokens: allocation.p3Tokens?.allocated || p3Tokens,
-      value: p3Val,
-      color: 'text-amber-300',
-      borderColor: 'border-amber-400/40',
-      fifoBadge: 'FIFO Priority Tier 2',
-      desc: '100x wealth generation milestone. Token demand backed by on-chain matrix spillover and global buyers.',
-    },
-    p4: {
-      title: 'Phase 4 Milestone',
-      rate: '$10.00',
-      multiplier: '1,000x Return',
-      tokens: allocation.p4Tokens?.allocated || p4Tokens,
-      value: p4Val,
-      color: 'text-cyan-300',
-      borderColor: 'border-cyan-400/40',
-      fifoBadge: 'FIFO Priority Tier 3',
-      desc: 'Four-digit return tier. Auto-clearing FIFO mechanisms ensure continuous on-chain liquidity absorption.',
-    },
-    p5: {
-      title: 'Phase 5 Milestone',
-      rate: '$100.00',
-      multiplier: '10,000x Return',
-      tokens: allocation.p5Tokens?.allocated || p5Tokens,
-      value: p5Val,
-      color: 'text-purple-300',
-      borderColor: 'border-purple-400/40',
-      fifoBadge: 'FIFO Ultimate Tier',
-      desc: 'Final presale phase before DEX / LIVE market stage.',
-    },
-    live: {
-      title: 'DEX / LIVE Wallet',
-      rate: 'Market price on DEX / LIVE',
-      multiplier: 'Market based',
-      tokens: liveTokens,
-      value: liveVal,
-      color: 'text-emerald-300',
-      borderColor: 'border-emerald-400/40',
-      fifoBadge: 'Not in Presale / FIFO',
-      desc: 'These tokens stay in your wallet and are reserved for the future DEX / LIVE market. They are not placed in the presale FIFO queue.',
-    },
-
-  };
-
-  const activeVectorDetail = vectorDetails[selectedVector];
 
   return (
     <div className="nxbc-screen flex flex-col w-full max-w-xl mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3 pb-8 sm:pb-12">
@@ -494,174 +418,82 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
             </span>
           </div>
 
-          {/* UNIQUE FEATURE 3: INTERACTIVE VECTOR INSPECTION HUD */}
-          <div className="rounded-[18px] border border-cyan-400/30 bg-[#050b16]/90 p-3 mb-3 shadow-[0_0_18px_rgba(6,182,212,0.08)]">
-            <div className="flex items-center justify-between gap-2 mb-1.5">
-              <div className="flex items-center gap-1.5">
-                <Target className="w-4 h-4 text-cyan-300" />
-                <span className={`text-[11px] sm:text-[12px] font-black font-rajdhani uppercase tracking-wider ${activeVectorDetail.color}`}>
-                  {activeVectorDetail.title} ({activeVectorDetail.rate})
-                </span>
-              </div>
-              <span className="text-[7.5px] sm:text-[8.5px] font-mono-crypto px-2 py-0.5 rounded-full bg-cyan-400/10 border border-cyan-400/30 text-cyan-300 font-bold">
-                {activeVectorDetail.fifoBadge}
-              </span>
-            </div>
-            <p className="text-[8px] sm:text-[9px] text-slate-300/90 font-mono-crypto leading-relaxed">
-              {activeVectorDetail.desc}
-            </p>
-            <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-[8px] sm:text-[9px] font-mono-crypto">
-              <span className="text-slate-400">Tokens: <strong className="text-white">{showValues ? activeVectorDetail.tokens.toLocaleString() : '••••'} NXBC</strong></span>
-              <span className="text-emerald-300 font-bold">Expected USDT: ${showValues ? activeVectorDetail.value.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '••••'}</span>
-            </div>
-          </div>
-
-          {/* 6-Box Grid Container — interactive with selected state */}
+          {/* REAL PERSONAL FIFO REPORT — same card design, backend-driven values only */}
           <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
-            {/* Box 1: P2 SELL */}
-            <button
-              type="button"
-              onClick={() => setSelectedVector('p2')}
-              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
-                selectedVector === 'p2'
-                  ? 'border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.25)]'
-                  : 'border border-amber-400/30 hover:border-amber-400/60 shadow-[0_0_15px_rgba(245,158,11,0.06)]'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-[11px] font-black text-amber-300 font-rajdhani uppercase tracking-wider block">
-                  P2 SELL
-                </span>
-                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-300 font-bold border border-amber-400/30">
-                  FIFO
-                </span>
-              </div>
-              <div className="my-1 sm:my-1.5">
-                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
-                  {showValues ? `${(allocation.p2Tokens?.allocated || p2Tokens).toLocaleString()} NXBC` : '••••'}
-                </span>
-                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-amber-400/90 font-semibold">
-                  @ $0.10 Rate
-                </span>
-              </div>
-              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
-                <span>Est. Return:</span>
-                <span className="text-emerald-300 font-black">${showValues ? p2Val.toFixed(0) : '••'}</span>
-              </div>
-            </button>
+            {([
+              { key: 'p2', phase: 2, label: 'P2 SELL', rate: 0.10, color: 'amber', tokens: p2Tokens },
+              { key: 'p3', phase: 3, label: 'P3 SELL', rate: 1.00, color: 'amber', tokens: p3Tokens },
+              { key: 'p4', phase: 4, label: 'P4 SELL', rate: 10.00, color: 'cyan', tokens: p4Tokens },
+              { key: 'p5', phase: 5, label: 'P5 SELL', rate: 100.00, color: 'purple', tokens: p5Tokens },
+            ] as const).map((item) => {
+              const orders = saleOrders.filter((o) => Number(o.phaseNumber) === item.phase);
+              const allocated = Math.max(0, Number(item.tokens || 0));
+              const sold = Math.max(0, orders.reduce((sum, o) => sum + Number(o.soldTokens || 0), 0));
+              const orderRemaining = Math.max(0, orders.reduce((sum, o) => sum + Number(o.remainingTokens || 0), 0));
+              const remaining = orders.length > 0 ? orderRemaining : allocated;
+              const realized = Math.max(0, orders.reduce((sum, o) => sum + Number(o.realizedUsdt || 0), 0));
+              const pending = Math.max(0, remaining * item.rate);
+              const fifoNumbers = orders
+                .map((o) => Number(o.fifoNumber || 0))
+                .filter((n) => n > 0)
+                .sort((a, b) => a - b);
+              const fifoText = fifoNumbers.length ? fifoNumbers.map((n) => `#${n}`).join(', ') : '0';
+              const status = allocated <= 0
+                ? 'NO ALLOCATION'
+                : remaining <= 0 && sold > 0
+                  ? 'SOLD'
+                  : sold > 0
+                    ? 'PARTIALLY SOLD'
+                    : fifoNumbers.length
+                      ? 'WAITING FIFO'
+                      : 'WAITING FIFO';
+              const border = item.color === 'cyan' ? 'border-cyan-400/30' : item.color === 'purple' ? 'border-purple-400/30' : 'border-amber-400/30';
+              const text = item.color === 'cyan' ? 'text-cyan-300' : item.color === 'purple' ? 'text-purple-300' : 'text-amber-300';
+              const badgeBg = item.color === 'cyan' ? 'bg-cyan-400/15 border-cyan-400/30' : item.color === 'purple' ? 'bg-purple-400/15 border-purple-400/30' : 'bg-amber-400/15 border-amber-400/30';
+              const soldColor = status === 'SOLD' ? 'text-emerald-300' : status === 'PARTIALLY SOLD' ? 'text-amber-300' : 'text-slate-300';
 
-            {/* Box 2: P3 SELL */}
-            <button
-              type="button"
-              onClick={() => setSelectedVector('p3')}
-              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
-                selectedVector === 'p3'
-                  ? 'border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.25)]'
-                  : 'border border-amber-400/30 hover:border-amber-400/60 shadow-[0_0_15px_rgba(245,158,11,0.06)]'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-[11px] font-black text-amber-300 font-rajdhani uppercase tracking-wider block">
-                  P3 SELL
-                </span>
-                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-300 font-bold border border-amber-400/30">
-                  FIFO
-                </span>
-              </div>
-              <div className="my-1 sm:my-1.5">
-                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
-                  {showValues ? `${(allocation.p3Tokens?.allocated || p3Tokens).toLocaleString()} NXBC` : '••••'}
-                </span>
-                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-amber-400/90 font-semibold">
-                  @ $1.00 Rate
-                </span>
-              </div>
-              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
-                <span>Est. Return:</span>
-                <span className="text-emerald-300 font-black">${showValues ? p3Val.toFixed(0) : '••'}</span>
-              </div>
-            </button>
+              return (
+                <div key={item.key} className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 border ${border} shadow-[0_0_15px_rgba(6,182,212,0.04)]`}>
+                  <div className="flex items-center justify-between gap-1">
+                    <span className={`text-[10px] sm:text-[11px] font-black ${text} font-rajdhani uppercase tracking-wider block`}>
+                      {item.label}
+                    </span>
+                    <span className={`text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full ${badgeBg} ${text} font-bold`}>
+                      FIFO {fifoText}
+                    </span>
+                  </div>
 
-            {/* Box 3: P4 SELL */}
-            <button
-              type="button"
-              onClick={() => setSelectedVector('p4')}
-              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
-                selectedVector === 'p4'
-                  ? 'border-2 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.25)]'
-                  : 'border border-cyan-400/30 hover:border-cyan-400/60 shadow-[0_0_15px_rgba(6,182,212,0.06)]'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-[11px] font-black text-cyan-300 font-rajdhani uppercase tracking-wider block">
-                  P4 SELL
-                </span>
-                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-cyan-400/15 text-cyan-300 font-bold border border-cyan-400/30">
-                  FIFO
-                </span>
-              </div>
-              <div className="my-1 sm:my-1.5">
-                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
-                  {showValues ? `${(allocation.p4Tokens?.allocated || p4Tokens).toLocaleString()} NXBC` : '••••'}
-                </span>
-                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-cyan-300/90 font-semibold">
-                  @ $10.00 Rate
-                </span>
-              </div>
-              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
-                <span>Est. Return:</span>
-                <span className="text-emerald-300 font-black">${showValues ? p4Val.toFixed(0) : '••'}</span>
-              </div>
-            </button>
+                  <div className="my-1 sm:my-1.5">
+                    <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
+                      {showValues ? `${allocated.toLocaleString()} NXBC` : '••••'}
+                    </span>
+                    <span className={`text-[8.5px] sm:text-[9.5px] font-mono-crypto ${text} font-semibold`}>
+                      @ ${item.rate.toFixed(2)} Rate
+                    </span>
+                  </div>
 
-            {/* Box 4: P5 SELL */}
-            <button
-              type="button"
-              onClick={() => setSelectedVector('p5')}
-              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
-                selectedVector === 'p5'
-                  ? 'border-2 border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.25)]'
-                  : 'border border-purple-400/30 hover:border-purple-400/60 shadow-[0_0_15px_rgba(168,85,247,0.06)]'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] sm:text-[11px] font-black text-purple-300 font-rajdhani uppercase tracking-wider block">
-                  P5 SELL
-                </span>
-                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-purple-400/15 text-purple-300 font-bold border border-purple-400/30">
-                  FIFO
-                </span>
-              </div>
-              <div className="my-1 sm:my-1.5">
-                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
-                  {showValues ? `${(allocation.p5Tokens?.allocated || p5Tokens).toLocaleString()} NXBC` : '••••'}
-                </span>
-                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-purple-300 font-semibold">
-                  @ $100.00 Rate
-                </span>
-              </div>
-              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
-                <span>Est. Return:</span>
-                <span className="text-emerald-300 font-black">${showValues ? p5Val.toFixed(0) : '••'}</span>
-              </div>
-            </button>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 border-t border-white/10 pt-1.5 mt-1 text-[7.5px] sm:text-[8px] font-mono-crypto">
+                    <span className="text-slate-400">Sold: <b className="text-white">{showValues ? sold.toLocaleString() : '••'}</b></span>
+                    <span className="text-slate-400 text-right">Remain: <b className="text-white">{showValues ? remaining.toLocaleString() : '••'}</b></span>
+                    <span className={`${soldColor} font-bold col-span-2`}>{status}</span>
+                  </div>
 
-            {/* Box 5: DEX / LIVE */}
-            <button
-              type="button"
-              onClick={() => setSelectedVector('live')}
-              className={`rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 transition-all relative overflow-hidden group ${
-                selectedVector === 'live'
-                  ? 'border-2 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
-                  : 'border border-emerald-400/30 hover:border-emerald-400/60 shadow-[0_0_15px_rgba(16,185,129,0.06)]'
-              }`}
-            >
-              <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between border-t border-white/10 pt-1 mt-1 text-[7.5px] sm:text-[8px] font-mono-crypto">
+                    <span className="text-slate-400">Realized: <b className="text-emerald-300">${showValues ? realized.toFixed(2) : '••'}</b></span>
+                    <span className="text-slate-400">Pending: <b className="text-amber-300">${showValues ? pending.toFixed(2) : '••'}</b></span>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* DEX / LIVE — never part of FIFO */}
+            <div className="rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 border border-emerald-400/30 shadow-[0_0_15px_rgba(16,185,129,0.06)]">
+              <div className="flex items-center justify-between gap-1">
                 <span className="text-[10px] sm:text-[11px] font-black text-emerald-300 font-rajdhani uppercase tracking-wider block">
                   DEX / LIVE
                 </span>
                 <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-emerald-400/15 text-emerald-300 font-bold border border-emerald-400/30">
-                  WALLET
+                  NO FIFO
                 </span>
               </div>
               <div className="my-1 sm:my-1.5">
@@ -672,12 +504,11 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                   @ DEX / LIVE MARKET PRICE
                 </span>
               </div>
-              <div className="text-[8px] text-slate-300 font-mono-crypto flex justify-between border-t border-white/10 pt-1 mt-1">
-                <span>Market Value:</span>
-                <span className="text-emerald-300 font-black">${showValues ? liveVal.toFixed(0) : '••'}</span>
+              <div className="grid grid-cols-2 gap-1 border-t border-white/10 pt-1.5 mt-1 text-[7.5px] sm:text-[8px] font-mono-crypto">
+                <span className="text-slate-400">FIFO: <b className="text-emerald-300">—</b></span>
+                <span className="text-slate-400 text-right">Status: <b className="text-emerald-300">RESERVE</b></span>
               </div>
-            </button>
-
+            </div>
           </div>
         </div>
       </section>
