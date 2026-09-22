@@ -579,23 +579,30 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
 
           {fifoLoading ? (
             <div className="py-4 text-center text-[10px] text-slate-400 font-mono-crypto">Loading global queue...</div>
-          ) : globalFifo.length === 0 ? (
-            <div className="py-4 text-center text-[10px] text-slate-400 font-mono-crypto">No active FIFO orders in queue.</div>
           ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-              {globalFifo.map((phase) => (
-                <div key={phase.phaseNumber} className="rounded-[15px] border border-white/10 bg-[#050b16]/75 p-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
+              {[2, 3, 4, 5].map((phaseNumber) => {
+                const phase = globalFifo.find((p) => Number(p.phaseNumber) === phaseNumber);
+                const orders = phase?.orders || [];
+                const totalOrders = Number(phase?.totalOrders || 0);
+                const totalQueuedTokens = Number(phase?.totalQueuedTokens || 0);
+                return (
+                <div key={phaseNumber} className="rounded-[15px] border border-white/10 bg-[#050b16]/75 p-2.5">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] sm:text-[11px] font-black text-cyan-300 font-rajdhani uppercase tracking-wider">
-                      PHASE {phase.phaseNumber}
+                      PHASE {phaseNumber}
                     </span>
                     <span className="text-[8px] sm:text-[9px] text-slate-300 font-mono-crypto">
-                      {phase.totalOrders} orders • {phase.totalQueuedTokens.toLocaleString()} NXBC queued
+                      {totalOrders} orders • {totalQueuedTokens.toLocaleString()} NXBC queued
                     </span>
                   </div>
 
                   <div className="space-y-1.5">
-                    {phase.orders.slice(0, 1).map((o) => {
+                    {orders.length === 0 ? (
+                      <div className="rounded-[12px] px-2.5 py-2 border border-white/10 bg-[#071426]/50 text-center text-[8px] text-slate-500 font-mono-crypto">
+                        No active FIFO orders
+                      </div>
+                    ) : orders.slice(0, 1).map((o) => {
                       const isMine = !!walletAddress && o.walletAddress.toLowerCase() === `${walletAddress.slice(0, 6).toLowerCase()}...${walletAddress.slice(-4).toLowerCase()}`;
                       return (
                         <div
@@ -619,13 +626,14 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                     })}
                   </div>
 
-                  {phase.totalOrders > 1 && (
+                  {totalOrders > 1 && (
                     <div className="mt-1.5 text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto text-center">
-                      +{phase.totalOrders - 1} more order(s) waiting in FIFO sequence
+                      +{totalOrders - 1} more order(s) waiting in FIFO sequence
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
