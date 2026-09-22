@@ -171,6 +171,8 @@ export default function App() {
   const [totalWithdrawnUsdt, setTotalWithdrawnUsdt] = useState<number>(0);
 
   const [totalInvestedUsd, setTotalInvestedUsd] = useState<number>(0);
+  const [teamDirects, setTeamDirects] = useState<number>(0);
+  const [teamTotalMembers, setTeamTotalMembers] = useState<number>(0);
 
   // Auto-detect injected Web3 (MetaMask / Trust Wallet / Binance Web3 / OKX)
   useEffect(() => {
@@ -373,7 +375,21 @@ export default function App() {
             if (data.success && data.allocations) {
               const a = data.allocations;
               const totalTokens = data.totalPurchasedTokens || 0;
-              
+              const p1Allocated = Number(a[1]?.allocated || 0);
+              const p2Allocated = Number(a[2]?.allocated || 0);
+              const p3Allocated = Number(a[3]?.allocated || 0);
+              const p4Allocated = Number(a[4]?.allocated || 0);
+              const p5Allocated = Number(a[5]?.allocated || 0);
+              const liveAllocated = Number(data.liveHoldTokens ?? a[6]?.allocated ?? 0);
+              // The "Vector Portfolio Distribution Strip" bar reads these
+              // percent fields. They used to stay frozen at the initial
+              // hardcoded default (20/30/20/15/15) forever because this
+              // fetch only ever updated the *Tokens fields, never the
+              // *Percent fields. Derive them from the real DB token split
+              // so the bar matches reality once tokens exist.
+              const percentBase = totalTokens > 0 ? totalTokens : 0;
+              const pct = (n: number) => (percentBase > 0 ? Math.round((n / percentBase) * 1000) / 10 : 0);
+
               setAllocation((prev) => {
 
                 const next = {
@@ -386,9 +402,18 @@ export default function App() {
                   p4Tokens: a[4] || { allocated: 0, sold: 0 },
                   p5Tokens: a[5] || { allocated: 0, sold: 0 },
                   liveTokens: {
-                    allocated: Number(data.liveHoldTokens ?? a[6]?.allocated ?? 0),
+                    allocated: liveAllocated,
                     sold: 0,
                   },
+                  ...(percentBase > 0 ? {
+                    p1Percent: pct(p1Allocated),
+                    p2Percent: pct(p2Allocated),
+                    p3Percent: pct(p3Allocated),
+                    p4Percent: pct(p4Allocated),
+                    p5Percent: pct(p5Allocated),
+                    livePercent: pct(liveAllocated),
+                    unallocatedPercent: 0,
+                  } : {}),
                 };
                 return next;
               });
@@ -401,7 +426,7 @@ export default function App() {
   // Transactions History (Persisted in localStorage)
   
   const [allocation, setAllocation] = useState<AllocationState>({
-    p1Percent: 0, p2Percent: 20, p3Percent: 30, p4Percent: 20, p5Percent: 15, livePercent: 15,
+    p1Percent: 0, p2Percent: 0, p3Percent: 0, p4Percent: 0, p5Percent: 0, livePercent: 0,
     unallocatedPercent: 0, totalTokensPurchased: 0, isLocked: false, lockedTimestamp: ''
   });
 
@@ -702,6 +727,36 @@ export default function App() {
     fetchUserStats();
     const interval = setInterval(fetchUserStats, 5000);
     return () => clearInterval(interval);
+  }, [walletAddress]);
+
+  // Sync real team/downline counts from the DB-backed /api/team endpoint.
+  // This is the same endpoint the Team tab already uses — the Assets tab's
+  // "Team Structure" card was never wired to it before, so it just showed 0.
+  useEffect(() => {
+    if (!walletAddress) {
+      setTeamDirects(0);
+      setTeamTotalMembers(0);
+      return;
+    }
+    let isMounted = true;
+    const fetchTeamCounts = async () => {
+      try {
+        const res = await fetch(`/api/team/${encodeURIComponent(walletAddress)}`);
+        const data = await res.json().catch(() => ({}));
+        if (isMounted && res.ok) {
+          setTeamDirects(Number(data.totalDirectMembers || 0));
+          setTeamTotalMembers(Number(data.totalMatrixMembers || 0));
+        }
+      } catch (err) {
+        console.error('Failed to sync team counts:', err);
+      }
+    };
+    fetchTeamCounts();
+    const interval = setInterval(fetchTeamCounts, 15000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [walletAddress]);
 
   // Purchase handler with sequential phase progression & immutable allocation lock
@@ -1310,6 +1365,8 @@ export default function App() {
                   walletAddress={walletAddress}
                   walletConnected={walletConnected}
                   sellQueueSharePercent={Number(systemConfig.sellQueueSharePercent ?? 20)}
+                  teamDirects={teamDirects}
+                  teamCount={teamTotalMembers}
                 />
               )}
 
@@ -1454,6 +1511,8 @@ export default function App() {
                   walletAddress={walletAddress}
                   walletConnected={walletConnected}
                   sellQueueSharePercent={Number(systemConfig.sellQueueSharePercent ?? 20)}
+                  teamDirects={teamDirects}
+                  teamCount={teamTotalMembers}
                 />
                 <BottomNavBar
                   idPrefix="s2-nav"
