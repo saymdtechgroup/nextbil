@@ -38,8 +38,6 @@ interface ScreenTwoAssetsProps {
   walletAddress?: string | null;
   walletConnected?: boolean;
   sellQueueSharePercent?: number;
-  teamDirects?: number;
-  teamCount?: number;
 }
 
 export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
@@ -51,8 +49,6 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   matrixIncomeUsd,
   walletAddress,
   sellQueueSharePercent = 20,
-  teamDirects = 0,
-  teamCount = 0,
 }) => {
   const [showValues, setShowValues] = useState<boolean>(true);
   const [simTarget, setSimTarget] = useState<'p2' | 'p3' | 'p4' | 'p5' | 'live'>('p3');
@@ -471,9 +467,6 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                     <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block">
                       {showValues ? `${allocated.toLocaleString()} NXBC` : '••••'}
                     </span>
-                    <span className="text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto block mt-0.5">
-                      Allocated
-                    </span>
                     <span className={`text-[8.5px] sm:text-[9.5px] font-mono-crypto ${text} font-semibold`}>
                       @ ${item.rate.toFixed(2)} Rate
                     </span>
@@ -650,7 +643,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                     <div key={o.id} className="rounded-[12px] border border-white/10 bg-[#071426]/60 p-2.5 text-[8px] font-mono-crypto space-y-2">
                       <div className="flex justify-between items-center">
                         <div>
-                          <span className="text-amber-300 font-bold">Phase {o.phaseNumber}</span> · FIFO {o.fifoNumber && Number(o.fifoNumber) > 0 ? `#${o.fifoNumber}` : '0'}
+                          <span className="text-amber-300 font-bold">Phase {o.phaseNumber}</span> · FIFO #{o.fifoNumber || o.id}
                         </div>
                         <span className="text-emerald-300 font-bold">{o.status.toUpperCase()}</span>
                       </div>
@@ -723,7 +716,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                 <Users className="w-3.5 h-3.5" />
               </div>
               <div className="text-sm sm:text-base font-black font-mono-crypto text-white">
-                {showValues ? `${teamDirects.toLocaleString()} Directs / ${teamCount.toLocaleString()} Team` : '•••• / ••••'}
+                0 Directs / 0 Team
               </div>
             </div>
 
