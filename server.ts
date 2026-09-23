@@ -2250,12 +2250,68 @@ async function startServer() {
         user = newUser;
       }
 
-      // Never allow one real blockchain transaction to create multiple database
-      // purchases. A valid tx hash is a one-time settlement proof.
+      // Idempotency / recovery: one blockchain tx may only settle once.
+      // IMPORTANT: if an older server version incorrectly stored a real, successful
+      // purchase as `failed`, do NOT reject the same tx hash forever. Re-verify the
+      // canonical on-chain receipt and safely recover that existing row instead.
       if (hasValidTxHash && txHash) {
         const existingTx = await db.query.transactions.findFirst({ where: eq(transactions.txHash, txHash) });
         if (existingTx) {
-          return res.status(409).json({ success: false, error: "This blockchain transaction has already been recorded as a purchase.", transaction: existingTx });
+          if (existingTx.status === 'completed') {
+            return res.status(409).json({ success: false, error: "This blockchain transaction has already been settled as a purchase.", transaction: existingTx });
+          }
+
+          if (purchaseStatus !== 'completed') {
+            return res.status(409).json({
+              success: false,
+              error: "This blockchain transaction is already recorded and is still awaiting successful on-chain verification.",
+              transaction: existingTx,
+            });
+          }
+
+          // The row was previously pending/failed, but the canonical BSC receipt
+          // is now verified. Recover the SAME database row; never create a second
+          // purchase and never send NXBC again.
+          const [recoveredTx] = await db.update(transactions).set({
+            amountUsdt: verifiedPurchaseUsdt,
+            tokenAmount: verifiedPurchaseTokens,
+            tokenPrice: verifiedPurchasePrice,
+            phaseIndex: verifiedPhaseNumber,
+            status: 'completed',
+          }).where(eq(transactions.id, existingTx.id)).returning();
+
+          const { newInvested, isNowMlmQualified } = await finalizeConfirmedPurchase(
+            user,
+            verifiedPurchaseTokens,
+            verifiedPurchaseUsdt,
+            verifiedPhaseNumber
+          );
+
+          const fifoSettlement = await matchVerifiedBuyerToPhaseQueue({
+            buyerUserId: user.id,
+            buyerWallet: normalizedAddress,
+            phaseNumber: verifiedPhaseNumber,
+            buyerTokenAmount: verifiedPurchaseTokens,
+            directBuyerInviteToken: typeof directBuyerInviteToken === 'string' ? directBuyerInviteToken : undefined,
+          });
+
+          return res.json({
+            success: true,
+            recovered: true,
+            transaction: recoveredTx,
+            tokenDispatchTxHash: txHash,
+            totalInvestedUsdt: newInvested,
+            isMlmQualified: isNowMlmQualified,
+            fifoSettlement: {
+              buyerTokens: verifiedPurchaseTokens,
+              userSharePercent: fifoSettlement.sellerSharePercent,
+              adminSharePercent: fifoSettlement.companySharePercent,
+              userShareTokens: fifoSettlement.userShareTokens,
+              adminShareTokens: fifoSettlement.adminShareTokens,
+              unmatchedUserShareTokens: fifoSettlement.unmatchedUserShareTokens,
+              matches: fifoSettlement.matches,
+            },
+          });
         }
       }
 
