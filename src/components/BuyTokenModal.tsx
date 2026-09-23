@@ -280,7 +280,14 @@ export const BuyTokenModal: React.FC<Props> = ({
               <Wallet size={17} className="mr-2 text-cyan-300" />
               <input
                 value={usd}
-                onChange={e => setUsd(e.target.value.replace(/[^\d.]/g, ''))}
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === '') {
+                    setUsd('');
+                  } else if (/^\d*\.?\d*$/.test(val)) {
+                    setUsd(val);
+                  }
+                }}
                 inputMode="decimal"
                 placeholder="0.00"
                 className="w-full bg-transparent py-3 outline-none font-black text-white"
