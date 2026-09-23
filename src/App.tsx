@@ -64,10 +64,6 @@ export default function App() {
   const [isAppLaunched, setIsAppLaunched] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('single');
   const [activeSingleScreen, setActiveSingleScreen] = useState<ActiveScreen>('home');
-  const handleScreenNavigation = (screen: ActiveScreen) => {
-    setViewMode('single');
-    setActiveSingleScreen(screen);
-  };
   const [showSecretAdminPage, setShowSecretAdminPage] = useState<boolean>(false);
 
   // Core State: 6-Phase Sequential Roadmap & Live Status (Admin Managed & Persisted)
@@ -124,10 +120,14 @@ export default function App() {
          if (syncRes.ok) {
             const syncData = await syncRes.json();
             if (syncData.user) {
-               setUserEarnings({
-                  availableUsdt: syncData.user.availableUsdt || 0,
-                  withdrawnUsdt: syncData.user.totalWithdrawnUsdt || 0
-               });
+               setUserEarnings((prev) => ({
+                  ...prev,
+                  availableUsdt: Number(syncData.user.availableUsdt || 0),
+                  mlmAvailableUsdt: Number(syncData.user.availableUsdt || 0),
+                  withdrawnUsdt: Number(syncData.user.totalWithdrawnUsdt || 0),
+                  tokenSellAvailableUsdt: Number(syncData.tokenSaleAvailableUsdt || prev.tokenSellAvailableUsdt || 0),
+                  tokenSellWithdrawnUsdt: Number(syncData.tokenSaleWithdrawnUsdt || prev.tokenSellWithdrawnUsdt || 0),
+               }));
                if (syncData.user.referralCode) {
                   setUserRefCode(syncData.user.referralCode);
                }
@@ -667,8 +667,18 @@ export default function App() {
         const res = await fetch(`/api/users/${walletAddress}`);
         const data = await res.json();
         if (data && data.user) {
-          setTotalInvestedUsd(data.user.totalInvestedUsdt || 0);
-          setClaimableBalanceUsd(data.user.availableUsdt || 0);
+          setTotalInvestedUsd(Number(data.user.totalInvestedUsdt || 0));
+          setClaimableBalanceUsd(Number(data.user.availableUsdt || 0));
+          setLevelIncomeUsd(Number(data.levelIncomeUsdt || 0));
+          setMatrixIncomeUsd(Number(data.matrixIncomeUsdt || 0));
+          setUserEarnings((prev) => ({
+            ...prev,
+            availableUsdt: Number(data.user.availableUsdt || 0),
+            mlmAvailableUsdt: Number(data.user.availableUsdt || 0),
+            withdrawnUsdt: Number(data.user.totalWithdrawnUsdt || 0),
+            tokenSellAvailableUsdt: Number(data.tokenSaleAvailableUsdt || 0),
+            tokenSellWithdrawnUsdt: Number(data.tokenSaleWithdrawnUsdt || 0),
+          }));
 
           // IMPORTANT: the database is the authoritative source for purchased NXBC.
           // The wallet is the user's ID in the DApp, so every connected wallet must
@@ -882,13 +892,15 @@ export default function App() {
       { phaseNumber: 5, amountTokens: p5TokensAllocated },
     ].filter((item) => item.amountTokens > 0);
 
-    if (allocations.length > 0) {
+    if (allocations.length > 0 || dexTokens > 0) {
       const allocationResponse = await fetch('/api/presale/allocation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           walletAddress,
           allocations,
+          liveHoldTokens: dexTokens,
+          purchaseTxHash: txHash,
         }),
       });
 
@@ -903,6 +915,23 @@ export default function App() {
     }
 
     // STEP 3: update local UI only after backend success.
+    // Immediately re-read both blockchain balances so the Home/Buy UI reflects
+    // the actual post-purchase wallet state instead of waiting for the 15s poll.
+    try {
+      const [freshNxbc, freshUsdt] = await Promise.all([
+        fetchOnChainTokenBalance(NXBC_CONTRACT, walletAddress),
+        fetchOnChainTokenBalance(USDT_CONTRACT, walletAddress),
+      ]);
+      setNxbcBalance(Math.max(0, freshNxbc));
+      setUsdtBalance(Math.max(0, freshUsdt));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nxbc_nxbusd_balance', String(Math.max(0, freshNxbc)));
+        localStorage.setItem('nxbc_usdt_balance', String(Math.max(0, freshUsdt)));
+      }
+    } catch (balanceRefreshError) {
+      console.warn('Immediate post-purchase wallet balance refresh failed:', balanceRefreshError);
+    }
+
     setAllocation(updatedAlloc);
     if (typeof window !== 'undefined') {
       localStorage.setItem('nxbc_user_allocation', JSON.stringify(updatedAlloc));
@@ -1590,7 +1619,7 @@ export default function App() {
               ].map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => handleScreenNavigation(tab.id as ActiveScreen)}
+                  onClick={() => setActiveSingleScreen(tab.id as ActiveScreen)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-rajdhani font-bold whitespace-nowrap transition-all ${
                     activeSingleScreen === tab.id
                       ? 'bg-gradient-to-r from-amber-500/30 to-fuchsia-600/30 text-amber-300 border border-amber-400/40 shadow-sm'
@@ -1610,15 +1639,17 @@ export default function App() {
                   phases={phases}
                   onUpdateAllocation={setAllocation}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
-                  onNavigate={handleScreenNavigation}
+                  
                   onOpenWalletModal={() => setWalletModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
                   onSimulateFillPhase={handleSimulateFillPhase}
                   onSimulateExternalBuy={handleSimulateExternalBuy}
                   onResetPhases={handleResetPhases}
-                  totalEarningUsdt={userEarnings?.availableUsdt || 0}
-                  totalWithdrawnUsdt={userEarnings?.withdrawnUsdt || 0}
+                  onNavigate={(screen) => {
+                    setViewMode('single');
+                    setActiveSingleScreen(screen);
+                  }}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
                   nxbcBalance={nxbcBalance}
@@ -1657,7 +1688,7 @@ export default function App() {
                 <ScreenThreeWallet
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
-                  tokenSellBalanceUsd={userEarnings?.availableUsdt || 0}
+                  tokenSellBalanceUsd={userEarnings?.tokenSellAvailableUsdt || 0}
                   mlmBalanceUsd={claimableBalanceUsd}
                   allocation={allocation}
                   levelIncomeUsd={levelIncomeUsd}
@@ -1690,7 +1721,7 @@ export default function App() {
             <BottomNavBar
               idPrefix="full-mobile-nav"
               activeScreen={activeSingleScreen}
-              onSelectScreen={handleScreenNavigation}
+              onSelectScreen={setActiveSingleScreen}
             />
           </div>
         ) : (
@@ -1727,15 +1758,17 @@ export default function App() {
                   phases={phases}
                   onUpdateAllocation={setAllocation}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
-                  onNavigate={handleScreenNavigation}
+                  
                   onOpenWalletModal={() => setWalletModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
                   onSimulateFillPhase={handleSimulateFillPhase}
                   onSimulateExternalBuy={handleSimulateExternalBuy}
                   onResetPhases={handleResetPhases}
-                  totalEarningUsdt={userEarnings?.availableUsdt || 0}
-                  totalWithdrawnUsdt={userEarnings?.withdrawnUsdt || 0}
+                  onNavigate={(screen) => {
+                    setViewMode('single');
+                    setActiveSingleScreen(screen);
+                  }}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
                   nxbcBalance={nxbcBalance}
@@ -1790,7 +1823,7 @@ export default function App() {
                 <ScreenThreeWallet
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
-                  tokenSellBalanceUsd={userEarnings?.availableUsdt || 0}
+                  tokenSellBalanceUsd={userEarnings?.tokenSellAvailableUsdt || 0}
                   mlmBalanceUsd={claimableBalanceUsd}
                   allocation={allocation}
                   levelIncomeUsd={levelIncomeUsd}
