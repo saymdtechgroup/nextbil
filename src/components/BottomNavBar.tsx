@@ -31,6 +31,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
         const isActive = activeScreen === item.id;
         return (
           <button
+            type="button"
             key={item.id}
             id={`${idPrefix}-btn-${item.id}`}
             onClick={() => onSelectScreen(item.id)}
