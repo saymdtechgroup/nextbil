@@ -20,8 +20,10 @@ interface ScreenOneAcquisitionProps {
   sellQueue?: QueueEntry[];
   walletConnected: boolean;
   walletAddress: string;
-  totalEarningUsdt: number;
-  totalWithdrawnUsdt: number;
+  nxbcBalance?: number;
+  usdtBalance?: number;
+  totalEarningUsdt?: number;
+  totalWithdrawnUsdt?: number;
 }
 
 export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
@@ -30,30 +32,6 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   onOpenBuyModal,
   onNavigate,
 }) => {
-  const [livePhaseSold, setLivePhaseSold] = useState<number | null>(null);
-  const [livePhaseSupply, setLivePhaseSupply] = useState<number | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadLivePhase = async () => {
-      try {
-        const res = await fetch('/api/presale/config', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled && data?.success !== false) {
-          setLivePhaseSold(Number(data.currentPhaseSold ?? 0));
-          const phase = Array.isArray(data.phases)
-            ? data.phases.find((p: any) => Number(p.phaseNumber) === Number(data.currentPhase))
-            : null;
-          if (phase) setLivePhaseSupply(Number(phase.totalSupply ?? 0));
-        }
-      } catch {}
-    };
-    loadLivePhase();
-    const timer = window.setInterval(loadLivePhase, 5000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, []);
-
   const [trustStats, setTrustStats] = useState({
     totalTokensSold: 0,
     totalUsdtReceived: 0,
@@ -85,8 +63,8 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
 
   const activePhase = phases.find((phase) => phase.status === 'active') ?? phases[0];
   const totalTokens = Number(allocation.totalTokensPurchased) || 0;
-  const tokensSold = livePhaseSold !== null ? livePhaseSold : (Number(activePhase?.tokensSold) || 0);
-  const phaseSupply = livePhaseSupply !== null ? livePhaseSupply : (Number(activePhase?.totalSupply) || 0);
+  const tokensSold = Number(activePhase?.tokensSold) || 0;
+  const phaseSupply = Number(activePhase?.totalSupply) || 0;
   const tokensRemaining = Math.max(0, phaseSupply - tokensSold);
   const progressPercent = phaseSupply > 0 ? Math.min(100, (tokensSold / phaseSupply) * 100) : 0;
   const currentRate = Number(activePhase?.rate) || 0;

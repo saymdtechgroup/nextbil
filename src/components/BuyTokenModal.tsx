@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, CheckCircle2, Lock, Sparkles, Wallet, X, Zap } from 'lucide-react';
+import { executeSmartContractBuy } from '../utils/web3Helper';
 
 type AllocationInput = {
   p1Percent?: number;
@@ -88,7 +89,7 @@ export const BuyTokenModal: React.FC<Props> = ({
     // defaults rather than opening the modal with an impossible 0% allocation.
     const totalIncoming = incoming.p2 + incoming.p3 + incoming.p4 + incoming.p5 + incoming.dex;
     setA(totalIncoming <= 0.000001 ? DEFAULT_ALLOCATION : incoming);
-  }, [isOpen]);
+  }, [isOpen, initialAllocation]);
 
   const purchaseUsd = Math.max(0, num(usd));
   const tokens = currentRate > 0 ? purchaseUsd / currentRate : 0;
@@ -147,6 +148,24 @@ export const BuyTokenModal: React.FC<Props> = ({
 
     try {
       setBusy(true);
+
+      // Execute the real BSC purchase first. The returned transaction hash is
+      // then passed to the backend as the immutable purchase-lot proof.
+      const buyResult = await executeSmartContractBuy(
+        purchaseUsd,
+        null,
+        parts.p2,
+        parts.p3,
+        parts.p4,
+        parts.p5,
+        parts.dex,
+        (msg) => setError(msg)
+      );
+
+      if (!buyResult.success || !buyResult.txHash) {
+        throw new Error(buyResult.error || 'NXBC purchase transaction failed.');
+      }
+
       await onConfirmPurchase(
         tokens,
         purchaseUsd,
@@ -159,7 +178,7 @@ export const BuyTokenModal: React.FC<Props> = ({
           dexPercent: a.dex,
           unallocatedPercent: 0,
         },
-        undefined,
+        buyResult.txHash,
         'USDT'
       );
       onClose();
