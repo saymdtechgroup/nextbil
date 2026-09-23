@@ -64,6 +64,10 @@ export default function App() {
   const [isAppLaunched, setIsAppLaunched] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('single');
   const [activeSingleScreen, setActiveSingleScreen] = useState<ActiveScreen>('home');
+  const handleScreenNavigation = (screen: ActiveScreen) => {
+    setViewMode('single');
+    setActiveSingleScreen(screen);
+  };
   const [showSecretAdminPage, setShowSecretAdminPage] = useState<boolean>(false);
 
   // Core State: 6-Phase Sequential Roadmap & Live Status (Admin Managed & Persisted)
@@ -1586,7 +1590,8 @@ export default function App() {
               ].map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveSingleScreen(tab.id as ActiveScreen)}
+                  type="button"
+                  onClick={() => handleScreenNavigation(tab.id as ActiveScreen)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-rajdhani font-bold whitespace-nowrap transition-all ${
                     activeSingleScreen === tab.id
                       ? 'bg-gradient-to-r from-amber-500/30 to-fuchsia-600/30 text-amber-300 border border-amber-400/40 shadow-sm'
@@ -1684,7 +1689,7 @@ export default function App() {
             <BottomNavBar
               idPrefix="full-mobile-nav"
               activeScreen={activeSingleScreen}
-              onSelectScreen={setActiveSingleScreen}
+              onSelectScreen={handleScreenNavigation}
             />
           </div>
         ) : (
