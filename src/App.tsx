@@ -309,9 +309,11 @@ export default function App() {
 
     syncLivePresale();
     const interval = window.setInterval(syncLivePresale, 5000);
+    window.addEventListener('nxbc:refresh-presale', syncLivePresale);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      window.removeEventListener('nxbc:refresh-presale', syncLivePresale);
     };
   }, []);
 
@@ -965,6 +967,7 @@ export default function App() {
     // number from the backend instead of inventing one on the frontend.
     try {
       window.dispatchEvent(new CustomEvent('nxbc:refresh-sale-orders'));
+      window.dispatchEvent(new CustomEvent('nxbc:refresh-presale'));
     } catch {}
 
     setBuyModalOpen(false);

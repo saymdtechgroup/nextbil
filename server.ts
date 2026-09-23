@@ -2928,21 +2928,34 @@ async function startServer() {
         } catch {}
       }
 
-      const safePhases = live.phases.map((livePhase: any) => ({
-        ...livePhase,
-        // Financial phase fields are read only from the deployed BSC contract.
-        // DB/admin config may not overwrite price, allocation, sold or status.
-        multiplier: '',
-        targetDate: '',
+      // FIX: the on-chain phases(i).sold counter can stay at 0 (e.g. different
+      // contract layout / indexing) even though purchases were verified on BSC
+      // and stored in the DB. Use the larger of on-chain sold and the sum of
+      // DB-verified (on-chain checked) purchases so Remaining = Supply - Sold.
+      const safePhases = await Promise.all(live.phases.map(async (livePhase: any) => {
+        let verifiedSold = 0;
+        try {
+          verifiedSold = await getVerifiedPresaleTokensByPhase(Number(livePhase.phaseNumber));
+        } catch {}
+        const supply = Math.max(0, Number(livePhase.totalSupply || 0));
+        const tokensSold = Math.min(supply, Math.max(Number(livePhase.tokensSold || 0), verifiedSold));
+        return {
+          ...livePhase,
+          tokensSold,
+          remaining: Math.max(0, supply - tokensSold),
+          multiplier: '',
+          targetDate: '',
+        };
       }));
+      const currentSafe = safePhases[Math.max(0, Math.min(safePhases.length - 1, live.currentPhase - 1))];
 
       res.json({
         success: true,
         phases: safePhases,
         currentPhase: live.currentPhase,
         currentPhasePrice: live.price,
-        currentPhaseRemaining: live.currentRemaining,
-        totalSold: live.totalSold,
+        currentPhaseRemaining: currentSafe ? currentSafe.remaining : live.currentRemaining,
+        totalSold: Math.max(live.totalSold, safePhases.reduce((a: number, p: any) => a + Number(p.tokensSold || 0), 0)),
         presaleActive: live.active,
         presaleNXBCBalance: live.presaleBalance,
         systemConfig: publicSystemConfig,
