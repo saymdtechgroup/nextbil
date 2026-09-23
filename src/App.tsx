@@ -1590,7 +1590,6 @@ export default function App() {
               ].map((tab) => (
                 <button
                   key={tab.id}
-                  type="button"
                   onClick={() => handleScreenNavigation(tab.id as ActiveScreen)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-rajdhani font-bold whitespace-nowrap transition-all ${
                     activeSingleScreen === tab.id
@@ -1618,6 +1617,8 @@ export default function App() {
                   onSimulateFillPhase={handleSimulateFillPhase}
                   onSimulateExternalBuy={handleSimulateExternalBuy}
                   onResetPhases={handleResetPhases}
+                  totalEarningUsdt={userEarnings?.availableUsdt || 0}
+                  totalWithdrawnUsdt={userEarnings?.withdrawnUsdt || 0}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
                   nxbcBalance={nxbcBalance}
@@ -1733,6 +1734,8 @@ export default function App() {
                   onSimulateFillPhase={handleSimulateFillPhase}
                   onSimulateExternalBuy={handleSimulateExternalBuy}
                   onResetPhases={handleResetPhases}
+                  totalEarningUsdt={userEarnings?.availableUsdt || 0}
+                  totalWithdrawnUsdt={userEarnings?.withdrawnUsdt || 0}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
                   nxbcBalance={nxbcBalance}
