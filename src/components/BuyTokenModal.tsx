@@ -149,8 +149,8 @@ export const BuyTokenModal: React.FC<Props> = ({
     try {
       setBusy(true);
 
-      // Execute the real BSC purchase first. The returned transaction hash is
-      // then passed to the backend as the immutable purchase-lot proof.
+      // First execute and confirm the real BSC purchase. The transaction hash
+      // is then used as the immutable proof for the backend allocation record.
       const buyResult = await executeSmartContractBuy(
         purchaseUsd,
         null,

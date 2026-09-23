@@ -120,14 +120,10 @@ export default function App() {
          if (syncRes.ok) {
             const syncData = await syncRes.json();
             if (syncData.user) {
-               setUserEarnings((prev) => ({
-                  ...prev,
-                  availableUsdt: Number(syncData.user.availableUsdt || 0),
-                  mlmAvailableUsdt: Number(syncData.user.availableUsdt || 0),
-                  withdrawnUsdt: Number(syncData.user.totalWithdrawnUsdt || 0),
-                  tokenSellAvailableUsdt: Number(syncData.tokenSaleAvailableUsdt || prev.tokenSellAvailableUsdt || 0),
-                  tokenSellWithdrawnUsdt: Number(syncData.tokenSaleWithdrawnUsdt || prev.tokenSellWithdrawnUsdt || 0),
-               }));
+               setUserEarnings({
+                  availableUsdt: syncData.user.availableUsdt || 0,
+                  withdrawnUsdt: syncData.user.totalWithdrawnUsdt || 0
+               });
                if (syncData.user.referralCode) {
                   setUserRefCode(syncData.user.referralCode);
                }
@@ -407,7 +403,7 @@ export default function App() {
       p3Percent: 30,
       p4Percent: 20,
       p5Percent: 15,
-      dexPercent: 15,
+      livePercent: 15,
       unallocatedPercent: 0,
       totalTokensPurchased: 0,
       isLocked: false,
@@ -425,6 +421,57 @@ export default function App() {
     }
     return [];
   });
+
+  // Hydrate the user's phase-sale allocation from PostgreSQL.
+  // localStorage is only a UI cache; backend allocation data is authoritative.
+  useEffect(() => {
+    if (!walletAddress) return;
+
+    let cancelled = false;
+    const loadAllocation = async () => {
+      try {
+        const res = await fetch(`/api/presale/allocation/${encodeURIComponent(walletAddress)}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.success || cancelled) return;
+
+        const total = Math.max(0, Number(data.totalPurchasedTokens || 0));
+        const byPhase = data.allocations || {};
+        const p2 = { allocated: Number(byPhase?.[2]?.allocated || 0), sold: Number(byPhase?.[2]?.sold || 0) };
+        const p3 = { allocated: Number(byPhase?.[3]?.allocated || 0), sold: Number(byPhase?.[3]?.sold || 0) };
+        const p4 = { allocated: Number(byPhase?.[4]?.allocated || 0), sold: Number(byPhase?.[4]?.sold || 0) };
+        const p5 = { allocated: Number(byPhase?.[5]?.allocated || 0), sold: Number(byPhase?.[5]?.sold || 0) };
+        const live = { allocated: Number(data.liveHoldTokens ?? byPhase?.[6]?.allocated ?? 0), sold: 0 };
+
+        const pct = (value: number) => total > 0 ? (value / total) * 100 : 0;
+        const next: AllocationState = {
+          p2Percent: pct(p2.allocated),
+          p3Percent: pct(p3.allocated),
+          p4Percent: pct(p4.allocated),
+          p5Percent: pct(p5.allocated),
+          livePercent: pct(live.allocated),
+          unallocatedPercent: 0,
+          p2Tokens: p2,
+          p3Tokens: p3,
+          p4Tokens: p4,
+          p5Tokens: p5,
+          liveTokens: live,
+          totalTokensPurchased: total,
+          isLocked: total > 0,
+        };
+
+        setAllocation(next);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('nxbc_user_allocation', JSON.stringify(next));
+        }
+      } catch (err) {
+        console.warn('Failed to load backend phase allocation:', err);
+      }
+    };
+
+    loadAllocation();
+    const timer = window.setInterval(loadAllocation, 5000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [walletAddress]);
 
   // 10-Level Referral Plan Data (Admin Managed & Persisted)
   const defaultPlanLevels: ReferralLevel[] = [
@@ -635,14 +682,17 @@ export default function App() {
         ]);
         if (isMounted) {
           
-          const storedNx = parseFloat(localStorage.getItem('nxbc_nxbusd_balance') || '0');
-          const effectiveNx = Math.max(nxChainBalance, storedNx, 0);
+          // The blockchain is authoritative. Never use an older localStorage
+          // balance as a floor because that prevents the visible balance from
+          // decreasing immediately after a purchase.
+          const liveNx = Math.max(0, Number(nxChainBalance || 0));
+          const liveUsdt = Math.max(0, Number(uBalance || 0));
 
-          setNxbcBalance(effectiveNx);
-          setUsdtBalance(uBalance);
+          setNxbcBalance(liveNx);
+          setUsdtBalance(liveUsdt);
           if (typeof window !== 'undefined') {
-            localStorage.setItem('nxbc_nxbusd_balance', effectiveNx.toString());
-            localStorage.setItem('nxbc_usdt_balance', uBalance.toString());
+            localStorage.setItem('nxbc_nxbusd_balance', liveNx.toString());
+            localStorage.setItem('nxbc_usdt_balance', liveUsdt.toString());
           }
         }
       } catch (e) {
@@ -833,7 +883,7 @@ export default function App() {
       p3Percent,
       p4Percent,
       p5Percent,
-      dexPercent,
+      livePercent: dexPercent,
       unallocatedPercent: 0,
       p2Tokens: {
         allocated: (allocation.p2Tokens?.allocated || 0) + p2TokensAllocated,
@@ -850,6 +900,10 @@ export default function App() {
       p5Tokens: {
         allocated: (allocation.p5Tokens?.allocated || 0) + p5TokensAllocated,
         sold: allocation.p5Tokens?.sold || 0,
+      },
+      liveTokens: {
+        allocated: (allocation.liveTokens?.allocated || 0) + dexTokens,
+        sold: allocation.liveTokens?.sold || 0,
       },
       totalTokensPurchased: Number(allocation.totalTokensPurchased || 0) + safeTokenAmount,
       isLocked: true,
@@ -915,21 +969,23 @@ export default function App() {
     }
 
     // STEP 3: update local UI only after backend success.
-    // Immediately re-read both blockchain balances so the Home/Buy UI reflects
-    // the actual post-purchase wallet state instead of waiting for the 15s poll.
+    // Immediately refresh the real BSC balances so the Home screen shows the
+    // USDT deduction / NXBC receipt without waiting for the 15s polling timer.
     try {
-      const [freshNxbc, freshUsdt] = await Promise.all([
+      const [freshNx, freshUsdt] = await Promise.all([
         fetchOnChainTokenBalance(NXBC_CONTRACT, walletAddress),
         fetchOnChainTokenBalance(USDT_CONTRACT, walletAddress),
       ]);
-      setNxbcBalance(Math.max(0, freshNxbc));
-      setUsdtBalance(Math.max(0, freshUsdt));
+      const nx = Math.max(0, Number(freshNx || 0));
+      const usdt = Math.max(0, Number(freshUsdt || 0));
+      setNxbcBalance(nx);
+      setUsdtBalance(usdt);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('nxbc_nxbusd_balance', String(Math.max(0, freshNxbc)));
-        localStorage.setItem('nxbc_usdt_balance', String(Math.max(0, freshUsdt)));
+        localStorage.setItem('nxbc_nxbusd_balance', String(nx));
+        localStorage.setItem('nxbc_usdt_balance', String(usdt));
       }
-    } catch (balanceRefreshError) {
-      console.warn('Immediate post-purchase wallet balance refresh failed:', balanceRefreshError);
+    } catch (balanceError) {
+      console.warn('Immediate post-purchase balance refresh failed:', balanceError);
     }
 
     setAllocation(updatedAlloc);
@@ -976,7 +1032,7 @@ export default function App() {
       p3Percent: 30,
       p4Percent: 20,
       p5Percent: 15,
-      dexPercent: 15,
+      livePercent: 15,
       unallocatedPercent: 0,
       totalTokensPurchased: 0,
       isLocked: false,
@@ -1365,7 +1421,7 @@ export default function App() {
     }
 
     if (walletType === 'token_sell') {
-      const availTokenSell = userEarnings?.availableUsdt || 0;
+      const availTokenSell = userEarnings?.tokenSellAvailableUsdt || 0;
       if (amountUsd > availTokenSell) {
         console.warn('Withdrawal rejected: insufficient token sell balance');
         return;
@@ -1373,8 +1429,9 @@ export default function App() {
 
       setUserEarnings(prev => ({
         ...prev,
-        availableUsdt: Math.max(0, (prev.availableUsdt || 0) - amountUsd),
-        withdrawnUsdt: (prev.withdrawnUsdt || 0) + amountUsd,
+        availableUsdt: prev.availableUsdt || 0,
+        tokenSellAvailableUsdt: Math.max(0, (prev.tokenSellAvailableUsdt || 0) - amountUsd),
+        tokenSellWithdrawnUsdt: (prev.tokenSellWithdrawnUsdt || 0) + amountUsd,
       }));
 
       const newTx: Transaction = {
@@ -1765,10 +1822,6 @@ export default function App() {
                   onSimulateFillPhase={handleSimulateFillPhase}
                   onSimulateExternalBuy={handleSimulateExternalBuy}
                   onResetPhases={handleResetPhases}
-                  onNavigate={(screen) => {
-                    setViewMode('single');
-                    setActiveSingleScreen(screen);
-                  }}
                   walletConnected={walletConnected}
                   walletAddress={walletAddress}
                   nxbcBalance={nxbcBalance}
@@ -1877,7 +1930,7 @@ export default function App() {
           p3Percent: allocation.p3Percent,
           p4Percent: allocation.p4Percent,
           p5Percent: allocation.p5Percent,
-          dexPercent: allocation.dexPercent,
+          dexPercent: allocation.livePercent,
         }}
       />
 
