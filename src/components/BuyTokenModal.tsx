@@ -46,6 +46,8 @@ type Props = {
     tokensSold: number;
   };
   initialAllocation?: AllocationInput;
+  directBuyerInviteToken?: string;
+  directBuyerInfo?: { phaseNumber?: number; remainingTokens?: number; tokenPrice?: number; sellerWalletMasked?: string; expiresAt?: string } | null;
 };
 
 const num = (v: any, d = 0) => Number.isFinite(Number(v)) ? Number(v) : d;
@@ -65,8 +67,12 @@ export const BuyTokenModal: React.FC<Props> = ({
   usdtBalance = 0,
   activePhaseInfo,
   initialAllocation,
+  directBuyerInviteToken,
+  directBuyerInfo,
 }) => {
   const [usd, setUsd] = useState('');
+  const currentPhaseNumber = Number(activePhaseInfo?.phaseNumber || 1);
+  const allowedPhaseKeys = useMemo(() => ['p2','p3','p4','p5'].filter(k => Number(k.slice(1)) > currentPhaseNumber) as Array<'p2'|'p3'|'p4'|'p5'>, [currentPhaseNumber]);
   const [a, setA] = useState(DEFAULT_ALLOCATION);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -78,17 +84,26 @@ export const BuyTokenModal: React.FC<Props> = ({
     setBusy(false);
 
     const incoming = {
-      p2: clamp(num(initialAllocation?.p2Percent, DEFAULT_ALLOCATION.p2)),
-      p3: clamp(num(initialAllocation?.p3Percent, DEFAULT_ALLOCATION.p3)),
-      p4: clamp(num(initialAllocation?.p4Percent, DEFAULT_ALLOCATION.p4)),
-      p5: clamp(num(initialAllocation?.p5Percent, DEFAULT_ALLOCATION.p5)),
-      dex: clamp(num(initialAllocation?.dexPercent, DEFAULT_ALLOCATION.dex)),
+      p2: clamp(num(initialAllocation?.p2Percent, 0)),
+      p3: clamp(num(initialAllocation?.p3Percent, 0)),
+      p4: clamp(num(initialAllocation?.p4Percent, 0)),
+      p5: clamp(num(initialAllocation?.p5Percent, 0)),
+      dex: clamp(num(initialAllocation?.dexPercent, 0)),
     };
-
-    // If the parent still has the old zero/100 state, use the safe 20/30/20/15/15
-    // defaults rather than opening the modal with an impossible 0% allocation.
+    // Never carry an allocation into the current/past presale phase. Those
+    // phases are already purchased and cannot become FIFO sell reservations.
+    for (const key of (['p2','p3','p4','p5'] as const)) {
+      if (Number(key.slice(1)) <= currentPhaseNumber) incoming[key] = 0;
+    }
     const totalIncoming = incoming.p2 + incoming.p3 + incoming.p4 + incoming.p5 + incoming.dex;
-    setA(totalIncoming <= 0.000001 ? DEFAULT_ALLOCATION : incoming);
+    if (totalIncoming <= 0.000001) {
+      incoming.dex = 100;
+    } else {
+      // Make any stale allocation sum to 100 by assigning the remainder to DEX/LIVE.
+      const futureTotal = incoming.p2 + incoming.p3 + incoming.p4 + incoming.p5;
+      incoming.dex = clamp(100 - futureTotal);
+    }
+    setA(incoming);
   }, [isOpen, initialAllocation]);
 
   const purchaseUsd = Math.max(0, num(usd));
@@ -118,7 +133,13 @@ export const BuyTokenModal: React.FC<Props> = ({
   };
 
   const preset = (next: typeof DEFAULT_ALLOCATION) => {
-    setA(next);
+    const safe = { ...next };
+    for (const key of (['p2','p3','p4','p5'] as const)) {
+      if (!allowedPhaseKeys.includes(key)) safe[key] = 0;
+    }
+    const futureTotal = safe.p2 + safe.p3 + safe.p4 + safe.p5;
+    safe.dex = clamp(100 - futureTotal);
+    setA(safe);
     setError('');
   };
 
@@ -149,8 +170,8 @@ export const BuyTokenModal: React.FC<Props> = ({
     try {
       setBusy(true);
 
-      // First execute and confirm the real BSC purchase. The transaction hash
-      // is then used as the immutable proof for the backend allocation record.
+      // Execute the real BSC purchase first. The returned transaction hash is
+      // then passed to the backend as the immutable purchase-lot proof.
       const buyResult = await executeSmartContractBuy(
         purchaseUsd,
         null,
@@ -167,8 +188,8 @@ export const BuyTokenModal: React.FC<Props> = ({
       }
 
       await onConfirmPurchase(
-        tokens,
-        purchaseUsd,
+        Number(buyResult.tokenAmount || tokens),
+        Number(buyResult.usdtAmount || purchaseUsd),
         {
           p1Percent: 0,
           p2Percent: a.p2,
@@ -179,7 +200,8 @@ export const BuyTokenModal: React.FC<Props> = ({
           unallocatedPercent: 0,
         },
         buyResult.txHash,
-        'USDT'
+        'USDT',
+        directBuyerInviteToken
       );
       onClose();
     } catch (e: any) {
@@ -219,6 +241,12 @@ export const BuyTokenModal: React.FC<Props> = ({
         </div>
 
         <div className="p-4 space-y-3">
+          {directBuyerInfo && (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3">
+              <div className="text-[10px] font-black text-amber-300">DIRECT BUYER MATCH</div>
+              <div className="text-[9px] text-slate-300 mt-1">Phase {directBuyerInfo.phaseNumber} · Available {fmt(directBuyerInfo.remainingTokens)} NXBC · Seller {directBuyerInfo.sellerWalletMasked}</div>
+            </div>
+          )}
           <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -292,8 +320,9 @@ export const BuyTokenModal: React.FC<Props> = ({
                     <input
                       type="number" min="0" max="100" step="0.01"
                       value={a[key]}
+                      disabled={!allowedPhaseKeys.includes(key)}
                       onChange={e => set(key, e.target.value)}
-                      className="w-20 rounded-lg bg-[#101527] px-2 py-2 text-right font-black outline-none border border-white/10"
+                      className="w-20 rounded-lg bg-[#101527] px-2 py-2 text-right font-black outline-none border border-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
                     />
                     <span className="ml-1 text-[10px] text-slate-500">%</span>
                   </div>

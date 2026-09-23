@@ -89,67 +89,92 @@ const ERC20_ABI = [
 ];
 
 const ERC20_TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
-const DEFAULT_NXBC_TOKEN_ADDRESS = "0x94D064AFDB04E3489C313054260929588b38dF85";
+const DEFAULT_NXBC_TOKEN_ADDRESS = "0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1";
 const DEFAULT_BSC_RPC = "https://bsc-dataseed.binance.org/";
 const DEFAULT_USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
 const DEFAULT_PRESALE_ADDRESS = "0x0C4a86691B3937549BFa688211EbF56520B64981";
 const DEFAULT_ADMIN_WALLET = "0x8d1abCa8Cf0f42799b9a76254710e979bd59c261";
 
 
-const LIVE_PRESALE_PHASES = [
-  { phaseNumber: 1, name: 'Phase 1', shortName: 'P1', rate: 0.01, totalSupply: 1_000_000 },
-  { phaseNumber: 2, name: 'Phase 2', shortName: 'P2', rate: 0.10, totalSupply: 2_500_000 },
-  { phaseNumber: 3, name: 'Phase 3', shortName: 'P3', rate: 1.00, totalSupply: 7_000_000 },
-  { phaseNumber: 4, name: 'Phase 4', shortName: 'P4', rate: 10.00, totalSupply: 19_500_000 },
-  { phaseNumber: 5, name: 'Phase 5', shortName: 'P5', rate: 100.00, totalSupply: 40_000_000 },
+const LIVE_PRESALE_PHASE_NAMES = [
+  { name: 'Phase 1', shortName: 'P1' },
+  { name: 'Phase 2', shortName: 'P2' },
+  { name: 'Phase 3', shortName: 'P3' },
+  { name: 'Phase 4', shortName: 'P4' },
+  { name: 'Phase 5', shortName: 'P5' },
 ] as const;
 
 async function getLivePresaleState() {
   const rpcUrl = process.env.RPC_URL || DEFAULT_BSC_RPC;
-  const presaleAddress = process.env.NXBC_PRESALE_CONTRACT_ADDRESS || DEFAULT_PRESALE_ADDRESS;
+  const configuredPresale = String(process.env.NXBC_PRESALE_CONTRACT_ADDRESS || '').trim();
+  const presaleAddress = configuredPresale || DEFAULT_PRESALE_ADDRESS;
+  if (presaleAddress.toLowerCase() !== DEFAULT_PRESALE_ADDRESS.toLowerCase()) {
+    throw new Error('NXBC_PRESALE_CONTRACT_ADDRESS does not match the current live presale contract.');
+  }
+
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   const presale = new ethers.Contract(presaleAddress, [
     'function currentPhase() view returns (uint256)',
     'function currentPhasePrice() view returns (uint256)',
+    'function currentPhaseAllocation() view returns (uint256)',
     'function currentPhaseSold() view returns (uint256)',
     'function currentPhaseRemaining() view returns (uint256)',
     'function totalSold() view returns (uint256)',
     'function presaleActive() view returns (bool)',
     'function presaleNXBCBalance() view returns (uint256)',
+    'function phases(uint256) view returns (uint256 price, uint256 allocation, uint256 sold)',
   ], provider);
 
-  const [currentPhaseRaw, priceRaw, soldRaw, remainingRaw, totalSoldRaw, active, presaleBalanceRaw] = await Promise.all([
+  const [currentPhaseRaw, active, totalSoldRaw, presaleBalanceRaw, phaseRows] = await Promise.all([
     presale.currentPhase(),
-    presale.currentPhasePrice(),
-    presale.currentPhaseSold(),
-    presale.currentPhaseRemaining(),
-    presale.totalSold(),
     presale.presaleActive(),
+    presale.totalSold(),
     presale.presaleNXBCBalance(),
+    Promise.all(Array.from({ length: 5 }, (_, i) => presale.phases(i))),
   ]);
 
   const currentPhase = Number(currentPhaseRaw);
-  const currentSold = Number(ethers.formatUnits(soldRaw, 18));
-  const currentRemaining = Number(ethers.formatUnits(remainingRaw, 18));
   const totalSold = Number(ethers.formatUnits(totalSoldRaw, 18));
-  const price = Number(ethers.formatUnits(priceRaw, 18));
   const presaleBalance = Number(ethers.formatUnits(presaleBalanceRaw, 18));
-
-  const phases = LIVE_PRESALE_PHASES.map((p) => ({
-    ...p,
-    rateLabel: `$${p.rate.toFixed(2)}`,
-    tokensSold: p.phaseNumber < currentPhase ? p.totalSupply : p.phaseNumber === currentPhase ? currentSold : 0,
-    status: !active && p.phaseNumber === 5 && currentPhase === 5
+  const normalizedPhases = phaseRows.map((row: any, idx: number) => {
+    const price = Number(ethers.formatUnits(row.price, 18));
+    const totalSupply = Number(ethers.formatUnits(row.allocation, 18));
+    const tokensSold = Number(ethers.formatUnits(row.sold, 18));
+    const remaining = Math.max(0, totalSupply - tokensSold);
+    const phaseNumber = idx + 1;
+    const isCurrent = phaseNumber === currentPhase;
+    const status = phaseNumber < currentPhase
       ? 'completed'
-      : p.phaseNumber < currentPhase
-        ? 'completed'
-        : p.phaseNumber === currentPhase
-          ? 'active'
-          : 'upcoming',
-    unlockRequirement: p.phaseNumber === 1 ? 'Live Now' : `After P${p.phaseNumber - 1}`,
-  }));
+      : isCurrent
+        ? (!active && currentPhase === 5 ? 'completed' : 'active')
+        : 'upcoming';
+    return {
+      id: `p${phaseNumber}`,
+      phaseNumber,
+      name: LIVE_PRESALE_PHASE_NAMES[idx].name,
+      shortName: LIVE_PRESALE_PHASE_NAMES[idx].shortName,
+      rate: price,
+      rateLabel: `$${price.toFixed(2)}`,
+      totalSupply,
+      tokensSold,
+      remaining,
+      status,
+      unlockRequirement: phaseNumber === 1 ? 'Live Now' : `After P${phaseNumber - 1}`,
+    };
+  });
 
-  return { currentPhase, price, currentSold, currentRemaining, totalSold, active, presaleBalance, phases };
+  const current = normalizedPhases[Math.max(0, Math.min(4, currentPhase - 1))];
+  return {
+    currentPhase,
+    price: current?.rate || 0,
+    currentAllocation: current?.totalSupply || 0,
+    currentSold: current?.tokensSold || 0,
+    currentRemaining: current?.remaining || 0,
+    totalSold,
+    active,
+    presaleBalance,
+    phases: normalizedPhases,
+  };
 }
 
 function settlementEndpointsEnabled(): boolean {
@@ -186,7 +211,7 @@ async function verifyPresalePurchaseOnChain(params: {
   buyer: string;
   usdtAmount: number;
   nxbcAmount: number;
-}): Promise<{ ok: boolean; pending?: boolean; error?: string }> {
+}): Promise<{ ok: boolean; pending?: boolean; error?: string; phase?: number; usdtAmount?: number; nxbcAmount?: number }> {
   const { txHash, buyer, usdtAmount, nxbcAmount } = params;
   if (!/^0x[a-fA-F0-9]{64}$/.test(String(txHash || ""))) {
     return { ok: false, error: "Invalid BSC transaction hash." };
@@ -246,6 +271,9 @@ async function verifyPresalePurchaseOnChain(params: {
   let usdtPaid = false;
   let nxbcDelivered = false;
   let purchaseEventMatched = false;
+  let verifiedPhase = 0;
+  let verifiedUsdt = 0;
+  let verifiedNxbc = 0;
 
   for (const log of receipt.logs) {
     const logAddress = log.address.toLowerCase();
@@ -290,6 +318,9 @@ async function verifyPresalePurchaseOnChain(params: {
           const eventNxbc = parsed.args.nxbcAmount as bigint;
           if (eventBuyer === buyer.toLowerCase() && eventUsdt === usdtRaw && eventNxbc === nxbcRaw) {
             purchaseEventMatched = true;
+            verifiedPhase = Number(parsed.args.phase);
+            verifiedUsdt = Number(ethers.formatUnits(eventUsdt, 18));
+            verifiedNxbc = Number(ethers.formatUnits(eventNxbc, 18));
           }
         }
       } catch {}
@@ -307,7 +338,7 @@ async function verifyPresalePurchaseOnChain(params: {
     return { ok: false, error: "The BSC transaction does not contain the expected NXBC delivery from the current presale contract." };
   }
 
-  return { ok: true };
+  return { ok: true, phase: verifiedPhase || undefined, usdtAmount: verifiedUsdt || usdtAmount, nxbcAmount: verifiedNxbc || nxbcAmount };
 }
 
 /**
@@ -1004,12 +1035,16 @@ async function verifyPendingPresalePurchases() {
       }
 
       await db.update(transactions).set({ status: 'completed' }).where(eq(transactions.id, txRecord.id));
-      await finalizeConfirmedPurchase(user, Number(txRecord.tokenAmount), Number(txRecord.amountUsdt), Number(txRecord.phaseIndex || 1));
+      const verifiedPhase = Number(verification.phase || txRecord.phaseIndex || 1);
+      const verifiedTokens = Number(verification.nxbcAmount || txRecord.tokenAmount);
+      const verifiedUsdt = Number(verification.usdtAmount || txRecord.amountUsdt);
+      await db.update(transactions).set({ phaseIndex: verifiedPhase, tokenAmount: verifiedTokens, amountUsdt: verifiedUsdt }).where(eq(transactions.id, txRecord.id));
+      await finalizeConfirmedPurchase(user, verifiedTokens, verifiedUsdt, verifiedPhase);
       await matchVerifiedBuyerToPhaseQueue({
         buyerUserId: user.id,
         buyerWallet: user.walletAddress,
-        phaseNumber: Number(txRecord.phaseIndex || 1),
-        buyerTokenAmount: Number(txRecord.tokenAmount),
+        phaseNumber: verifiedPhase,
+        buyerTokenAmount: verifiedTokens,
       });
       console.log(`[PRESALE VERIFY] Purchase #${txRecord.id} confirmed on-chain, finalized, and FIFO matched.`);
     } catch (err: any) {
@@ -2153,44 +2188,19 @@ async function startServer() {
         return res.status(400).json({ error: "Missing required purchase fields" });
       }
 
-      // --- SERVER-SIDE LIVE CONTRACT VALIDATION ------------------------------
-      // The deployed NXBCPresale contract on BSC Mainnet is authoritative for
-      // phase, price, remaining supply and whether the presale is active.
-      const live = await getLivePresaleState();
-      if (!live.active) {
-        return res.status(403).json({ error: 'Presale is currently inactive on the live contract.' });
-      }
-
-      const activePhaseNumber = live.currentPhase;
-      const activePhase = live.phases[activePhaseNumber - 1];
-      if (!activePhase) {
-        return res.status(400).json({ error: 'No valid active phase exists on the live contract.' });
-      }
-
-      const activePhasePrice = live.price;
-      const submittedPrice = Number(tokenPrice);
-      if (!Number.isFinite(submittedPrice) || Math.abs(submittedPrice - activePhasePrice) > 0.000001) {
-        return res.status(400).json({ error: 'Submitted token price does not match the live contract phase price.' });
-      }
-
+      // The transaction receipt is the source of truth for the phase. A purchase
+      // that exactly sells out a phase advances currentPhase inside the same
+      // contract transaction, so reading currentPhase after mining can return the
+      // NEXT phase even though this transaction was bought at the previous price.
       const requestedUsdt = Number(amountUsdt);
       const requestedTokens = Number(tokenAmount);
       if (!Number.isFinite(requestedUsdt) || requestedUsdt <= 0 || !Number.isFinite(requestedTokens) || requestedTokens <= 0) {
         return res.status(400).json({ error: 'Invalid purchase amount.' });
       }
-
-      const expectedTokens = requestedUsdt / activePhasePrice;
-      if (Math.abs(expectedTokens - requestedTokens) / Math.max(expectedTokens, 1) > 0.000001) {
-        return res.status(400).json({ error: 'Token amount does not match the live contract price.' });
+      const submittedPrice = Number(tokenPrice);
+      if (!Number.isFinite(submittedPrice) || submittedPrice <= 0) {
+        return res.status(400).json({ error: 'Invalid purchase price.' });
       }
-
-      if (requestedTokens > live.currentRemaining + 1e-12) {
-        return res.status(400).json({
-          error: 'Purchase exceeds the live phase remaining supply.',
-          remainingInPhase: live.currentRemaining,
-        });
-      }
-      // ------------------------------------------------------------------------
 
       // SECURITY: a syntactically valid tx hash is NOT proof of payment. Verify
       // the real BSC receipt, buyer, exact USDT treasury payment, and exact NXBC
@@ -2198,6 +2208,10 @@ async function startServer() {
       // side effects (MLM commissions, phase progression, qualification, etc.).
       let purchaseStatus: 'completed' | 'pending_verification' | 'failed' = 'pending_verification';
       const hasValidTxHash = typeof txHash === 'string' && /^0x[a-fA-F0-9]{64}$/.test(txHash);
+      let verifiedPhaseNumber = 0;
+      let verifiedPurchasePrice = submittedPrice;
+      let verifiedPurchaseTokens = requestedTokens;
+      let verifiedPurchaseUsdt = requestedUsdt;
       if (hasValidTxHash) {
         const chainCheck = await verifyPresalePurchaseOnChain({
           txHash,
@@ -2205,8 +2219,16 @@ async function startServer() {
           usdtAmount: requestedUsdt,
           nxbcAmount: requestedTokens,
         });
-        if (chainCheck.ok) purchaseStatus = 'completed';
-        else if (chainCheck.pending) purchaseStatus = 'pending_verification';
+        if (chainCheck.ok) {
+          purchaseStatus = 'completed';
+          verifiedPhaseNumber = Number(chainCheck.phase || 0);
+          verifiedPurchaseTokens = Number(chainCheck.nxbcAmount || requestedTokens);
+          verifiedPurchaseUsdt = Number(chainCheck.usdtAmount || requestedUsdt);
+          verifiedPurchasePrice = verifiedPurchaseUsdt / Math.max(verifiedPurchaseTokens, 1e-18);
+          if (!verifiedPhaseNumber || !Number.isFinite(verifiedPurchasePrice) || verifiedPurchasePrice <= 0) {
+            return res.status(400).json({ success: false, error: 'Purchase event was verified, but its phase data could not be decoded safely.' });
+          }
+        } else if (chainCheck.pending) purchaseStatus = 'pending_verification';
         else purchaseStatus = 'failed';
       }
       // ------------------------------------------------------------------------
@@ -2241,10 +2263,10 @@ async function startServer() {
       const [tx] = await db.insert(transactions).values({
         userId: user.id,
         type: 'buy_presale',
-        amountUsdt: Number(amountUsdt),
-        tokenAmount: Number(tokenAmount),
-        tokenPrice: activePhasePrice,
-        phaseIndex: activePhaseNumber,
+        amountUsdt: purchaseStatus === 'completed' ? verifiedPurchaseUsdt : Number(amountUsdt),
+        tokenAmount: purchaseStatus === 'completed' ? verifiedPurchaseTokens : Number(tokenAmount),
+        tokenPrice: purchaseStatus === 'completed' ? verifiedPurchasePrice : submittedPrice,
+        phaseIndex: purchaseStatus === 'completed' ? verifiedPhaseNumber : 1,
         status: purchaseStatus,
         txHash: hasValidTxHash ? txHash : null,
       }).returning();
@@ -2262,9 +2284,9 @@ async function startServer() {
 
       const { newInvested, isNowMlmQualified } = await finalizeConfirmedPurchase(
         user,
-        Number(tokenAmount),
-        Number(amountUsdt),
-        activePhaseNumber
+        verifiedPurchaseTokens,
+        verifiedPurchaseUsdt,
+        verifiedPhaseNumber
       );
 
       // VERIFIED PURCHASE -> FIFO MATCHING. This is the only place where a real
@@ -2275,8 +2297,8 @@ async function startServer() {
       const fifoSettlement = await matchVerifiedBuyerToPhaseQueue({
         buyerUserId: user.id,
         buyerWallet: normalizedAddress,
-        phaseNumber: activePhaseNumber,
-        buyerTokenAmount: Number(tokenAmount),
+        phaseNumber: verifiedPhaseNumber,
+        buyerTokenAmount: verifiedPurchaseTokens,
         directBuyerInviteToken: typeof directBuyerInviteToken === 'string' ? directBuyerInviteToken : undefined,
       });
 
@@ -2295,7 +2317,7 @@ async function startServer() {
           ? "MLM Leader Qualified ($100+ Total Investment)" 
           : `Investor Mode ($${newInvested.toFixed(2)} / $100 USD to qualify for MLM commissions)`,
         fifoSettlement: {
-          buyerTokens: Number(tokenAmount),
+          buyerTokens: verifiedPurchaseTokens,
           userSharePercent: fifoSettlement.sellerSharePercent,
           adminSharePercent: fifoSettlement.companySharePercent,
           userShareTokens: fifoSettlement.userShareTokens,
@@ -2817,13 +2839,6 @@ async function startServer() {
   app.get("/api/presale/config", async (_req, res) => {
     try {
       const live = await getLivePresaleState();
-      const phaseRecord = await db.query.systemConfigs.findFirst({
-        where: eq(systemConfigs.key, "phases"),
-      });
-      const dbPhases = phaseRecord?.value ? JSON.parse(phaseRecord.value) : [];
-      const byPhase = new Map<number, any>(
-        Array.isArray(dbPhases) ? dbPhases.map((p: any) => [Number(p.phaseNumber || 0), p]) : []
-      );
 
       const socialRecord = await db.query.systemConfigs.findFirst({
         where: eq(systemConfigs.key, "systemConfig"),
@@ -2857,23 +2872,13 @@ async function startServer() {
         } catch {}
       }
 
-      const safePhases = live.phases.map((livePhase: any) => {
-        const configured = byPhase.get(livePhase.phaseNumber) || {};
-        return {
-          id: configured.id || `p${livePhase.phaseNumber}`,
-          phaseNumber: livePhase.phaseNumber,
-          name: livePhase.name,
-          shortName: livePhase.shortName,
-          rate: livePhase.rate,
-          rateLabel: livePhase.rateLabel,
-          totalSupply: livePhase.totalSupply,
-          tokensSold: livePhase.tokensSold,
-          status: livePhase.status,
-          multiplier: configured.multiplier || '',
-          unlockRequirement: livePhase.unlockRequirement,
-          targetDate: configured.targetDate || '',
-        };
-      });
+      const safePhases = live.phases.map((livePhase: any) => ({
+        ...livePhase,
+        // Financial phase fields are read only from the deployed BSC contract.
+        // DB/admin config may not overwrite price, allocation, sold or status.
+        multiplier: '',
+        targetDate: '',
+      }));
 
       res.json({
         success: true,

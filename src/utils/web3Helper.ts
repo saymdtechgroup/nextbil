@@ -10,7 +10,7 @@ const waitWithTimeout = (promise: Promise<any>, ms: number) => {
 // Web3 Utility Helpers for BSC Mainnet Token Balances and Strict On-Chain Receipt Verification
 
 
-export const NXBC_TOKEN_CONTRACT = '0x94D064AFDB04E3489C313054260929588b38dF85';
+export const NXBC_TOKEN_CONTRACT = '0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1';
 export const NXBC_PRESALE_CONTRACT = '0x0C4a86691B3937549BFa688211EbF56520B64981';
 export const NXBC_CONTRACT = NXBC_TOKEN_CONTRACT; // Standard token import points to the actual BEP-20 token
 export const USDT_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
@@ -332,7 +332,7 @@ export async function executeSmartContractBuy(
   _p5Tokens: number,
   _dexTokens: number,
   onStatusUpdate: (msg: string) => void
-): Promise<{ success: boolean; txHash?: string; error?: string }> {
+): Promise<{ success: boolean; txHash?: string; error?: string; tokenAmount?: number; usdtAmount?: number; phaseNumber?: number; tokenPrice?: number }> {
   if (typeof window === 'undefined') return { success: false, error: 'Web3 window not available' };
 
   const ethProvider =
@@ -444,7 +444,27 @@ export async function executeSmartContractBuy(
       return { success: false, error: 'NXBC purchase transaction reverted on BSC.' };
     }
 
-    return { success: true, txHash: buyTx.hash };
+    let actualTokens = expectedTokens;
+    let actualUsdt = Number(amountUsd);
+    let actualPhase = Number(await presaleContract.currentPhase());
+    try {
+      const iface = new ethers.Interface([
+        'event TokensPurchased(address indexed buyer, uint256 indexed phase, uint256 usdtAmount, uint256 nxbcAmount)'
+      ]);
+      for (const log of receipt.logs || []) {
+        if (String(log.address).toLowerCase() !== NXBC_PRESALE_CONTRACT.toLowerCase()) continue;
+        try {
+          const parsed = iface.parseLog(log);
+          if (parsed?.name === 'TokensPurchased') {
+            actualPhase = Number(parsed.args.phase);
+            actualUsdt = Number(ethers.formatUnits(parsed.args.usdtAmount, 18));
+            actualTokens = Number(ethers.formatUnits(parsed.args.nxbcAmount, 18));
+            break;
+          }
+        } catch {}
+      }
+    } catch {}
+    return { success: true, txHash: buyTx.hash, tokenAmount: actualTokens, usdtAmount: actualUsdt, phaseNumber: actualPhase, tokenPrice: actualUsdt / Math.max(actualTokens, 1e-18) };
   } catch (err: any) {
     console.error('Smart Contract Buy Error:', err);
     return { success: false, error: err?.shortMessage || err?.reason || err?.message || 'Transaction failed or rejected by user.' };

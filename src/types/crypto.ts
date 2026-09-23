@@ -19,7 +19,8 @@ export interface AllocationState {
   p3Percent: number;
   p4Percent: number;
   p5Percent: number;
-  livePercent: number;
+  dexPercent: number;
+  livePercent?: number;
   unallocatedPercent: number;
   p1Tokens?: PhaseAllocation;
   p2Tokens?: PhaseAllocation;

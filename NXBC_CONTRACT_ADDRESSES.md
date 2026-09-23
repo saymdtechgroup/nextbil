@@ -2,7 +2,7 @@
 
 These are the addresses for the current live setup.
 
-- **NXBC token contract:** `0x94D064AFDB04E3489C313054260929588b38dF85`
+- **NXBC token contract:** `0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1`
 - **Current live presale contract:** `0x0C4a86691B3937549BFa688211EbF56520B64981`
 - **Admin / NXBC return wallet:** `0x8d1abCa8Cf0f42799b9a76254710e979bd59c261`
 - **BSC USDT:** `0x55d398326f99059fF775485246999027B3197955`

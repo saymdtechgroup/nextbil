@@ -138,7 +138,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   const p3Tokens = Number(allocation.p3Tokens?.allocated ?? Math.round(totalTokens * ((allocation.p3Percent || 0) / 100)));
   const p4Tokens = Number(allocation.p4Tokens?.allocated ?? Math.round(totalTokens * ((allocation.p4Percent || 0) / 100)));
   const p5Tokens = Number(allocation.p5Tokens?.allocated ?? Math.round(totalTokens * ((allocation.p5Percent || 0) / 100)));
-  const liveTokens = Number(allocation.liveTokens ?? Math.round(totalTokens * ((allocation.livePercent || 0) / 100)));
+  const liveTokens = Number(allocation.liveTokens ?? Math.round(totalTokens * ((allocation.dexPercent || 0) / 100)));
 
   // Projected values are based on the actual allocated token quantities, not
   // percentages. This prevents the Assets page from showing $0 when allocation
@@ -300,7 +300,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               <div style={{ width: `${allocation.p3Percent || 0}%` }} title={`Phase 3: ${allocation.p3Percent || 0}%`} className="h-full bg-yellow-300 transition-all" />
               <div style={{ width: `${allocation.p4Percent || 0}%` }} title={`Phase 4: ${allocation.p4Percent || 0}%`} className="h-full bg-cyan-400 transition-all" />
               <div style={{ width: `${allocation.p5Percent || 0}%` }} title={`Phase 5: ${allocation.p5Percent || 0}%`} className="h-full bg-purple-400 transition-all" />
-              <div style={{ width: `${allocation.livePercent || 0}%` }} title={`DEX / LIVE: ${allocation.livePercent || 0}%`} className="h-full bg-emerald-400 transition-all" />
+              <div style={{ width: `${allocation.dexPercent || 0}%` }} title={`DEX / LIVE: ${allocation.dexPercent || 0}%`} className="h-full bg-emerald-400 transition-all" />
             </div>
 
             <div className="mt-1.5 grid grid-cols-5 gap-1 text-[7px] sm:text-[8px] font-mono-crypto text-center">
@@ -308,7 +308,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               <div className="text-yellow-300">P3 {allocation.p3Percent}%</div>
               <div className="text-cyan-300">P4 {allocation.p4Percent}%</div>
               <div className="text-purple-300">P5 {allocation.p5Percent}%</div>
-              <div className="text-emerald-300">DEX / LIVE {allocation.livePercent}%</div>
+              <div className="text-emerald-300">DEX / LIVE {allocation.dexPercent}%</div>
             </div>
           </div>
 

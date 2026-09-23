@@ -69,7 +69,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   const progressPercent = phaseSupply > 0 ? Math.min(100, (tokensSold / phaseSupply) * 100) : 0;
   const currentRate = Number(activePhase?.rate) || 0;
   const nextPhase = activePhase ? phases.find((p) => p.phaseNumber === (activePhase.phaseNumber ?? 1) + 1) : undefined;
-  const projectTotalSupply = 70_000_000;
+  const projectTotalSupply = phases.reduce((sum, phase) => sum + (Number(phase.totalSupply) || 0), 0);
 
   const go = (screen: ActiveScreen) => {
     // Home shortcut navigation: delegate to App's single-screen router.
