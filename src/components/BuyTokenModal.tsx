@@ -88,7 +88,7 @@ export const BuyTokenModal: React.FC<Props> = ({
     // defaults rather than opening the modal with an impossible 0% allocation.
     const totalIncoming = incoming.p2 + incoming.p3 + incoming.p4 + incoming.p5 + incoming.dex;
     setA(totalIncoming <= 0.000001 ? DEFAULT_ALLOCATION : incoming);
-  }, [isOpen, initialAllocation]);
+  }, [isOpen]);
 
   const purchaseUsd = Math.max(0, num(usd));
   const tokens = currentRate > 0 ? purchaseUsd / currentRate : 0;

@@ -20,8 +20,8 @@ interface ScreenOneAcquisitionProps {
   sellQueue?: QueueEntry[];
   walletConnected: boolean;
   walletAddress: string;
-  totalEarningUsdt: number;
-  totalWithdrawnUsdt: number;
+  totalEarningUsdt?: number;
+  totalWithdrawnUsdt?: number;
 }
 
 export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
@@ -36,6 +36,45 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
     completedPurchases: 0,
     verified: true,
   });
+
+  // Live presale state: BSC-backed API is the source of truth for the
+  // active phase sold/remaining figures shown on Home.
+  const [livePhase, setLivePhase] = useState<{
+    phaseNumber: number;
+    rate: number;
+    totalSupply: number;
+    tokensSold: number;
+    status: string;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadLivePhase = async () => {
+      try {
+        const res = await fetch('/api/presale/config', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.success) {
+          setLivePhase({
+            phaseNumber: Number(data.currentPhase || 1),
+            rate: Number(data.currentPhasePrice || 0),
+            totalSupply: Number(
+              data.phases?.find((p: any) => Number(p.phaseNumber) === Number(data.currentPhase))?.totalSupply || 0
+            ),
+            tokensSold: Number(data.currentPhaseSold || 0),
+            status: data.presaleActive ? 'active' : 'upcoming',
+          });
+        }
+      } catch {}
+    };
+
+    loadLivePhase();
+    const timer = window.setInterval(loadLivePhase, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,13 +98,23 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
     return () => { cancelled = true; window.clearInterval(timer); };
   }, []);
 
-  const activePhase = phases.find((phase) => phase.status === 'active') ?? phases[0];
+  const fallbackActivePhase = phases.find((phase) => phase.status === 'active') ?? phases[0];
+  const activePhase = livePhase
+    ? (phases.find((phase) => Number(phase.phaseNumber) === livePhase.phaseNumber) || {
+        ...fallbackActivePhase,
+        phaseNumber: livePhase.phaseNumber,
+        rate: livePhase.rate,
+        totalSupply: livePhase.totalSupply,
+        tokensSold: livePhase.tokensSold,
+        status: livePhase.status,
+      })
+    : fallbackActivePhase;
   const totalTokens = Number(allocation.totalTokensPurchased) || 0;
-  const tokensSold = Number(activePhase?.tokensSold) || 0;
-  const phaseSupply = Number(activePhase?.totalSupply) || 0;
+  const tokensSold = livePhase ? livePhase.tokensSold : Number(activePhase?.tokensSold) || 0;
+  const phaseSupply = livePhase?.totalSupply || Number(activePhase?.totalSupply) || 0;
   const tokensRemaining = Math.max(0, phaseSupply - tokensSold);
   const progressPercent = phaseSupply > 0 ? Math.min(100, (tokensSold / phaseSupply) * 100) : 0;
-  const currentRate = Number(activePhase?.rate) || 0;
+  const currentRate = livePhase?.rate || Number(activePhase?.rate) || 0;
   const nextPhase = activePhase ? phases.find((p) => p.phaseNumber === (activePhase.phaseNumber ?? 1) + 1) : undefined;
   const projectTotalSupply = 70_000_000;
 
