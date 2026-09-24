@@ -2504,7 +2504,15 @@ async function startServer() {
         };
       });
 
-      res.json({ success: true, phases, generatedAt: new Date().toISOString() });
+      const { sellerSharePercent, companySharePercent } = await getFifoShareConfig();
+
+      res.json({
+        success: true,
+        phases,
+        sellerSharePercent,
+        companySharePercent,
+        generatedAt: new Date().toISOString(),
+      });
     } catch (error: any) {
       console.error('Error fetching global FIFO queue:', error);
       res.status(500).json({ success: false, error: 'Failed to load global FIFO queue.' });
