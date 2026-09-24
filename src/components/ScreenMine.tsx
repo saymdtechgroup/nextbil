@@ -264,4 +264,3 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
     </div>
   );
 };
-

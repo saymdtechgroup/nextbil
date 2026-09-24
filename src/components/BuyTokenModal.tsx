@@ -106,7 +106,6 @@ export const BuyTokenModal: React.FC<Props> = ({
   const [usd, setUsd] = useState('');
   const currentPhaseNumber = Number(activePhaseInfo?.phaseNumber || 1);
 
-  // User CANNOT sell in the phase they are currently buying (only future phases + DEX are allowed)
   const allowedPhaseKeys = useMemo(
     () =>
       ['p2', 'p3', 'p4', 'p5'].filter(
@@ -128,7 +127,6 @@ export const BuyTokenModal: React.FC<Props> = ({
   const [statusDetail, setStatusDetail] = useState<string>('');
   const [error, setError] = useState('');
 
-  // Protect typing state from external re-renders / price polling
   const prevIsOpenRef = useRef(false);
 
   useEffect(() => {
@@ -147,7 +145,6 @@ export const BuyTokenModal: React.FC<Props> = ({
         dex: clamp(num(initialAllocation?.dexPercent, 15)),
       };
 
-      // Disable any phases <= current purchase phase
       for (const key of ['p2', 'p3', 'p4', 'p5'] as const) {
         if (Number(key.slice(1)) <= currentPhaseNumber) incoming[key] = 0;
       }
@@ -179,7 +176,6 @@ export const BuyTokenModal: React.FC<Props> = ({
   const tokens = purchaseUsd / effectiveRate;
   const tokensPerOneUsdt = 1 / effectiveRate;
 
-  // Breakdown of token amounts per phase based on user's exact % selection
   const parts = useMemo(() => {
     const p2 = (tokens * a.p2) / 100;
     const p3 = (tokens * a.p3) / 100;
@@ -194,13 +190,11 @@ export const BuyTokenModal: React.FC<Props> = ({
   const minOk = purchaseUsd >= Math.max(0, minPurchaseUsd);
   const balanceOk = purchaseUsd <= Number(usdtBalance) + 1e-9;
 
-  // Is ready to purchase
   const isPurchaseReady =
     purchaseUsd > 0 && tokens > 0 && exact100 && minOk && balanceOk && !busy;
 
   const canSubmit = walletConnected && !!walletAddress && isPurchaseReady;
 
-  // Handle direct manual typing into any phase box
   const handlePhaseChange = (key: keyof typeof a, rawVal: string) => {
     setRawPhaseInputs((prev) => ({ ...prev, [key]: rawVal }));
     const valNumber = rawVal === '' ? 0 : clamp(num(rawVal));
@@ -208,7 +202,6 @@ export const BuyTokenModal: React.FC<Props> = ({
     setError('');
   };
 
-  // Give 100% allocation to a single selected phase/DEX
   const allocateAllToSinglePhase = (targetKey: 'p2' | 'p3' | 'p4' | 'p5' | 'dex') => {
     const nextA = { p2: 0, p3: 0, p4: 0, p5: 0, dex: 0 };
     nextA[targetKey] = 100;
@@ -223,7 +216,6 @@ export const BuyTokenModal: React.FC<Props> = ({
     setError('');
   };
 
-  // Set preset combination (e.g. 10/30/60/0/0 or 20/30/20/15/15)
   const applyPreset = (presetAlloc: typeof DEFAULT_ALLOCATION) => {
     const safe = { ...presetAlloc };
     for (const key of ['p2', 'p3', 'p4', 'p5'] as const) {
@@ -273,9 +265,7 @@ export const BuyTokenModal: React.FC<Props> = ({
       return;
     }
     if (!minOk) {
-      setError(
-        `Minimum purchase is $${Number(minPurchaseUsd).toFixed(2)} USDT.`
-      );
+      setError(`Minimum purchase is $${Number(minPurchaseUsd).toFixed(2)} USDT.`);
       return;
     }
     if (!balanceOk) {
@@ -283,11 +273,7 @@ export const BuyTokenModal: React.FC<Props> = ({
       return;
     }
     if (!exact100) {
-      setError(
-        `Please allocate exactly 100%. Current allocation is ${parts.total.toFixed(
-          2
-        )}%.`
-      );
+      setError(`Please allocate exactly 100%. Current allocation is ${parts.total.toFixed(2)}%.`);
       return;
     }
 
@@ -305,7 +291,6 @@ export const BuyTokenModal: React.FC<Props> = ({
         parts.p5,
         parts.dex,
         (msg) => {
-          // Status updates from blockchain steps (Approve, Buy, Waiting confirmation)
           setStatusStep(msg);
           setStatusDetail('Check your wallet screen and confirm prompt if requested.');
         }
@@ -347,7 +332,6 @@ export const BuyTokenModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
-  // Phase cards configuration
   const phaseCards = [
     { key: 'p2' as const, label: 'Phase 2 Sell', targetPrice: 0.1, tokens: parts.p2 },
     { key: 'p3' as const, label: 'Phase 3 Sell', targetPrice: 1.0, tokens: parts.p3 },
@@ -355,22 +339,14 @@ export const BuyTokenModal: React.FC<Props> = ({
     { key: 'p5' as const, label: 'Phase 5 Sell', targetPrice: 100.0, tokens: parts.p5 },
   ];
 
-  // Calculate sold progress percentage for current phase
   const phaseSoldPercent =
     activePhaseInfo && activePhaseInfo.totalSupply > 0
-      ? Math.min(
-          100,
-          Math.max(
-            0,
-            (activePhaseInfo.tokensSold / activePhaseInfo.totalSupply) * 100
-          )
-        )
+      ? Math.min(100, Math.max(0, (activePhaseInfo.tokensSold / activePhaseInfo.totalSupply) * 100))
       : 35;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-4">
       <div className="relative w-full max-w-xl max-h-[94vh] overflow-y-auto rounded-3xl border border-amber-500/30 bg-[#070b16] text-white shadow-[0_0_50px_rgba(245,158,11,0.15)] custom-scrollbar">
-        {/* Glowing ambient background element */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-32 bg-gradient-to-b from-amber-500/10 via-cyan-500/5 to-transparent blur-3xl pointer-events-none" />
 
         {/* Modal Header */}
@@ -403,7 +379,6 @@ export const BuyTokenModal: React.FC<Props> = ({
         </div>
 
         <div className="p-4 sm:p-5 space-y-4">
-          {/* Direct Match Banner if active */}
           {directBuyerInfo && (
             <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5 flex items-start gap-3">
               <Sparkles className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
@@ -425,13 +400,11 @@ export const BuyTokenModal: React.FC<Props> = ({
             </div>
           )}
 
-          {/* BEAUTIFIED CURRENT PHASE & LIVE RATE SHOWCASE */}
+          {/* CURRENT PHASE SHOWCASE */}
           <div className="relative overflow-hidden rounded-3xl border border-amber-500/40 bg-gradient-to-br from-[#121024] via-[#090e1f] to-[#04121b] p-4 sm:p-5 shadow-xl">
-            {/* Ambient Corner Glow */}
             <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/15 rounded-full blur-2xl pointer-events-none" />
             <div className="absolute bottom-0 left-0 w-40 h-40 bg-cyan-500/15 rounded-full blur-2xl pointer-events-none" />
 
-            {/* Top Stage Indicator */}
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <div className="flex items-center gap-2">
                 <span className="relative flex h-2.5 w-2.5">
@@ -448,7 +421,6 @@ export const BuyTokenModal: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* Hero 1 USDT Exchange Rate Display */}
             <div className="mt-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/40 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
               <div>
                 <div className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
@@ -474,24 +446,17 @@ export const BuyTokenModal: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* Phase Supply Progress Bar */}
             {activePhaseInfo && (
               <div className="mt-3.5 space-y-1.5">
                 <div className="flex justify-between text-[10px] text-slate-400 font-semibold">
                   <span>
-                    Sold:{' '}
-                    <b className="text-white">
-                      {fmt(activePhaseInfo.tokensSold)} NXBC
-                    </b>
+                    Sold: <b className="text-white">{fmt(activePhaseInfo.tokensSold)} NXBC</b>
                   </span>
                   <span className="text-cyan-300 font-bold">
                     {phaseSoldPercent.toFixed(1)}% Completed
                   </span>
                   <span>
-                    Total:{' '}
-                    <b className="text-white">
-                      {fmt(activePhaseInfo.totalSupply)} NXBC
-                    </b>
+                    Total: <b className="text-white">{fmt(activePhaseInfo.totalSupply)} NXBC</b>
                   </span>
                 </div>
                 <div className="w-full h-2 rounded-full bg-slate-900 border border-white/10 overflow-hidden p-0.5">
@@ -512,10 +477,7 @@ export const BuyTokenModal: React.FC<Props> = ({
                 USDT Purchase Amount
               </label>
               <span className="text-xs text-slate-400">
-                Wallet Balance:{' '}
-                <b className="text-cyan-300 font-mono">
-                  {fmt(usdtBalance)} USDT
-                </b>
+                Wallet Balance: <b className="text-cyan-300 font-mono">{fmt(usdtBalance)} USDT</b>
               </span>
             </div>
 
@@ -541,7 +503,6 @@ export const BuyTokenModal: React.FC<Props> = ({
               </span>
             </div>
 
-            {/* Quick Amount Buttons */}
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
@@ -585,7 +546,6 @@ export const BuyTokenModal: React.FC<Props> = ({
               </button>
             </div>
 
-            {/* Real-time Token Calculation Summary */}
             <div className="rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900/60 to-cyan-950/40 border border-purple-500/30 p-3.5 flex items-center justify-between">
               <div>
                 <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
@@ -599,14 +559,13 @@ export const BuyTokenModal: React.FC<Props> = ({
               <div className="text-right text-[10px] text-slate-400">
                 <div>Formula:</div>
                 <div className="font-mono text-amber-300 font-bold">
-                  ${purchaseUsd > 0 ? purchaseUsd.toFixed(2) : '0.00'} ÷ $
-                  {effectiveRate.toFixed(2)}
+                  ${purchaseUsd > 0 ? purchaseUsd.toFixed(2) : '0.00'} ÷ ${effectiveRate.toFixed(2)}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* CUSTOM PHASE SELECTION SECTION */}
+          {/* CUSTOM PHASE SELECTION */}
           <div className="rounded-3xl border border-white/10 bg-[#0a0e18] p-4 sm:p-5 space-y-3.5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
               <div>
@@ -622,7 +581,6 @@ export const BuyTokenModal: React.FC<Props> = ({
               </span>
             </div>
 
-            {/* Quick 1-Click Preset Shortcuts */}
             <div className="space-y-1.5">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
                 <Zap size={12} className="text-amber-400" /> Quick 100% or Split Presets:
@@ -699,9 +657,7 @@ export const BuyTokenModal: React.FC<Props> = ({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() =>
-                    applyPreset({ p2: 10, p3: 30, p4: 60, p5: 0, dex: 0 })
-                  }
+                  onClick={() => applyPreset({ p2: 10, p3: 30, p4: 60, p5: 0, dex: 0 })}
                   className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-bold text-slate-300 transition-all cursor-pointer disabled:opacity-40"
                 >
                   10/30/60 Split
@@ -709,9 +665,7 @@ export const BuyTokenModal: React.FC<Props> = ({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() =>
-                    applyPreset({ p2: 20, p3: 30, p4: 20, p5: 15, dex: 15 })
-                  }
+                  onClick={() => applyPreset({ p2: 20, p3: 30, p4: 20, p5: 15, dex: 15 })}
                   className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-bold text-slate-300 transition-all cursor-pointer disabled:opacity-40"
                 >
                   20/30/20/15/15
@@ -719,7 +673,6 @@ export const BuyTokenModal: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* Individual Phase Boxes */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               {phaseCards.map(({ key, label, targetPrice, tokens: phaseTokens }) => {
                 const isAllowed = allowedPhaseKeys.includes(key);
@@ -770,14 +723,10 @@ export const BuyTokenModal: React.FC<Props> = ({
                             step="1"
                             disabled={!isAllowed || busy}
                             value={rawPhaseInputs[key] ?? String(percentVal)}
-                            onChange={(e) =>
-                              handlePhaseChange(key, e.target.value)
-                            }
+                            onChange={(e) => handlePhaseChange(key, e.target.value)}
                             className="w-16 rounded-xl bg-[#101527] px-2.5 py-1.5 text-right font-black text-sm outline-none border border-white/15 focus:border-cyan-400 text-white disabled:cursor-not-allowed disabled:opacity-40"
                           />
-                          <span className="text-xs font-black text-slate-400">
-                            %
-                          </span>
+                          <span className="text-xs font-black text-slate-400">%</span>
                         </div>
 
                         {isAllowed && (
@@ -830,9 +779,7 @@ export const BuyTokenModal: React.FC<Props> = ({
                         step="1"
                         disabled={busy}
                         value={rawPhaseInputs.dex ?? String(a.dex)}
-                        onChange={(e) =>
-                          handlePhaseChange('dex', e.target.value)
-                        }
+                        onChange={(e) => handlePhaseChange('dex', e.target.value)}
                         className="w-16 rounded-xl bg-[#101527] px-2.5 py-1.5 text-right font-black text-sm outline-none border border-purple-500/40 focus:border-purple-400 text-white disabled:opacity-40"
                       />
                       <span className="text-xs font-black text-purple-300">%</span>
@@ -902,13 +849,12 @@ export const BuyTokenModal: React.FC<Props> = ({
               </div>
             ) : (
               <div className="text-rose-300 text-xs font-bold flex items-center gap-1.5 mt-2.5">
-                <AlertCircle size={15} /> Total must equal exactly 100% (currently{' '}
-                {parts.total.toFixed(1)}%).
+                <AlertCircle size={15} /> Total must equal exactly 100% (currently {parts.total.toFixed(1)}%).
               </div>
             )}
           </div>
 
-          {/* ACTIVE TRANSACTION PROGRESS BANNER */}
+          {/* ACTIVE PROGRESS BANNER */}
           {busy && (
             <div className="rounded-2xl border border-cyan-500/50 bg-gradient-to-r from-cyan-950/60 to-purple-950/60 p-4 shadow-xl space-y-2 animate-pulse">
               <div className="flex items-center gap-2.5 text-cyan-300 font-black text-sm">
@@ -932,7 +878,7 @@ export const BuyTokenModal: React.FC<Props> = ({
             </div>
           )}
 
-          {/* HIGH-VISIBILITY HIGHLIGHTED CALL TO ACTION BUTTON */}
+          {/* ACTION BUTTON */}
           <button
             type="button"
             onClick={handleActionClick}
