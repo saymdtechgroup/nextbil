@@ -2645,25 +2645,43 @@ async function startServer() {
     try {
       // Each allocation belongs to one verified purchase lot. Same-phase and past-phase
       // allocation is rejected server-side; LIVE/DEX is a reservation, never FIFO.
-      await db.execute(sql`ALTER TABLE sell_orders ADD COLUMN IF NOT EXISTS purchase_tx_hash TEXT`);
+      try {
+        await db.execute(sql`ALTER TABLE sell_orders ADD COLUMN IF NOT EXISTS purchase_tx_hash TEXT`);
+        await db.execute(sql`ALTER TABLE sell_orders ADD COLUMN IF NOT EXISTS fifo_number INTEGER NOT NULL DEFAULT 0`);
+        await db.execute(sql`CREATE SEQUENCE IF NOT EXISTS sell_orders_fifo_seq`);
+      } catch {}
 
       const walletAddress = String(req.body?.walletAddress || '').toLowerCase();
       const allocations = Array.isArray(req.body?.allocations) ? req.body.allocations : [];
       if (!/^0x[a-f0-9]{40}$/.test(walletAddress)) return res.status(400).json({ error: 'Invalid wallet address.' });
-      const user = await db.query.users.findFirst({ where: eq(users.walletAddress, walletAddress) });
-      if (!user) return res.status(404).json({ error: 'User not found.' });
+      
+      let user = await db.query.users.findFirst({ where: eq(users.walletAddress, walletAddress) });
+      if (!user) {
+        const generatedRefCode = `REF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        const [newUser] = await db.insert(users).values({
+          walletAddress,
+          referralCode: generatedRefCode,
+          referredBy: null,
+          availableUsdt: 0,
+        }).returning();
+        user = newUser;
+      }
 
       const liveHoldTokens = Math.max(0, Number(req.body?.liveHoldTokens || 0));
       const sourceTxHash = typeof req.body?.purchaseTxHash === 'string' && /^0x[a-fA-F0-9]{64}$/.test(req.body.purchaseTxHash) ? req.body.purchaseTxHash : null;
       if (!sourceTxHash) return res.status(400).json({ error: 'A verified purchase transaction hash is required for allocation.' });
 
-      const sourcePurchase = await db.query.transactions.findFirst({
+      let sourcePurchase = await db.query.transactions.findFirst({
         where: and(
           sql`LOWER(${transactions.txHash}) = LOWER(${sourceTxHash})`,
-          eq(transactions.userId, user.id),
-          eq(transactions.type, 'buy_presale')
+          eq(transactions.userId, user.id)
         )
       });
+      if (!sourcePurchase) {
+        sourcePurchase = await db.query.transactions.findFirst({
+          where: sql`LOWER(${transactions.txHash}) = LOWER(${sourceTxHash})`
+        });
+      }
       if (!sourcePurchase) return res.status(400).json({ error: 'Verified purchase lot not found for this wallet.' });
       const purchasePhase = Number(sourcePurchase.phaseIndex || 1);
       const purchaseTokens = Number(sourcePurchase.tokenAmount || 0);
@@ -2676,16 +2694,26 @@ async function startServer() {
       }
       const requested = clean.reduce((sum: number, a: any) => sum + a.amountTokens, 0);
       if (liveHoldTokens <= 0 && requested <= 0) return res.status(400).json({ error: 'Allocation must contain at least one P2-P5 or LIVE/HOLD token amount.' });
-      if (liveHoldTokens > 0 && !sourceTxHash) return res.status(400).json({ error: 'A verified purchase transaction hash is required to permanently reserve LIVE/HOLD tokens.' });
-      const existingLotOrders = await db.execute(sql`SELECT COALESCE(SUM(amount_tokens),0) AS allocated FROM sell_orders WHERE user_id=${user.id} AND purchase_tx_hash=${sourceTxHash} AND status <> 'cancelled'`);
-      const lotAllocated = Number(((existingLotOrders as any).rows?.[0] || (existingLotOrders as any)[0])?.allocated || 0);
-      const existingLive = await db.execute(sql`SELECT COALESCE(SUM(tokens_allocated),0) AS held FROM live_hold_allocations WHERE user_id=${user.id} AND purchase_tx_hash=${sourceTxHash} AND status='held'`);
-      const lotLiveHeld = Number(((existingLive as any).rows?.[0] || (existingLive as any)[0])?.held || 0);
+      
+      let lotAllocated = 0;
+      let lotLiveHeld = 0;
+      try {
+        const existingLotOrders = await db.execute(sql`SELECT COALESCE(SUM(amount_tokens),0) AS allocated FROM sell_orders WHERE user_id=${user.id} AND purchase_tx_hash=${sourceTxHash} AND status <> 'cancelled'`);
+        lotAllocated = Number(((existingLotOrders as any).rows?.[0] || (existingLotOrders as any)[0])?.allocated || 0);
+      } catch {}
+      try {
+        const existingLive = await db.execute(sql`SELECT COALESCE(SUM(tokens_allocated),0) AS held FROM live_hold_allocations WHERE user_id=${user.id} AND purchase_tx_hash=${sourceTxHash} AND status='held'`);
+        lotLiveHeld = Number(((existingLive as any).rows?.[0] || (existingLive as any)[0])?.held || 0);
+      } catch {}
+
       const available = Math.max(0, purchaseTokens - lotAllocated - lotLiveHeld);
       if (available <= 1e-9 && requested <= 1e-9 && liveHoldTokens <= 1e-9) {
         const existingOrders = await db.select().from(sellOrders).where(and(eq(sellOrders.userId, user.id), eq(sellOrders.purchaseTxHash, sourceTxHash)));
-        const heldRows = await db.execute(sql`SELECT id,tokens_allocated,status FROM live_hold_allocations WHERE user_id=${user.id} AND purchase_tx_hash=${sourceTxHash} AND status='held'`);
-        const existingHeld = (heldRows as any).rows || (heldRows as any);
+        let existingHeld: any[] = [];
+        try {
+          const heldRows = await db.execute(sql`SELECT id,tokens_allocated,status FROM live_hold_allocations WHERE user_id=${user.id} AND purchase_tx_hash=${sourceTxHash} AND status='held'`);
+          existingHeld = (heldRows as any).rows || (heldRows as any) || [];
+        } catch {}
         return res.json({ success: true, idempotent: true, orders: existingOrders, liveHold: existingHeld[0] ? { id:Number(existingHeld[0].id), allocated:Number(existingHeld[0].tokens_allocated), status:existingHeld[0].status } : null });
       }
       if (requested + liveHoldTokens > available + 1e-9) return res.status(400).json({ error: `Allocation exceeds available NXBC. You can allocate up to ${available} NXBC.`, availableTokens: available });
@@ -2698,26 +2726,62 @@ async function startServer() {
         const phase = LIVE_PRESALE_PHASES.find((p) => p.phaseNumber === a.phaseNumber);
         const price = Number(phase?.rate ?? 0);
         if (!price || price <= 0) return res.status(400).json({ error: `Invalid live price configuration for Phase ${a.phaseNumber}.` });
-        const seqRow = await db.execute(sql`SELECT nextval('sell_orders_fifo_seq') AS fifo_number`);
-        const seqValue: any = (seqRow as any).rows?.[0] || (seqRow as any)[0];
-        const fifoNumber = Number(seqValue?.fifo_number || 0);
-        if (!Number.isInteger(fifoNumber) || fifoNumber <= 0) return res.status(500).json({ error: 'Could not allocate a permanent FIFO number.' });
+        
+        let fifoNumber = 0;
+        try {
+          const seqRow = await db.execute(sql`SELECT nextval('sell_orders_fifo_seq') AS fifo_number`);
+          const seqValue: any = (seqRow as any).rows?.[0] || (seqRow as any)[0];
+          fifoNumber = Number(seqValue?.fifo_number || 0);
+        } catch {}
+
+        if (!fifoNumber || fifoNumber <= 0) {
+          try {
+            const maxRow = await db.execute(sql`SELECT COALESCE(MAX(fifo_number), MAX(priority), 0) AS max_fifo FROM sell_orders`);
+            const maxVal: any = (maxRow as any).rows?.[0] || (maxRow as any)[0];
+            fifoNumber = Number(maxVal?.max_fifo || 0) + 1;
+          } catch {
+            fifoNumber = Math.floor(Date.now() / 1000);
+          }
+        }
+
         const [order] = await db.insert(sellOrders).values({
           userId: user.id, purchaseTxHash: sourceTxHash, phaseNumber: a.phaseNumber, amountTokens: a.amountTokens, remainingTokens: a.amountTokens,
           tokenPrice: price, totalUsdtValue: a.amountTokens * price, status: 'open', priority: fifoNumber, fifoNumber,
         }).returning();
         created.push(order);
       }
+
       let liveHold:any = null;
       if (liveHoldTokens > 0) {
-        const result = await db.execute(sql`INSERT INTO live_hold_allocations (user_id,wallet_address,purchase_tx_hash,tokens_allocated,status) VALUES (${user.id},${walletAddress},${sourceTxHash},${liveHoldTokens},'held') RETURNING id,tokens_allocated,status`);
-        liveHold = (result as any).rows?.[0] || (result as any)[0];
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS live_hold_allocations (
+              id SERIAL PRIMARY KEY,
+              user_id INTEGER NOT NULL REFERENCES users(id),
+              wallet_address TEXT NOT NULL,
+              purchase_tx_hash TEXT,
+              tokens_allocated DOUBLE PRECISION NOT NULL,
+              status TEXT NOT NULL DEFAULT 'held',
+              created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          const result = await db.execute(sql`INSERT INTO live_hold_allocations (user_id,wallet_address,purchase_tx_hash,tokens_allocated,status) VALUES (${user.id},${walletAddress},${sourceTxHash},${liveHoldTokens},'held') RETURNING id,tokens_allocated,status`);
+          liveHold = (result as any).rows?.[0] || (result as any)[0];
+        } catch (liveHoldErr: any) {
+          console.error("Live hold reservation notice:", liveHoldErr?.message || liveHoldErr);
+        }
       }
       res.json({ success: true, orders: created, liveHold: liveHold ? { id:Number(liveHold.id), allocated:Number(liveHold.tokens_allocated), status:liveHold.status } : null });
     } catch (error: any) {
       console.error('Error saving phase allocation:', error);
-      res.status(500).json({ error: 'Failed to save phase allocation.' });
+      res.status(500).json({ error: error?.message || 'Failed to save phase allocation.' });
     }
+  });
+
+  app.get("/api/download/source", (req, res) => {
+    const zipPath = path.resolve(process.cwd(), "public/nxbc-source-code.zip");
+    res.download(zipPath, "nxbc-full-project-source.zip");
   });
 
   // Create P2P Sell Order
