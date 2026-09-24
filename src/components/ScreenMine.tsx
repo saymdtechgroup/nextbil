@@ -25,7 +25,7 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
   const isMlmQualified = totalInvestedUsd >= minMlmQualifyUsd;
   const [copied, setCopied] = useState(false);
   const [contractCopied, setContractCopied] = useState(false);
-  const NXBC_CONTRACT = '0xB44dC2107438D3f98e5A0784fBC6C6a2Ad843bd1';
+  const NXBC_CONTRACT = '0x94D064AFDB04E3489C313054260929588b38dF85';
 
   const handleCopy = async () => {
     try {
