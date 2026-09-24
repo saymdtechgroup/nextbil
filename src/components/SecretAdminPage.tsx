@@ -364,11 +364,12 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
 
     // Persist to central API backend
     try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('nxbc_admin_token') : null;
       const res = await fetch('/api/admin/configs', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(typeof window !== 'undefined' && localStorage.getItem('nxbc_admin_token') ? { 'x-admin-token': localStorage.getItem('nxbc_admin_token') as string } : {}),
+          ...(token ? { 'x-admin-token': token } : {}),
         },
         body: JSON.stringify({
           phases: localPhases,
@@ -378,26 +379,32 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
           matrixConfig: localMatrix,
         }),
       });
-      const data = await res.json();
-      if (data?.success) {
-        // Use the server-reconciled phase counters so a stale admin screen
-        // cannot keep showing 0 after a real purchase already exists.
-        if (Array.isArray(data.phases) && data.phases.length) {
-          setLocalPhases(data.phases);
-          if (typeof window !== 'undefined') localStorage.setItem('nxbc_admin_phases', JSON.stringify(data.phases));
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401 || !data?.success) {
+        const errorMsg = data?.error || 'Authentication required. Please enter Security PIN again.';
+        setPinError(errorMsg);
+        if (res.status === 401) {
+          if (typeof window !== 'undefined') localStorage.removeItem('nxbc_admin_token');
+          setIsAuthenticated(false);
+          alert(`⚠️ Session expired: ${errorMsg}\nPlease enter your PIN to complete saving.`);
+        } else {
+          alert(`❌ Save Failed: ${errorMsg}`);
         }
-        setSaveSuccessMsg('✓ All settings saved & live-updated across all user dashboards!');
-      } else {
-        setSaveSuccessMsg('✓ Settings saved & applied live!');
+        return;
       }
+
+      // Use the server-reconciled phase counters so a stale admin screen
+      // cannot keep showing 0 after a real purchase already exists.
+      if (Array.isArray(data.phases) && data.phases.length) {
+        setLocalPhases(data.phases);
+        if (typeof window !== 'undefined') localStorage.setItem('nxbc_admin_phases', JSON.stringify(data.phases));
+      }
+      setSaveSuccessMsg('✓ All settings saved & live-updated across all user dashboards!');
       try {
         window.dispatchEvent(new CustomEvent('nxbc:refresh-presale'));
       } catch {}
-    } catch (err) {
-      setSaveSuccessMsg('✓ Settings applied & saved locally!');
-      try {
-        window.dispatchEvent(new CustomEvent('nxbc:refresh-presale'));
-      } catch {}
+    } catch (err: any) {
+      alert('❌ Failed to reach server. Please check internet connection.');
     }
 
     setTimeout(() => {
