@@ -302,6 +302,19 @@ export default function App() {
         }));
 
         setPhases(livePhases);
+
+        if (data.systemConfig && typeof data.systemConfig === 'object') {
+          setSystemConfig((prev) => ({
+            ...prev,
+            ...data.systemConfig,
+            sellQueueSharePercent: Number.isFinite(Number(data.systemConfig.sellQueueSharePercent))
+              ? Number(data.systemConfig.sellQueueSharePercent)
+              : (prev.sellQueueSharePercent ?? 20),
+            withdrawalFeePercent: Number.isFinite(Number(data.systemConfig.withdrawalFeePercent))
+              ? Number(data.systemConfig.withdrawalFeePercent)
+              : (prev.withdrawalFeePercent ?? 2),
+          }));
+        }
       } catch (err) {
         console.warn('[LIVE PRESALE] Could not read BSC phase state:', err);
       }
@@ -1076,9 +1089,8 @@ export default function App() {
     if (activeIdx === -1) return; // No active phase
     const currentPhase = phases[activeIdx];
     
-    // Total tokens purchased by the external buyer
-    // 20% of this goes to fulfilling user queued sell orders
-    const userAllocationFulfillment = Math.floor(amount * 0.20);
+    // Dynamic user seller allocation fulfillment based on Admin systemConfig
+    const userAllocationFulfillment = Math.floor(amount * ((systemConfig.sellQueueSharePercent ?? 20) / 100));
     let remainingToFulfill = userAllocationFulfillment;
     let earnedUsdt = 0;
 
