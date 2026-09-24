@@ -72,7 +72,6 @@ export const BuyTokenModal: React.FC<Props> = ({
 }) => {
   const [usd, setUsd] = useState('');
   const currentPhaseNumber = Number(activePhaseInfo?.phaseNumber || 1);
-  const allowedPhaseKeys = useMemo(() => ['p2','p3','p4','p5'].filter(k => Number(k.slice(1)) > currentPhaseNumber) as Array<'p2'|'p3'|'p4'|'p5'>, [currentPhaseNumber]);
   const [a, setA] = useState(DEFAULT_ALLOCATION);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -90,16 +89,12 @@ export const BuyTokenModal: React.FC<Props> = ({
       p5: clamp(num(initialAllocation?.p5Percent, 0)),
       dex: clamp(num(initialAllocation?.dexPercent, 0)),
     };
-    // Never carry an allocation into the current/past presale phase. Those
-    // phases are already purchased and cannot become FIFO sell reservations.
-    for (const key of (['p2','p3','p4','p5'] as const)) {
-      if (Number(key.slice(1)) <= currentPhaseNumber) incoming[key] = 0;
-    }
+    
+    // Reset logic to allow editing
     const totalIncoming = incoming.p2 + incoming.p3 + incoming.p4 + incoming.p5 + incoming.dex;
     if (totalIncoming <= 0.000001) {
       incoming.dex = 100;
     } else {
-      // Make any stale allocation sum to 100 by assigning the remainder to DEX/LIVE.
       const futureTotal = incoming.p2 + incoming.p3 + incoming.p4 + incoming.p5;
       incoming.dex = clamp(100 - futureTotal);
     }
@@ -114,7 +109,6 @@ export const BuyTokenModal: React.FC<Props> = ({
     const p3 = tokens * a.p3 / 100;
     const p4 = tokens * a.p4 / 100;
     const p5 = tokens * a.p5 / 100;
-    // DEX is independently selected by the user; never send this bucket to FIFO.
     const dex = tokens * a.dex / 100;
     const total = a.p2 + a.p3 + a.p4 + a.p5 + a.dex;
     return { p2, p3, p4, p5, dex, total };
@@ -133,45 +127,20 @@ export const BuyTokenModal: React.FC<Props> = ({
   };
 
   const preset = (next: typeof DEFAULT_ALLOCATION) => {
-    const safe = { ...next };
-    for (const key of (['p2','p3','p4','p5'] as const)) {
-      if (!allowedPhaseKeys.includes(key)) safe[key] = 0;
-    }
-    const futureTotal = safe.p2 + safe.p3 + safe.p4 + safe.p5;
-    safe.dex = clamp(100 - futureTotal);
-    setA(safe);
+    setA(next);
     setError('');
   };
 
   const confirm = async () => {
     setError('');
-
-    if (!walletConnected || !walletAddress) {
-      setError('Please connect your Web3 wallet first.');
-      return;
-    }
-    if (purchaseUsd <= 0) {
-      setError('Enter a valid USDT purchase amount.');
-      return;
-    }
-    if (!minOk) {
-      setError(`Minimum purchase is $${Number(minPurchaseUsd).toFixed(2)} USDT.`);
-      return;
-    }
-    if (!balanceOk) {
-      setError('Insufficient USDT balance in the connected wallet.');
-      return;
-    }
-    if (!exact100) {
-      setError(`Please allocate exactly 100%. Current allocation is ${parts.total.toFixed(2)}%.`);
-      return;
-    }
+    if (!walletConnected || !walletAddress) { setError('Please connect your Web3 wallet first.'); return; }
+    if (purchaseUsd <= 0) { setError('Enter a valid USDT purchase amount.'); return; }
+    if (!minOk) { setError(`Minimum purchase is $${Number(minPurchaseUsd).toFixed(2)} USDT.`); return; }
+    if (!balanceOk) { setError('Insufficient USDT balance in the connected wallet.'); return; }
+    if (!exact100) { setError(`Please allocate exactly 100%. Current allocation is ${parts.total.toFixed(2)}%.`); return; }
 
     try {
       setBusy(true);
-
-      // Execute the real BSC purchase first. The returned transaction hash is
-      // then passed to the backend as the immutable purchase-lot proof.
       const buyResult = await executeSmartContractBuy(
         purchaseUsd,
         null,
@@ -260,18 +229,6 @@ export const BuyTokenModal: React.FC<Props> = ({
                 <div className="text-lg font-black text-amber-300">${currentRate.toFixed(2)}</div>
               </div>
             </div>
-            {activePhaseInfo && (
-              <div className="mt-3 grid grid-cols-2 gap-2 text-[9px]">
-                <div className="rounded-xl bg-black/20 p-2">
-                  <span className="text-slate-500">Phase Sold</span>
-                  <div className="font-bold text-white">{fmt(activePhaseInfo.tokensSold)} NXBC</div>
-                </div>
-                <div className="rounded-xl bg-black/20 p-2">
-                  <span className="text-slate-500">Phase Supply</span>
-                  <div className="font-bold text-white">{fmt(activePhaseInfo.totalSupply)} NXBC</div>
-                </div>
-              </div>
-            )}
           </div>
 
           <div>
@@ -327,9 +284,8 @@ export const BuyTokenModal: React.FC<Props> = ({
                     <input
                       type="number" min="0" max="100" step="0.01"
                       value={a[key]}
-                      disabled={!allowedPhaseKeys.includes(key)}
                       onChange={e => set(key, e.target.value)}
-                      className="w-20 rounded-lg bg-[#101527] px-2 py-2 text-right font-black outline-none border border-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="w-20 rounded-lg bg-[#101527] px-2 py-2 text-right font-black outline-none border border-white/10"
                     />
                     <span className="ml-1 text-[10px] text-slate-500">%</span>
                   </div>
