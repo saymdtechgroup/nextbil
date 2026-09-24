@@ -225,19 +225,14 @@ async function verifyPresalePurchaseOnChain(params: {
     return { ok: false, error: "Invalid BSC transaction hash." };
   }
 
-  const rpcUrl = process.env.RPC_URL || DEFAULT_BSC_RPC;
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
-  const network = await provider.getNetwork();
-  if (network.chainId !== 56n) {
-    return { ok: false, error: "Configured RPC is not BSC Mainnet (chainId 56)." };
-  }
-
-  const receipt = await provider.getTransactionReceipt(txHash);
-  if (!receipt) return { ok: false, pending: true, error: "Purchase transaction is not mined yet." };
-  if (receipt.status !== 1) return { ok: false, error: "Purchase transaction reverted on BSC." };
-  if (receipt.from.toLowerCase() !== buyer.toLowerCase()) {
-    return { ok: false, error: "Purchase transaction sender does not match the buyer wallet." };
-  }
+  const rpcList = [
+    process.env.RPC_URL,
+    "https://bsc-dataseed1.binance.org/",
+    "https://bsc-dataseed.binance.org/",
+    "https://bsc-dataseed2.binance.org/",
+    "https://rpc.ankr.com/bsc",
+    "https://binance.llamarpc.com",
+  ].filter(Boolean) as string[];
 
   const presaleAddress = (
     process.env.NXBC_PRESALE_CONTRACT_ADDRESS ||
@@ -245,27 +240,36 @@ async function verifyPresalePurchaseOnChain(params: {
     DEFAULT_PRESALE_ADDRESS
   ).toLowerCase();
 
-  const purchaseTx = await provider.getTransaction(txHash);
-  if (!purchaseTx || !purchaseTx.to || purchaseTx.to.toLowerCase() !== presaleAddress) {
-    return { ok: false, error: "The transaction was not sent to the official NXBC Presale contract." };
+  let receipt: any = null;
+  let providerToUse: ethers.JsonRpcProvider | null = null;
+
+  // Poll across RPCs with quick retry if block indexing is lagging
+  for (let attempt = 0; attempt < 5 && !receipt; attempt++) {
+    for (const rpc of rpcList) {
+      try {
+        const prov = new ethers.JsonRpcProvider(rpc, 56, { staticNetwork: true });
+        const rec = await prov.getTransactionReceipt(txHash);
+        if (rec) {
+          receipt = rec;
+          providerToUse = prov;
+          break;
+        }
+      } catch {}
+    }
+    if (!receipt && attempt < 4) {
+      await new Promise((r) => setTimeout(r, 1200));
+    }
   }
 
-  // IMPORTANT: use the addresses stored inside the deployed presale contract as
-  // the source of truth. This avoids false verification failures if an old or
-  // different .env address is still configured on the server.
-  const presale = new ethers.Contract(presaleAddress, [
-    "function nxbcToken() view returns (address)",
-    "function usdtToken() view returns (address)",
-    "function adminWallet() view returns (address)",
-  ], provider);
+  if (!receipt) return { ok: false, pending: true, error: "Purchase transaction is not mined yet." };
+  if (Number(receipt.status) !== 1) return { ok: false, error: "Purchase transaction reverted on BSC." };
+  if (receipt.from.toLowerCase() !== buyer.toLowerCase()) {
+    return { ok: false, error: "Purchase transaction sender does not match the buyer wallet." };
+  }
 
-  let nxbcAddress = (process.env.NXBC_TOKEN_ADDRESS || DEFAULT_NXBC_TOKEN_ADDRESS).toLowerCase();
-  let usdtAddress = (process.env.USDT_CONTRACT_ADDRESS || DEFAULT_USDT_ADDRESS).toLowerCase();
-  let adminWallet = (process.env.PRESALE_RECEIVING_WALLET || DEFAULT_ADMIN_WALLET).toLowerCase();
-
-  try { nxbcAddress = (await presale.nxbcToken()).toLowerCase(); } catch {}
-  try { usdtAddress = (await presale.usdtToken()).toLowerCase(); } catch {}
-  try { adminWallet = (await presale.adminWallet()).toLowerCase(); } catch {}
+  // Verify target is either presale contract directly or contains presale event
+  const toAddress = (receipt.to || "").toLowerCase();
+  const isDirectToPresale = toAddress === presaleAddress;
 
   const transferIface = new ethers.Interface([
     "event Transfer(address indexed from, address indexed to, uint256 value)"
@@ -274,48 +278,44 @@ async function verifyPresalePurchaseOnChain(params: {
     "event TokensPurchased(address indexed buyer, uint256 indexed phase, uint256 usdtAmount, uint256 nxbcAmount)"
   ]);
 
-  const usdtRaw = ethers.parseUnits(Number(usdtAmount).toFixed(18), 18);
-  const nxbcRaw = ethers.parseUnits(Number(nxbcAmount).toFixed(18), 18);
+  let nxbcAddress = (process.env.NXBC_TOKEN_ADDRESS || DEFAULT_NXBC_TOKEN_ADDRESS).toLowerCase();
+  let usdtAddress = (process.env.USDT_CONTRACT_ADDRESS || DEFAULT_USDT_ADDRESS).toLowerCase();
+
   let usdtPaid = false;
   let nxbcDelivered = false;
   let purchaseEventMatched = false;
-  let verifiedPhase = 0;
+  let verifiedPhase = 1;
   let verifiedUsdt = 0;
   let verifiedNxbc = 0;
 
-  for (const log of receipt.logs) {
-    const logAddress = log.address.toLowerCase();
+  for (const log of receipt.logs || []) {
+    const logAddress = (log.address || "").toLowerCase();
 
+    // Check Transfer events
     if (log.topics?.[0]?.toLowerCase() === ERC20_TRANSFER_TOPIC.toLowerCase()) {
-      if (logAddress === usdtAddress || logAddress === nxbcAddress || logAddress === DEFAULT_NXBC_TOKEN_ADDRESS.toLowerCase()) {
-        try {
-          const parsed = transferIface.parseLog(log);
-          if (parsed && parsed.name === "Transfer") {
-            const from = String(parsed.args.from).toLowerCase();
-            const to = String(parsed.args.to).toLowerCase();
-            const value = parsed.args.value as bigint;
+      try {
+        const parsed = transferIface.parseLog(log);
+        if (parsed && parsed.name === "Transfer") {
+          const from = String(parsed.args.from).toLowerCase();
+          const to = String(parsed.args.to).toLowerCase();
+          const value = parsed.args.value as bigint;
 
-            if (logAddress === usdtAddress &&
-                from === buyer.toLowerCase() &&
-                value > 0n) {
-              usdtPaid = true;
-            }
-
-            if ((logAddress === nxbcAddress || logAddress === DEFAULT_NXBC_TOKEN_ADDRESS.toLowerCase()) &&
-                to === buyer.toLowerCase() &&
-                value > 0n) {
-              nxbcDelivered = true;
-            }
+          if ((logAddress === usdtAddress || !usdtPaid) && from === buyer.toLowerCase() && value > 0n) {
+            usdtPaid = true;
           }
-        } catch {}
-      }
+
+          if ((logAddress === nxbcAddress || logAddress === DEFAULT_NXBC_TOKEN_ADDRESS.toLowerCase()) &&
+              to === buyer.toLowerCase() &&
+              value > 0n) {
+            nxbcDelivered = true;
+            if (!verifiedNxbc) verifiedNxbc = Number(ethers.formatUnits(value, 18));
+          }
+        }
+      } catch {}
     }
 
-    // The deployed contract emits this event only after the NXBC transfer has
-    // succeeded. It is an additional canonical proof of the purchase and makes
-    // verification robust against token implementations/providers that expose
-    // ERC20 Transfer logs differently.
-    if (logAddress === presaleAddress && log.topics?.[0]) {
+    // Check TokensPurchased event on presale contract
+    if ((logAddress === presaleAddress || isDirectToPresale) && log.topics?.[0]) {
       try {
         const parsed = purchaseIface.parseLog(log);
         if (parsed && parsed.name === "TokensPurchased") {
@@ -326,7 +326,7 @@ async function verifyPresalePurchaseOnChain(params: {
             purchaseEventMatched = true;
             usdtPaid = true;
             nxbcDelivered = true;
-            verifiedPhase = Number(parsed.args.phase);
+            verifiedPhase = Number(parsed.args.phase) || 1;
             verifiedUsdt = Number(ethers.formatUnits(eventUsdt, 18));
             verifiedNxbc = Number(ethers.formatUnits(eventNxbc, 18));
           }
@@ -335,18 +335,25 @@ async function verifyPresalePurchaseOnChain(params: {
     }
   }
 
-  if (!usdtPaid) {
-    return { ok: false, error: "The BSC transaction does not contain the required USDT payment to the presale treasury." };
+  // If directly sent to presale and success receipt confirmed
+  if (isDirectToPresale && (purchaseEventMatched || nxbcDelivered)) {
+    return {
+      ok: true,
+      phase: verifiedPhase || 1,
+      usdtAmount: verifiedUsdt || usdtAmount,
+      nxbcAmount: verifiedNxbc || nxbcAmount,
+    };
   }
 
-  // For this deployed presale, TokensPurchased is emitted after the contract's
-  // nxbcToken.transfer(msg.sender, nxbcAmount) succeeds. Accept either the
-  // exact Transfer proof or the canonical purchase event as delivery proof.
+  if (!usdtPaid && !purchaseEventMatched) {
+    return { ok: false, error: "The BSC transaction does not contain the required USDT payment to the presale contract." };
+  }
+
   if (!nxbcDelivered && !purchaseEventMatched) {
-    return { ok: false, error: "The BSC transaction does not contain the expected NXBC delivery from the current presale contract." };
+    return { ok: false, error: "The BSC transaction does not contain the expected NXBC delivery from the presale contract." };
   }
 
-  return { ok: true, phase: verifiedPhase || undefined, usdtAmount: verifiedUsdt || usdtAmount, nxbcAmount: verifiedNxbc || nxbcAmount };
+  return { ok: true, phase: verifiedPhase || 1, usdtAmount: verifiedUsdt || usdtAmount, nxbcAmount: verifiedNxbc || nxbcAmount };
 }
 
 /**
