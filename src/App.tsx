@@ -1691,6 +1691,7 @@ export default function App() {
                   matrixIncomeUsd={matrixIncomeUsd}
                   walletAddress={walletAddress}
                   walletConnected={walletConnected}
+                  sellQueueSharePercent={systemConfig?.sellQueueSharePercent}
                 />
               )}
 
@@ -1824,6 +1825,9 @@ export default function App() {
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
                   levelIncomeUsd={levelIncomeUsd}
                   matrixIncomeUsd={matrixIncomeUsd}
+                  walletAddress={walletAddress}
+                  walletConnected={walletConnected}
+                  sellQueueSharePercent={systemConfig?.sellQueueSharePercent}
                 />
                 <BottomNavBar
                   idPrefix="s2-nav"
