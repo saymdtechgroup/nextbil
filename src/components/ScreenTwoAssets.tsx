@@ -53,6 +53,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   const [showValues, setShowValues] = useState<boolean>(true);
   const [simTarget, setSimTarget] = useState<'p2' | 'p3' | 'p4' | 'p5' | 'live'>('p3');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [liveSellerShare, setLiveSellerShare] = useState<number>(sellQueueSharePercent ?? 20);
   const [saleOrders, setSaleOrders] = useState<Array<{
     id: number; phaseNumber: number; amountTokens: number; soldTokens: number;
     remainingTokens: number; tokenPrice: number; expectedUsdt: number;
@@ -103,6 +104,9 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
       const data = await r.json().catch(() => ({}));
       if (r.ok && data.success) {
         setGlobalFifo(Array.isArray(data.phases) ? data.phases : []);
+        if (typeof data.sellerSharePercent === 'number' && Number.isFinite(data.sellerSharePercent)) {
+          setLiveSellerShare(data.sellerSharePercent);
+        }
       }
     } catch (e) {
       console.error('Failed to load global FIFO queue:', e);
@@ -110,6 +114,12 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
       setFifoLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (typeof sellQueueSharePercent === 'number' && Number.isFinite(sellQueueSharePercent)) {
+      setLiveSellerShare(sellQueueSharePercent);
+    }
+  }, [sellQueueSharePercent]);
 
   useEffect(() => {
     fetchOrders();
@@ -550,7 +560,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                   Global FIFO Execution Queue
                 </h2>
                 <p className="text-[7.5px] sm:text-[8.5px] text-slate-300/80 font-mono-crypto">
-                  Algorithmic auto-matching on BSC • {sellQueueSharePercent}% buyer flow absorption
+                  Algorithmic auto-matching on BSC • {liveSellerShare}% buyer flow absorption
                 </p>
               </div>
             </div>
@@ -565,14 +575,14 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               <Zap className="w-4 h-4 text-amber-300 shrink-0" />
               <div className="min-w-0">
                 <div className="text-[7px] text-slate-400 uppercase font-rajdhani">Buyer Absorption</div>
-                <div className="text-[9px] font-bold text-amber-300 font-mono-crypto">{sellQueueSharePercent}% Immediate Pool</div>
+                <div className="text-[9px] font-bold text-amber-300 font-mono-crypto">{liveSellerShare}% Immediate Pool</div>
               </div>
             </div>
             <div className="rounded-[12px] bg-[#050b16]/70 border border-white/10 p-2 flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-300 shrink-0" />
               <div className="min-w-0">
                 <div className="text-[7px] text-slate-400 uppercase font-rajdhani">Reserve Pool Match</div>
-                <div className="text-[9px] font-bold text-emerald-300 font-mono-crypto">{Math.max(0, 100 - Number(sellQueueSharePercent))}% Contract Pool</div>
+                <div className="text-[9px] font-bold text-emerald-300 font-mono-crypto">{Math.max(0, 100 - Number(liveSellerShare))}% Contract Pool</div>
               </div>
             </div>
           </div>
