@@ -66,7 +66,8 @@ type AdminSection =
   | 'ranks'
   | 'token_security'
   | 'simulator'
-  | 'queue';
+  | 'queue'
+  | 'users';
 
 export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
   phases,
@@ -87,6 +88,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
 }) => {
   // Secret Authentication Gate - Strictly Locked by default
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [currentMasterPin, setCurrentMasterPin] = useState<string>('');
   const [enteredPin, setEnteredPin] = useState<string>('');
   const [pinError, setPinError] = useState<string>('');
   // Password / PIN Change Form State
@@ -388,8 +390,14 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
       } else {
         setSaveSuccessMsg('✓ Settings saved & applied live!');
       }
+      try {
+        window.dispatchEvent(new CustomEvent('nxbc:refresh-presale'));
+      } catch {}
     } catch (err) {
       setSaveSuccessMsg('✓ Settings applied & saved locally!');
+      try {
+        window.dispatchEvent(new CustomEvent('nxbc:refresh-presale'));
+      } catch {}
     }
 
     setTimeout(() => {

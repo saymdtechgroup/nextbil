@@ -90,7 +90,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   const fetchOrders = async () => {
     if (!walletAddress) { setSaleOrders([]); return; }
     try {
-      const r = await fetch(`/api/presale/sale-orders/${walletAddress}`);
+      const r = await fetch(`/api/presale/sale-orders/${walletAddress}`, { cache: 'no-store' });
       const data = await r.json().catch(() => ({}));
       if (r.ok && data.success) setSaleOrders(Array.isArray(data.orders) ? data.orders : []);
     } catch (e) {
@@ -100,7 +100,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
 
   const fetchGlobalFifo = async () => {
     try {
-      const r = await fetch('/api/presale/fifo-global');
+      const r = await fetch('/api/presale/fifo-global', { cache: 'no-store' });
       const data = await r.json().catch(() => ({}));
       if (r.ok && data.success) {
         setGlobalFifo(Array.isArray(data.phases) ? data.phases : []);
