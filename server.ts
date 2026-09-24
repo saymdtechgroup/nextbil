@@ -6,10 +6,10 @@ import { db } from "./src/db/index.ts";
 import { users, matrixNodes, levelEarnings, transactions, sellOrders, systemConfigs, tokenSellLedgers, rankAchievements } from "./src/db/schema.ts";
 import { eq, desc, asc, and, or, inArray, sql } from "drizzle-orm";
 import { ethers } from "ethers";
-import { scryptSync, randomBytes, timingSafeEqual, createHash } from "crypto";
+import { scryptSync, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
 
 // ---------------------------------------------------------------------------
-// Admin PIN hashing + brute-force lockout
+// Admin PIN hashing + persistent HMAC session verification + brute-force lockout
 // ---------------------------------------------------------------------------
 // PINs are never stored or compared in plaintext. We hash with a random salt
 // (scrypt, built into Node) and store "salt:hash" as the systemConfigs value.
@@ -31,30 +31,59 @@ function verifyPin(pin: string, stored: string): boolean {
 }
 
 const pinAttempts = new Map<string, { count: number; lockedUntil: number }>();
-const adminSessions = new Map<string, number>();
-const ADMIN_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+const ADMIN_SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours durable session
 
-function issueAdminSession(): string {
-  const token = randomBytes(32).toString("hex");
-  adminSessions.set(token, Date.now() + ADMIN_SESSION_TTL_MS);
-  return token;
+let ADMIN_SIGNING_SECRET = process.env.ADMIN_JWT_SECRET || '';
+async function getAdminSigningSecret(): Promise<string> {
+  if (ADMIN_SIGNING_SECRET) return ADMIN_SIGNING_SECRET;
+  try {
+    const existing = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'admin_signing_key') });
+    if (existing?.value) {
+      ADMIN_SIGNING_SECRET = existing.value;
+      return ADMIN_SIGNING_SECRET;
+    }
+    const newKey = randomBytes(32).toString('hex');
+    await db.insert(systemConfigs).values({ key: 'admin_signing_key', value: newKey, description: 'Secret key for admin auth tokens' });
+    ADMIN_SIGNING_SECRET = newKey;
+    return newKey;
+  } catch {
+    if (!ADMIN_SIGNING_SECRET) ADMIN_SIGNING_SECRET = 'nxbc_master_admin_signing_secure_key_2026';
+    return ADMIN_SIGNING_SECRET;
+  }
 }
 
-function requireAdmin(req: express.Request, res: express.Response): boolean {
+async function issueAdminSession(): Promise<string> {
+  const secret = await getAdminSigningSecret();
+  const expiresAt = Date.now() + ADMIN_SESSION_TTL_MS;
+  const payload = `${expiresAt}.${randomBytes(16).toString('hex')}`;
+  const sig = createHmac('sha256', secret).update(payload).digest('hex');
+  return `${payload}.${sig}`;
+}
+
+async function verifyAdminToken(token: string): Promise<boolean> {
+  if (!token) return false;
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+  const [expiresAtStr, nonce, sig] = parts;
+  const expiresAt = Number(expiresAtStr);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return false;
+  const secret = await getAdminSigningSecret();
+  const payload = `${expiresAtStr}.${nonce}`;
+  const expectedSig = createHmac('sha256', secret).update(payload).digest('hex');
+  const a = Buffer.from(sig, 'hex');
+  const b = Buffer.from(expectedSig, 'hex');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+async function requireAdmin(req: express.Request, res: express.Response): Promise<boolean> {
   const token = String(req.headers["x-admin-token"] || "");
-  const expires = adminSessions.get(token);
-  if (!token || !expires || expires <= Date.now()) {
-    if (token) adminSessions.delete(token);
-    res.status(401).json({ success: false, error: "Admin authentication required." });
+  const isValid = await verifyAdminToken(token);
+  if (!isValid) {
+    res.status(401).json({ success: false, error: "Admin authentication required or session expired. Please enter PIN." });
     return false;
   }
   return true;
 }
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [token, expires] of adminSessions) if (expires <= now) adminSessions.delete(token);
-}, 15 * 60 * 1000);
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -2849,7 +2878,7 @@ async function startServer() {
   // Admin FIFO controls - persisted in PostgreSQL, not browser/localStorage.
   // -------------------------------------------------------------------------
   app.post("/api/admin/sellqueue/reorder", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    if (!await requireAdmin(req, res)) return;
     try {
       const orderIds = Array.isArray(req.body?.orderIds) ? req.body.orderIds.map(Number).filter(Number.isFinite) : [];
       if (!orderIds.length) return res.status(400).json({ error: "orderIds is required." });
@@ -2861,7 +2890,7 @@ async function startServer() {
   });
 
   app.post("/api/admin/sellqueue/instant-fulfill", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    if (!await requireAdmin(req, res)) return;
     try {
       const orderId = Number(req.body?.orderId);
       if (!Number.isFinite(orderId)) return res.status(400).json({ error: "Valid orderId is required." });
@@ -2918,7 +2947,7 @@ async function startServer() {
 
       if (cleanPin && verifyPin(cleanPin, currentPinHash)) {
         recordPinSuccess(ip);
-        const adminToken = issueAdminSession();
+        const adminToken = await issueAdminSession();
         return res.json({ success: true, message: "Authentication successful", adminToken });
       } else {
         recordPinFailure(ip);
@@ -2931,7 +2960,7 @@ async function startServer() {
 
   // Change Admin PIN Endpoint
   app.post("/api/admin/change-pin", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    if (!await requireAdmin(req, res)) return;
     try {
       const ip = req.ip || req.socket.remoteAddress || "unknown";
       const lockout = checkPinLockout(ip);
@@ -3171,7 +3200,7 @@ async function startServer() {
 
   // Save Live System & Admin Configs
   app.post("/api/admin/configs", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    if (!await requireAdmin(req, res)) return;
     try {
       const { phases, referralLevels, rankRewards, systemConfig, matrixConfig } = req.body;
 
@@ -3240,7 +3269,7 @@ async function startServer() {
 
   // System Configurations (Admin Control Legacy endpoint)
   app.get("/api/system/configs", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    if (!await requireAdmin(req, res)) return;
     try {
       const configs = await db.select().from(systemConfigs);
       res.json({ configs });
