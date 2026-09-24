@@ -3246,7 +3246,15 @@ async function startServer() {
           });
 
           if (existing) {
-            await db.update(systemConfigs).set({ value: item.value, updatedAt: new Date() }).where(eq(systemConfigs.key, item.key));
+            let finalValue = item.value;
+            if (item.key === 'systemConfig' || item.key === 'matrixConfig') {
+              try {
+                const prevObj = JSON.parse(existing.value || '{}');
+                const newObj = JSON.parse(item.value);
+                finalValue = JSON.stringify({ ...prevObj, ...newObj });
+              } catch {}
+            }
+            await db.update(systemConfigs).set({ value: finalValue, updatedAt: new Date() }).where(eq(systemConfigs.key, item.key));
           } else {
             await db.insert(systemConfigs).values({ key: item.key, value: item.value, description: item.desc });
           }
@@ -3260,6 +3268,9 @@ async function startServer() {
       res.json({
         success: true,
         message: "Configurations updated successfully and applied to all users!",
+        systemConfig,
+        matrixConfig,
+        phases: phasesForSave,
       });
     } catch (error: any) {
       console.error("Error in /api/admin/configs POST:", error);
