@@ -2651,7 +2651,11 @@ async function startServer() {
       if (!sourceTxHash) return res.status(400).json({ error: 'A verified purchase transaction hash is required for allocation.' });
 
       const sourcePurchase = await db.query.transactions.findFirst({
-        where: and(eq(transactions.txHash, sourceTxHash), eq(transactions.userId, user.id), eq(transactions.type, 'buy_presale'), eq(transactions.status, 'completed'))
+        where: and(
+          sql`LOWER(${transactions.txHash}) = LOWER(${sourceTxHash})`,
+          eq(transactions.userId, user.id),
+          eq(transactions.type, 'buy_presale')
+        )
       });
       if (!sourcePurchase) return res.status(400).json({ error: 'Verified purchase lot not found for this wallet.' });
       const purchasePhase = Number(sourcePurchase.phaseIndex || 1);
