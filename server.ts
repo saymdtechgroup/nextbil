@@ -933,13 +933,29 @@ async function finalizeConfirmedPurchase(
     await conn.execute(sql`UPDATE direct_buyer_invites SET claimed_by_wallet=${buyer}, used_at=NOW() WHERE id=${Number(invite.id)} AND used_at IS NULL`);
     return {matched:filled,unmatched:Math.max(0,share-filled),inviteUsed:true,match:{orderId:Number(order.id),sellerUserId:Number(order.user_id),phaseNumber:Number(order.phase_number),tokensSold:filled,tokenPrice:price,grossUsdt,remainingOrderTokens:nextRemaining,status:nextStatus}};
   }
+  let inMemorySellerSharePercent: number | null = null;
+  let inMemoryWithdrawalFeePercent: number | null = null;
+
   async function getFifoShareConfig() {
+    if (inMemorySellerSharePercent !== null && Number.isFinite(inMemorySellerSharePercent)) {
+      return { sellerSharePercent: inMemorySellerSharePercent, companySharePercent: 100 - inMemorySellerSharePercent };
+    }
     let sellerSharePercent = 20;
     try {
-      const row = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'systemConfig') });
-      const parsed = row?.value ? JSON.parse(row.value) : {};
-      const candidate = Number(parsed?.sellQueueSharePercent ?? 20);
-      if (Number.isFinite(candidate) && candidate >= 0 && candidate <= 100) sellerSharePercent = candidate;
+      const rows = await db.select().from(systemConfigs);
+      for (const row of rows) {
+        if (row.key === 'systemConfig' || row.key === 'system_config') {
+          try {
+            const parsed = JSON.parse(row.value);
+            const candidate = Number(parsed?.sellQueueSharePercent);
+            if (Number.isFinite(candidate) && candidate >= 0 && candidate <= 100) {
+              sellerSharePercent = candidate;
+              inMemorySellerSharePercent = candidate;
+              break;
+            }
+          } catch {}
+        }
+      }
     } catch {}
     return { sellerSharePercent, companySharePercent: 100 - sellerSharePercent };
   }
@@ -3043,15 +3059,22 @@ async function startServer() {
             contractAddress: process.env.NXBC_TOKEN_ADDRESS || DEFAULT_NXBC_TOKEN_ADDRESS,
             receivingAddress: process.env.PRESALE_RECEIVING_WALLET || DEFAULT_ADMIN_WALLET,
             presalePaused: !live.active,
-            withdrawalFeePercent: Number.isFinite(Number(parsed.withdrawalFeePercent ?? 2))
-              ? Math.max(0, Math.min(100, Number(parsed.withdrawalFeePercent ?? 2)))
-              : 2,
-            sellQueueSharePercent: Number.isFinite(Number(parsed.sellQueueSharePercent ?? 20))
-              ? Math.max(0, Math.min(100, Number(parsed.sellQueueSharePercent ?? 20)))
-              : 20,
+            withdrawalFeePercent: inMemoryWithdrawalFeePercent !== null
+              ? inMemoryWithdrawalFeePercent
+              : Number.isFinite(Number(parsed.withdrawalFeePercent ?? 2))
+                ? Math.max(0, Math.min(100, Number(parsed.withdrawalFeePercent ?? 2)))
+                : 2,
+            sellQueueSharePercent: inMemorySellerSharePercent !== null
+              ? inMemorySellerSharePercent
+              : Number.isFinite(Number(parsed.sellQueueSharePercent ?? 20))
+                ? Math.max(0, Math.min(100, Number(parsed.sellQueueSharePercent ?? 20)))
+                : 20,
             socialLinks: parsed.socialLinks || {},
           };
         } catch {}
+      } else {
+        if (inMemorySellerSharePercent !== null) publicSystemConfig.sellQueueSharePercent = inMemorySellerSharePercent;
+        if (inMemoryWithdrawalFeePercent !== null) publicSystemConfig.withdrawalFeePercent = inMemoryWithdrawalFeePercent;
       }
 
       // FIX: the on-chain phases(i).sold counter can stay at 0 (e.g. different
@@ -3210,6 +3233,7 @@ async function startServer() {
           return res.status(400).json({ error: 'User Sell Queue Share must be between 0% and 100%.' });
         }
         systemConfig.sellQueueSharePercent = sellerShare;
+        inMemorySellerSharePercent = sellerShare;
       }
       if (systemConfig && Object.prototype.hasOwnProperty.call(systemConfig, 'withdrawalFeePercent')) {
         const fee = Number(systemConfig.withdrawalFeePercent);
@@ -3217,6 +3241,7 @@ async function startServer() {
           return res.status(400).json({ error: 'Withdrawal fee must be between 0% and 100%.' });
         }
         systemConfig.withdrawalFeePercent = fee;
+        inMemoryWithdrawalFeePercent = fee;
       }
 
       // Save to database. The admin "Coins Sold" field is a manual/initial
