@@ -43,7 +43,11 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
     let cancelled = false;
     const loadTrustStats = async () => {
       try {
-        const res = await fetch('/api/presale/trust-stats');
+        const res = await fetch('/api/presale/trust-stats', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('nxbc_admin_token')}`
+          }
+        });
         if (!res.ok) return;
         const data = await res.json();
         if (!cancelled && data.success) {
