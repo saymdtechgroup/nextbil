@@ -130,8 +130,15 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   useEffect(() => {
     fetchGlobalFifo();
     const timer = setInterval(fetchGlobalFifo, 5000);
-    return () => clearInterval(timer);
-  }, []);
+    const onRefresh = () => { fetchGlobalFifo(); fetchOrders(); };
+    window.addEventListener('nxbc:refresh-presale', onRefresh);
+    window.addEventListener('nxbc:refresh-sale-orders', onRefresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('nxbc:refresh-presale', onRefresh);
+      window.removeEventListener('nxbc:refresh-sale-orders', onRefresh);
+    };
+  }, [walletAddress]);
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
