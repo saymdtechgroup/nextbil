@@ -14,6 +14,8 @@ import {
   Flame,
   Layers,
   ArrowUpRight,
+  Loader2,
+  ExternalLink,
 } from 'lucide-react';
 import { executeSmartContractBuy } from '../utils/web3Helper';
 
@@ -86,13 +88,6 @@ const fmt = (v: number) =>
 
 const DEFAULT_ALLOCATION = { p2: 20, p3: 30, p4: 20, p5: 15, dex: 15 };
 
-const PHASE_PRICES: Record<string, number> = {
-  p2: 0.1,
-  p3: 1.0,
-  p4: 10.0,
-  p5: 100.0,
-};
-
 export const BuyTokenModal: React.FC<Props> = ({
   isOpen,
   onClose,
@@ -129,6 +124,8 @@ export const BuyTokenModal: React.FC<Props> = ({
     dex: '15',
   });
   const [busy, setBusy] = useState(false);
+  const [statusStep, setStatusStep] = useState<string>('');
+  const [statusDetail, setStatusDetail] = useState<string>('');
   const [error, setError] = useState('');
 
   // Protect typing state from external re-renders / price polling
@@ -139,6 +136,8 @@ export const BuyTokenModal: React.FC<Props> = ({
       setUsd('');
       setError('');
       setBusy(false);
+      setStatusStep('');
+      setStatusDetail('');
 
       const incoming = {
         p2: clamp(num(initialAllocation?.p2Percent, 20)),
@@ -191,8 +190,6 @@ export const BuyTokenModal: React.FC<Props> = ({
     return { p2, p3, p4, p5, dex, total };
   }, [tokens, a]);
 
-  const totalTokensAllocated =
-    parts.p2 + parts.p3 + parts.p4 + parts.p5 + parts.dex;
   const exact100 = Math.abs(parts.total - 100) <= 0.01;
   const minOk = purchaseUsd >= Math.max(0, minPurchaseUsd);
   const balanceOk = purchaseUsd <= Number(usdtBalance) + 1e-9;
@@ -268,6 +265,8 @@ export const BuyTokenModal: React.FC<Props> = ({
     }
 
     setError('');
+    setStatusStep('');
+    setStatusDetail('');
 
     if (purchaseUsd <= 0) {
       setError('Enter a valid USDT purchase amount.');
@@ -294,6 +293,9 @@ export const BuyTokenModal: React.FC<Props> = ({
 
     try {
       setBusy(true);
+      setStatusStep('Initiating Web3 Transaction...');
+      setStatusDetail('Please check your Trust Wallet / MetaMask / Web3 app to confirm.');
+
       const buyResult = await executeSmartContractBuy(
         purchaseUsd,
         null,
@@ -302,12 +304,19 @@ export const BuyTokenModal: React.FC<Props> = ({
         parts.p4,
         parts.p5,
         parts.dex,
-        (msg) => setError(msg)
+        (msg) => {
+          // Status updates from blockchain steps (Approve, Buy, Waiting confirmation)
+          setStatusStep(msg);
+          setStatusDetail('Check your wallet screen and confirm prompt if requested.');
+        }
       );
 
       if (!buyResult.success || !buyResult.txHash) {
-        throw new Error(buyResult.error || 'NXBC purchase transaction failed.');
+        throw new Error(buyResult.error || 'NXBC purchase transaction failed or was rejected.');
       }
+
+      setStatusStep('Finalizing your purchase on server...');
+      setStatusDetail(`Tx: ${buyResult.txHash.substring(0, 10)}...${buyResult.txHash.substring(58)}`);
 
       await onConfirmPurchase(
         Number(buyResult.tokenAmount || tokens),
@@ -327,7 +336,10 @@ export const BuyTokenModal: React.FC<Props> = ({
       );
       onClose();
     } catch (e: any) {
+      console.error('Purchase Execution Failed:', e);
       setError(e?.message || 'Purchase could not be completed.');
+      setStatusStep('');
+      setStatusDetail('');
     } finally {
       setBusy(false);
     }
@@ -382,7 +394,8 @@ export const BuyTokenModal: React.FC<Props> = ({
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              disabled={busy}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <X size={20} />
             </button>
@@ -510,6 +523,7 @@ export const BuyTokenModal: React.FC<Props> = ({
               <span className="text-2xl font-black text-amber-400 mr-2">$</span>
               <input
                 type="text"
+                disabled={busy}
                 value={usd}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -520,7 +534,7 @@ export const BuyTokenModal: React.FC<Props> = ({
                 }}
                 inputMode="decimal"
                 placeholder="0.00"
-                className="w-full bg-transparent py-2 outline-none font-black text-2xl text-white placeholder:text-slate-600"
+                className="w-full bg-transparent py-2 outline-none font-black text-2xl text-white placeholder:text-slate-600 disabled:opacity-50"
               />
               <span className="text-cyan-300 font-black text-sm px-2.5 py-1 rounded-xl bg-cyan-500/15 border border-cyan-500/30">
                 USDT
@@ -531,36 +545,41 @@ export const BuyTokenModal: React.FC<Props> = ({
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
+                disabled={busy}
                 onClick={() => setQuickUsd(10)}
-                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer disabled:opacity-40"
               >
                 +$10
               </button>
               <button
                 type="button"
+                disabled={busy}
                 onClick={() => setQuickUsd(50)}
-                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer disabled:opacity-40"
               >
                 +$50
               </button>
               <button
                 type="button"
+                disabled={busy}
                 onClick={() => setQuickUsd(100)}
-                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer disabled:opacity-40"
               >
                 +$100
               </button>
               <button
                 type="button"
+                disabled={busy}
                 onClick={() => setQuickUsd(500)}
-                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer disabled:opacity-40"
               >
                 +$500
               </button>
               <button
                 type="button"
+                disabled={busy}
                 onClick={setMaxUsd}
-                className="px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-xs font-black text-cyan-300 transition-all cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-xs font-black text-cyan-300 transition-all cursor-pointer disabled:opacity-40"
               >
                 MAX USDT
               </button>
@@ -612,8 +631,9 @@ export const BuyTokenModal: React.FC<Props> = ({
                 {allowedPhaseKeys.includes('p2') && (
                   <button
                     type="button"
+                    disabled={busy}
                     onClick={() => allocateAllToSinglePhase('p2')}
-                    className={`px-2.5 py-1.5 rounded-xl border text-[10px] font-black transition-all cursor-pointer ${
+                    className={`px-2.5 py-1.5 rounded-xl border text-[10px] font-black transition-all cursor-pointer disabled:opacity-40 ${
                       a.p2 === 100
                         ? 'bg-cyan-500 text-black border-cyan-400 shadow-md shadow-cyan-500/30'
                         : 'bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/20 text-cyan-300'
@@ -625,8 +645,9 @@ export const BuyTokenModal: React.FC<Props> = ({
                 {allowedPhaseKeys.includes('p3') && (
                   <button
                     type="button"
+                    disabled={busy}
                     onClick={() => allocateAllToSinglePhase('p3')}
-                    className={`px-2.5 py-1.5 rounded-xl border text-[10px] font-black transition-all cursor-pointer ${
+                    className={`px-2.5 py-1.5 rounded-xl border text-[10px] font-black transition-all cursor-pointer disabled:opacity-40 ${
                       a.p3 === 100
                         ? 'bg-cyan-500 text-black border-cyan-400 shadow-md shadow-cyan-500/30'
                         : 'bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/20 text-cyan-300'
@@ -638,8 +659,9 @@ export const BuyTokenModal: React.FC<Props> = ({
                 {allowedPhaseKeys.includes('p4') && (
                   <button
                     type="button"
+                    disabled={busy}
                     onClick={() => allocateAllToSinglePhase('p4')}
-                    className={`px-2.5 py-1.5 rounded-xl border text-[10px] font-black transition-all cursor-pointer ${
+                    className={`px-2.5 py-1.5 rounded-xl border text-[10px] font-black transition-all cursor-pointer disabled:opacity-40 ${
                       a.p4 === 100
                         ? 'bg-cyan-500 text-black border-cyan-400 shadow-md shadow-cyan-500/30'
                         : 'bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/20 text-cyan-300'
@@ -651,8 +673,9 @@ export const BuyTokenModal: React.FC<Props> = ({
                 {allowedPhaseKeys.includes('p5') && (
                   <button
                     type="button"
+                    disabled={busy}
                     onClick={() => allocateAllToSinglePhase('p5')}
-                    className={`px-2.5 py-1.5 rounded-xl border text-[10px] font-black transition-all cursor-pointer ${
+                    className={`px-2.5 py-1.5 rounded-xl border text-[10px] font-black transition-all cursor-pointer disabled:opacity-40 ${
                       a.p5 === 100
                         ? 'bg-emerald-500 text-black border-emerald-400 shadow-md shadow-emerald-500/30'
                         : 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/20 text-emerald-300'
@@ -663,8 +686,9 @@ export const BuyTokenModal: React.FC<Props> = ({
                 )}
                 <button
                   type="button"
+                  disabled={busy}
                   onClick={() => allocateAllToSinglePhase('dex')}
-                  className={`px-2.5 py-1.5 rounded-xl border text-[10px] font-black transition-all cursor-pointer ${
+                  className={`px-2.5 py-1.5 rounded-xl border text-[10px] font-black transition-all cursor-pointer disabled:opacity-40 ${
                     a.dex === 100
                       ? 'bg-purple-500 text-white border-purple-400 shadow-md shadow-purple-500/30'
                       : 'bg-purple-500/10 hover:bg-purple-500/20 border-purple-500/20 text-purple-300'
@@ -674,19 +698,21 @@ export const BuyTokenModal: React.FC<Props> = ({
                 </button>
                 <button
                   type="button"
+                  disabled={busy}
                   onClick={() =>
                     applyPreset({ p2: 10, p3: 30, p4: 60, p5: 0, dex: 0 })
                   }
-                  className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-bold text-slate-300 transition-all cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-bold text-slate-300 transition-all cursor-pointer disabled:opacity-40"
                 >
                   10/30/60 Split
                 </button>
                 <button
                   type="button"
+                  disabled={busy}
                   onClick={() =>
                     applyPreset({ p2: 20, p3: 30, p4: 20, p5: 15, dex: 15 })
                   }
-                  className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-bold text-slate-300 transition-all cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-bold text-slate-300 transition-all cursor-pointer disabled:opacity-40"
                 >
                   20/30/20/15/15
                 </button>
@@ -742,12 +768,12 @@ export const BuyTokenModal: React.FC<Props> = ({
                             min="0"
                             max="100"
                             step="1"
-                            disabled={!isAllowed}
+                            disabled={!isAllowed || busy}
                             value={rawPhaseInputs[key] ?? String(percentVal)}
                             onChange={(e) =>
                               handlePhaseChange(key, e.target.value)
                             }
-                            className="w-16 rounded-xl bg-[#101527] px-2.5 py-1.5 text-right font-black text-sm outline-none border border-white/15 focus:border-cyan-400 text-white disabled:cursor-not-allowed"
+                            className="w-16 rounded-xl bg-[#101527] px-2.5 py-1.5 text-right font-black text-sm outline-none border border-white/15 focus:border-cyan-400 text-white disabled:cursor-not-allowed disabled:opacity-40"
                           />
                           <span className="text-xs font-black text-slate-400">
                             %
@@ -757,8 +783,9 @@ export const BuyTokenModal: React.FC<Props> = ({
                         {isAllowed && (
                           <button
                             type="button"
+                            disabled={busy}
                             onClick={() => allocateAllToSinglePhase(key)}
-                            className="text-[9px] font-black text-cyan-300 hover:text-cyan-200 bg-cyan-500/10 hover:bg-cyan-500/20 px-2 py-0.5 rounded-lg border border-cyan-500/30 transition-all cursor-pointer"
+                            className="text-[9px] font-black text-cyan-300 hover:text-cyan-200 bg-cyan-500/10 hover:bg-cyan-500/20 px-2 py-0.5 rounded-lg border border-cyan-500/30 transition-all cursor-pointer disabled:opacity-40"
                           >
                             100% ALL
                           </button>
@@ -801,18 +828,20 @@ export const BuyTokenModal: React.FC<Props> = ({
                         min="0"
                         max="100"
                         step="1"
+                        disabled={busy}
                         value={rawPhaseInputs.dex ?? String(a.dex)}
                         onChange={(e) =>
                           handlePhaseChange('dex', e.target.value)
                         }
-                        className="w-16 rounded-xl bg-[#101527] px-2.5 py-1.5 text-right font-black text-sm outline-none border border-purple-500/40 focus:border-purple-400 text-white"
+                        className="w-16 rounded-xl bg-[#101527] px-2.5 py-1.5 text-right font-black text-sm outline-none border border-purple-500/40 focus:border-purple-400 text-white disabled:opacity-40"
                       />
                       <span className="text-xs font-black text-purple-300">%</span>
                     </div>
                     <button
                       type="button"
+                      disabled={busy}
                       onClick={() => allocateAllToSinglePhase('dex')}
-                      className="text-[9px] font-black text-purple-300 hover:text-purple-200 bg-purple-500/15 hover:bg-purple-500/25 px-2 py-0.5 rounded-lg border border-purple-500/30 transition-all cursor-pointer"
+                      className="text-[9px] font-black text-purple-300 hover:text-purple-200 bg-purple-500/15 hover:bg-purple-500/25 px-2 py-0.5 rounded-lg border border-purple-500/30 transition-all cursor-pointer disabled:opacity-40"
                     >
                       100% DEX
                     </button>
@@ -879,11 +908,27 @@ export const BuyTokenModal: React.FC<Props> = ({
             )}
           </div>
 
+          {/* ACTIVE TRANSACTION PROGRESS BANNER */}
+          {busy && (
+            <div className="rounded-2xl border border-cyan-500/50 bg-gradient-to-r from-cyan-950/60 to-purple-950/60 p-4 shadow-xl space-y-2 animate-pulse">
+              <div className="flex items-center gap-2.5 text-cyan-300 font-black text-sm">
+                <Loader2 size={18} className="animate-spin text-cyan-400" />
+                <span>{statusStep || 'Processing On-Chain Transaction...'}</span>
+              </div>
+              <p className="text-[11px] text-slate-300 pl-7">
+                {statusDetail || 'Please look at your Trust Wallet / MetaMask / Web3 app to confirm the transaction request.'}
+              </p>
+            </div>
+          )}
+
           {/* Error Notice */}
           {error && (
             <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-3.5 text-xs text-rose-300 flex items-start gap-2.5">
               <AlertCircle size={17} className="shrink-0 mt-0.5" />
-              <span>{error}</span>
+              <div className="flex-1">
+                <div className="font-bold">Transaction Notice:</div>
+                <div className="mt-0.5 text-[11px] leading-relaxed">{error}</div>
+              </div>
             </div>
           )}
 
@@ -893,7 +938,9 @@ export const BuyTokenModal: React.FC<Props> = ({
             onClick={handleActionClick}
             disabled={busy || (walletConnected && !canSubmit)}
             className={`w-full relative overflow-hidden rounded-2xl py-4 px-6 font-black text-base flex justify-center items-center gap-2.5 transition-all duration-300 cursor-pointer ${
-              !walletConnected
+              busy
+                ? 'bg-slate-800 text-amber-300 border border-amber-500/40 cursor-wait'
+                : !walletConnected
                 ? isPurchaseReady
                   ? 'bg-gradient-to-r from-amber-400 via-orange-400 to-cyan-300 text-black shadow-[0_0_30px_rgba(245,158,11,0.5)] ring-2 ring-amber-300 animate-pulse'
                   : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20 hover:opacity-95'
@@ -904,8 +951,8 @@ export const BuyTokenModal: React.FC<Props> = ({
           >
             {busy ? (
               <span className="flex items-center gap-2.5">
-                <span className="animate-spin rounded-full h-5 w-5 border-2 border-black border-t-transparent" />
-                PROCESSING BLOCKCHAIN TRANSACTION...
+                <Loader2 size={18} className="animate-spin text-amber-300" />
+                <span>CONFIRMING IN WALLET &amp; BSC...</span>
               </span>
             ) : !walletConnected ? (
               <>
