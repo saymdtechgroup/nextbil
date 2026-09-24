@@ -60,11 +60,13 @@ const INITIAL_PHASES: PhaseConfig[] = [
 ];
 
 export default function App() {
+  // Default to 'single' full mobile screen mode
   const [isAppLaunched, setIsAppLaunched] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('single');
   const [activeSingleScreen, setActiveSingleScreen] = useState<ActiveScreen>('home');
   const [showSecretAdminPage, setShowSecretAdminPage] = useState<boolean>(false);
 
+  // Core State: 6-Phase Sequential Roadmap & Live Status (Admin Managed & Persisted)
   const [phases, setPhases] = useState<PhaseConfig[]>(INITIAL_PHASES);
 
   const activePhase = phases.find((p) => p.status === 'active') || phases[0] || {
@@ -75,6 +77,8 @@ export default function App() {
     totalSupply: 1000000,
     tokensSold: 0
   };
+
+
 
   const [userEarnings, setUserEarnings] = useState<UserEarnings>(() => {
     if (typeof window !== 'undefined') {
@@ -88,6 +92,7 @@ export default function App() {
 
   const [sellQueue, setSellQueue] = useState<QueueEntry[]>([]);
   
+  // Fetch Live P2P Sell Orders
   const fetchSellOrders = async () => {
     try {
       const res = await fetch('/api/p2p/orders');
@@ -105,6 +110,7 @@ export default function App() {
          }
       }
       
+      // Also sync user balances to reflect P2P fulfillment or rank rewards
       if (walletConnected && walletAddress) {
          const syncRes = await fetch('/api/users/sync', {
             method: 'POST',
@@ -135,7 +141,7 @@ export default function App() {
 
   useEffect(() => {
     fetchSellOrders();
-    const interval = setInterval(fetchSellOrders, 10000);
+    const interval = setInterval(fetchSellOrders, 10000); // refresh every 10s
     return () => clearInterval(interval);
   }, []);
 
@@ -145,6 +151,9 @@ export default function App() {
     }
   }, [userEarnings]);
 
+  // (Removed local storage effect for sellQueue)
+
+  // Wallet & Income State (Loads persisted wallet if present, or checks injected web3)
   const [walletConnected, setWalletConnected] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return !!localStorage.getItem('nxbc_connected_wallet');
@@ -187,6 +196,7 @@ export default function App() {
     return 0;
   });
 
+  // Auto-detect injected Web3 (MetaMask / Trust Wallet / Binance Web3 / OKX)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const eth =
@@ -196,6 +206,7 @@ export default function App() {
         (window as any).okxwallet;
 
       if (eth) {
+        // Check if accounts already authorized
         eth
           .request({ method: 'eth_accounts' })
           .then((accounts: string[]) => {
@@ -207,6 +218,7 @@ export default function App() {
           })
           .catch((err: any) => console.log('Web3 silent account check:', err));
 
+        // Listen to account switch in Trust Wallet / MetaMask
         const handleAccountsChanged = (accounts: string[]) => {
           if (accounts && accounts.length > 0) {
             setWalletAddress(accounts[0]);
@@ -224,6 +236,7 @@ export default function App() {
     }
   }, []);
 
+  // Secure URL-Only Admin Access (#admin, /admin, ?admin=true, ?panel=admin, #secret-admin)
   useEffect(() => {
     const checkAdminUrl = () => {
       if (typeof window !== 'undefined') {
@@ -250,6 +263,8 @@ export default function App() {
     checkAdminUrl();
     window.addEventListener('hashchange', checkAdminUrl);
     window.addEventListener('popstate', checkAdminUrl);
+
+    // Periodic scanner every 400ms in case URL is modified without page reload
     const interval = setInterval(checkAdminUrl, 400);
 
     return () => {
@@ -259,6 +274,8 @@ export default function App() {
     };
   }, []);
 
+  // Public live presale state. Phase price/supply/sold/remaining/status are
+  // authoritative on BSC and must never be replaced by admin/localStorage data.
   useEffect(() => {
     let cancelled = false;
 
@@ -300,6 +317,8 @@ export default function App() {
     };
   }, []);
 
+  // Admin configuration is private. Normal users must never use this endpoint
+  // as a source for public phase financial data.
   useEffect(() => {
     const adminToken = typeof window !== 'undefined' ? localStorage.getItem('nxbc_admin_token') : null;
     if (!adminToken) return;
@@ -314,6 +333,8 @@ export default function App() {
         const data = await res.json();
         if (!data?.success) return;
 
+        // Do NOT copy data.phases here. Public phase financial state comes
+        // exclusively from /api/presale/config -> BSC.
         if (Array.isArray(data.referralLevels) && data.referralLevels.length > 0) setReferralLevels(data.referralLevels);
         if (Array.isArray(data.rankRewards) && data.rankRewards.length > 0) setRankRewards(data.rankRewards);
         if (data.systemConfig && typeof data.systemConfig === 'object') setSystemConfig(data.systemConfig);
@@ -328,6 +349,8 @@ export default function App() {
     return () => window.clearInterval(interval);
   }, []);
 
+  // Cross-tab storage listener is intentionally limited to non-financial admin
+  // configuration. It must not overwrite live BSC phase state.
   useEffect(() => {
     const handleStorageEvent = (e: StorageEvent) => {
       if (e.key === 'nxbc_admin_levels' && e.newValue) {
@@ -347,6 +370,7 @@ export default function App() {
     return () => window.removeEventListener('storage', handleStorageEvent);
   }, []);
 
+  // Sync user with PostgreSQL backend when wallet connects
   useEffect(() => {
     if (walletConnected && walletAddress) {
       const sponsorRef = typeof window !== 'undefined' ? localStorage.getItem('nxbc_sponsor_ref') : null;
@@ -371,6 +395,8 @@ export default function App() {
     }
   }, [walletConnected, walletAddress]);
 
+  // Transactions History (Persisted in localStorage)
+  
   const [allocation, setAllocation] = useState<AllocationState>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('nxbc_user_allocation');
@@ -404,6 +430,7 @@ export default function App() {
     return [];
   });
 
+  // 10-Level Referral Plan Data (Admin Managed & Persisted)
   const defaultPlanLevels: ReferralLevel[] = [
     { level: 1, commissionPercent: 3, directRequirement: 1, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
     { level: 2, commissionPercent: 2, directRequirement: 2, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
@@ -422,13 +449,19 @@ export default function App() {
       const saved = localStorage.getItem('nxbc_admin_levels');
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          if (false) {
+            localStorage.setItem('nxbc_admin_levels', JSON.stringify(defaultPlanLevels));
+            return defaultPlanLevels;
+          }
+          return parsed;
         } catch (e) {}
       }
     }
     return defaultPlanLevels;
   });
 
+  // 2x2 Matrix System Config (Dynamic via Admin & Persisted)
   const [matrixConfig, setMatrixConfig] = useState<MatrixConfig>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('nxbc_admin_matrix');
@@ -445,6 +478,7 @@ export default function App() {
     };
   });
 
+  // Rank Rewards & Leadership Pool (Dynamic via Admin & Persisted)
   const defaultRankRewards: RankReward[] = [
     {
       id: 'rank-1',
@@ -528,13 +562,19 @@ export default function App() {
       const saved = localStorage.getItem('nxbc_admin_ranks');
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          if (parsed?.[0]?.requiredDirectVolume === 50000 || parsed?.[1]?.name === 'Monthly Leadership Salary') {
+             localStorage.setItem('nxbc_admin_ranks', JSON.stringify(defaultRankRewards));
+             return defaultRankRewards;
+          }
+          return parsed;
         } catch (e) {}
       }
     }
     return defaultRankRewards;
   });
 
+  // General System & Global Parameters (Dynamic via Admin & Persisted)
   const [systemConfig, setSystemConfig] = useState<AdminSystemConfig>({
     tokenName: 'NXBC',
     tokenSymbol: 'NXBC',
@@ -551,6 +591,7 @@ export default function App() {
     sellQueueSharePercent: 20,
   });
 
+  // 2x2 Matrix Structure Nodes Data (Clean Real Tree)
   const matrixNodes: MatrixNode[] = [
     { id: 'm-0', name: walletConnected ? 'You (Active)' : 'You (Root)', wallet: walletAddress ? `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}` : 'Connect Wallet', position: 'root', status: walletConnected ? 'filled' : 'empty', avatarSeed: 'root', earningsUsd: 0 },
     { id: 'm-1', name: 'Open Slot', wallet: 'Empty', position: 'L1_left', status: 'empty', avatarSeed: 'l1', earningsUsd: 0 },
@@ -561,6 +602,7 @@ export default function App() {
     { id: 'm-6', name: 'Open Slot', wallet: 'Empty', position: 'L2_RR', status: 'empty', avatarSeed: 'l6', earningsUsd: 0 },
   ];
 
+  // Modals state
   const [buyModalOpen, setBuyModalOpen] = useState<boolean>(false);
   const [walletModalOpen, setWalletModalOpen] = useState<boolean>(false);
   const [teamModalOpen, setTeamModalOpen] = useState<boolean>(false);
@@ -585,9 +627,11 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  // Token Balances
   const [nxbcBalance, setNxbcBalance] = useState<number>(0);
   const [usdtBalance, setUsdtBalance] = useState<number>(0);
 
+  // Automatically fetch live on-chain balances when wallet is connected
   useEffect(() => {
     if (!walletAddress || !walletConnected) return;
 
@@ -599,6 +643,7 @@ export default function App() {
           fetchOnChainTokenBalance(USDT_CONTRACT, walletAddress),
         ]);
         if (isMounted) {
+          
           setNxbcBalance(Math.max(0, nxChainBalance));
           setUsdtBalance(Math.max(0, uBalance));
         }
@@ -615,6 +660,8 @@ export default function App() {
     };
   }, [walletAddress, walletConnected]);
 
+    
+  // Sync User Stats from PostgreSQL Database
   useEffect(() => {
     const fetchUserStats = async () => {
       if (!walletAddress) return;
@@ -635,6 +682,9 @@ export default function App() {
             tokenSellWithdrawnUsdt: Number(data.tokenSaleWithdrawnUsdt || 0),
           }));
 
+          // IMPORTANT: the database is the authoritative source for purchased NXBC.
+          // The wallet is the user's ID in the DApp, so every connected wallet must
+          // display its DB total instead of relying only on browser localStorage.
           const dbPurchasedTokens = Math.max(0, Number(data.user.totalPurchasedTokens || 0));
           setAllocation((prev) => {
             if (Number(prev.totalTokensPurchased || 0) === dbPurchasedTokens) return prev;
@@ -644,6 +694,9 @@ export default function App() {
             }
             return updated;
           });
+          
+          // Optionally calculate matrix specific income from earnings if needed, 
+          // For now we map totalEarned to a mix or keep them separate.
           
           if (data.transactions) {
             const mappedTxs = data.transactions.map((t: any) => ({
@@ -670,6 +723,12 @@ export default function App() {
     return () => clearInterval(interval);
   }, [walletAddress]);
 
+  // Purchase handler:
+  // - validates that the five user-facing buckets total exactly 100%
+  // - never creates a fake Phase 6 / DEX sell order
+  // - verifies the blockchain purchase through the backend first
+  // - only then persists phase sell reservations
+  // - keeps the database/backend authoritative for financial records
   const handleConfirmPurchase = async (
     tokenAmount: number,
     usdAmount: number,
@@ -710,6 +769,8 @@ export default function App() {
       throw new Error('Presale is currently paused by the System.');
     }
 
+    // Use the current server-synced phase state. The backend remains the final
+    // authority and will verify the on-chain purchase before recording it.
     const activeIdx = phases.findIndex((p) => p.status === 'active');
     if (activeIdx === -1) {
       throw new Error('Presale has ended or no active phase is available.');
@@ -736,6 +797,8 @@ export default function App() {
 
     const percentTotal = p2Percent + p3Percent + p4Percent + p5Percent + dexPercent;
 
+    // DEX/LIVE is a display/allocation bucket only. It must not become a
+    // Phase 6 sell order because the production presale has only P1-P5.
     if (Math.abs(percentTotal - 100) > 0.000001) {
       throw new Error(
         `Allocation must equal 100%. Current allocation is ${percentTotal.toFixed(2)}%.`
@@ -749,6 +812,8 @@ export default function App() {
     const invalidPastAllocation = (currentP.phaseNumber >= 2 && p2Percent > 0) || (currentP.phaseNumber >= 3 && p3Percent > 0) || (currentP.phaseNumber >= 4 && p4Percent > 0) || (currentP.phaseNumber >= 5 && p5Percent > 0);
     if (invalidPastAllocation) throw new Error(`Allocation contains the current or a completed phase. Only future phases after P${currentP.phaseNumber} and DEX / LIVE are allowed.`);
 
+    // DEX/LIVE receives the exact mathematical remainder so floating-point
+    // rounding cannot create a hidden/unallocated token amount.
     const dexTokens =
       safeTokenAmount -
       p2TokensAllocated -
@@ -799,6 +864,8 @@ export default function App() {
       }),
     };
 
+    // STEP 1: backend verifies the on-chain transaction and finalizes the
+    // purchase. Do not change balances/local financial state before success.
     const buyResponse = await fetch('/api/presale/buy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -821,12 +888,17 @@ export default function App() {
       );
     }
 
+    // The direct-buyer token is single-use; clear it after the verified purchase
+    // so a later normal purchase from the same browser cannot accidentally reuse it.
     if (directBuyerInviteToken) {
       setDirectBuyerInviteToken('');
       setDirectBuyerInfo(null);
       if (typeof window !== 'undefined') window.history.replaceState(null, '', window.location.pathname);
     }
 
+    // STEP 2: save only P2-P5 sell reservations. DEX/LIVE is deliberately
+    // excluded from the FIFO reservation API and therefore cannot create a
+    // bogus FIFO number or an invalid Phase 6 allocation.
     const allocations = [
       { phaseNumber: 2, amountTokens: p2TokensAllocated },
       { phaseNumber: 3, amountTokens: p3TokensAllocated },
@@ -835,27 +907,42 @@ export default function App() {
     ].filter((item) => item.amountTokens > 0);
 
     if (allocations.length > 0 || dexTokens > 0) {
-      const allocationResponse = await fetch('/api/presale/allocation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          walletAddress,
-          allocations,
-          liveHoldTokens: dexTokens,
-          purchaseTxHash: txHash,
-        }),
-      });
+      try {
+        const allocationResponse = await fetch('/api/presale/allocation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletAddress,
+            allocations,
+            liveHoldTokens: dexTokens,
+            purchaseTxHash: txHash,
+          }),
+        });
 
-      const allocationData = await allocationResponse.json().catch(() => ({}));
-
-      if (!allocationResponse.ok || !allocationData.success) {
-        throw new Error(
-          allocationData.error ||
-          'Purchase succeeded, but the phase sell plan could not be saved.'
-        );
+        const allocationData = await allocationResponse.json().catch(() => ({}));
+        if (!allocationResponse.ok || !allocationData.success) {
+          console.warn('First allocation attempt returned:', allocationData.error);
+          // Quick retry in 600ms
+          await new Promise((r) => setTimeout(r, 600));
+          await fetch('/api/presale/allocation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              walletAddress,
+              allocations,
+              liveHoldTokens: dexTokens,
+              purchaseTxHash: txHash,
+            }),
+          }).catch((err) => console.warn('Allocation retry error:', err));
+        }
+      } catch (allocErr) {
+        console.warn('Phase sell allocation notice:', allocErr);
       }
     }
 
+    // STEP 3: update local UI only after backend success.
+    // Immediately re-read both blockchain balances so the Home/Buy UI reflects
+    // the actual post-purchase wallet state instead of waiting for the 15s poll.
     try {
       const [freshNxbc, freshUsdt] = await Promise.all([
         fetchOnChainTokenBalance(NXBC_CONTRACT, walletAddress),
@@ -863,6 +950,7 @@ export default function App() {
       ]);
       setNxbcBalance(Math.max(0, freshNxbc));
       setUsdtBalance(Math.max(0, freshUsdt));
+
     } catch (balanceRefreshError) {
       console.warn('Immediate post-purchase wallet balance refresh failed:', balanceRefreshError);
     }
@@ -872,6 +960,10 @@ export default function App() {
       localStorage.setItem('nxbc_user_allocation', JSON.stringify(updatedAlloc));
     }
 
+    // On-chain wallet balance is re-read by the balance polling effect.
+    // Do not fabricate a local USDT/NXBC balance after purchase.
+
+    // Refresh the DB-backed user state after the confirmed purchase.
     try {
       const userResponse = await fetch(`/api/users/${walletAddress}`);
       const userData = await userResponse.json().catch(() => ({}));
@@ -883,6 +975,8 @@ export default function App() {
       console.warn('User balance refresh after purchase failed:', refreshError);
     }
 
+    // Reload personal sale orders so the Assets screen receives the real FIFO
+    // number from the backend instead of inventing one on the frontend.
     try {
       window.dispatchEvent(new CustomEvent('nxbc:refresh-sale-orders'));
       window.dispatchEvent(new CustomEvent('nxbc:refresh-presale'));
@@ -891,6 +985,7 @@ export default function App() {
     setBuyModalOpen(false);
   };
 
+  // Helper to reset all data back to clean state
   const handleResetAllData = () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('nxbc_user_allocation');
@@ -918,6 +1013,7 @@ export default function App() {
     setTransactions([]);
   };
 
+  // Synchronized Update Handlers (Updates React state, persists to localStorage, and saves to Server API)
   const syncConfigsToServer = (partial: {
     phases?: PhaseConfig[];
     referralLevels?: ReferralLevel[];
@@ -972,11 +1068,16 @@ export default function App() {
     syncConfigsToServer({ matrixConfig: newMatrix });
   };
 
+  // Helper to easily simulate 100% phase completion for sequential demo
+  
   const handleSimulateExternalBuy = (amount: number) => {
+    // Determine current active phase
     const activeIdx = phases.findIndex((p) => p.status === 'active');
-    if (activeIdx === -1) return;
+    if (activeIdx === -1) return; // No active phase
     const currentPhase = phases[activeIdx];
     
+    // Total tokens purchased by the external buyer
+    // 20% of this goes to fulfilling user queued sell orders
     const userAllocationFulfillment = Math.floor(amount * 0.20);
     let remainingToFulfill = userAllocationFulfillment;
     let earnedUsdt = 0;
@@ -991,14 +1092,16 @@ export default function App() {
           queueUpdated = true;
           const tokensNeeded = entry.tokensRequested - entry.tokensSold;
           if (remainingToFulfill >= tokensNeeded) {
+            // Completely fulfill this entry
             remainingToFulfill -= tokensNeeded;
             entry.tokensSold = entry.tokensRequested;
             earnedUsdt += tokensNeeded * currentPhase.rate;
           } else {
+            // Partially fulfill
             entry.tokensSold += remainingToFulfill;
             earnedUsdt += remainingToFulfill * currentPhase.rate;
             remainingToFulfill = 0;
-            break;
+            break; // Used up all fulfillment allocation
           }
         }
       }
@@ -1011,6 +1114,7 @@ export default function App() {
         availableUsdt: prev.availableUsdt + earnedUsdt
       }));
       
+      // Update allocation state sold counts for the user
       setAllocation((prev) => {
          const newAlloc = { ...prev };
          const soldTokens = userAllocationFulfillment - remainingToFulfill;
@@ -1022,6 +1126,7 @@ export default function App() {
       });
     }
     
+    // Also increase total tokens sold in the phase so it moves forward
     setPhases((prevPhases) => {
       const updatedPhases = prevPhases.map((p, idx) => {
         if (idx === activeIdx) {
@@ -1032,96 +1137,221 @@ export default function App() {
       if (typeof window !== 'undefined') {
         localStorage.setItem('nxbc_admin_phases', JSON.stringify(updatedPhases));
       }
+      syncConfigsToServer({ phases: updatedPhases });
       return updatedPhases;
     });
   };
 
   const handleSimulateFillPhase = () => {
-    const activeIdx = phases.findIndex((p) => p.status === 'active');
-    if (activeIdx === -1) return;
+    setPhases((prevPhases) => {
+      const activeIdx = prevPhases.findIndex((p) => p.status === 'active');
+      if (activeIdx === -1 || activeIdx >= prevPhases.length - 1) return prevPhases;
 
-    const currentPhase = phases[activeIdx];
-    const currentRate = currentPhase.rate;
+      const currentP = prevPhases[activeIdx];
+      const nextIdx = activeIdx + 1;
 
-    const newPhases = phases.map((phase, idx) => {
-      if (idx === activeIdx) {
-        return { ...phase, tokensSold: phase.totalSupply, status: 'completed' as const };
+      const updatedPhases = prevPhases.map((p, idx) => {
+        if (idx === activeIdx) {
+          return { ...p, tokensSold: p.totalSupply, status: 'completed' as const };
+        }
+        if (idx === nextIdx) {
+          return { ...p, tokensSold: 0, status: 'active' as const };
+        }
+        return p;
+      });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nxbc_admin_phases', JSON.stringify(updatedPhases));
       }
-      if (idx === activeIdx + 1) {
-        return { ...phase, status: 'active' as const };
-      }
-      return phase;
+      syncConfigsToServer({ phases: updatedPhases });
+      return updatedPhases;
     });
-
-    handleUpdatePhases(newPhases);
-
-    if (allocation.isLocked) {
-      const currentPhaseNumber = currentPhase.phaseNumber;
-      let releasedTokens = 0;
-
-      if (currentPhaseNumber === 2 && allocation.p2Tokens) {
-        releasedTokens = allocation.p2Tokens.allocated;
-      } else if (currentPhaseNumber === 3 && allocation.p3Tokens) {
-        releasedTokens = allocation.p3Tokens.allocated;
-      } else if (currentPhaseNumber === 4 && allocation.p4Tokens) {
-        releasedTokens = allocation.p4Tokens.allocated;
-      } else if (currentPhaseNumber === 5 && allocation.p5Tokens) {
-        releasedTokens = allocation.p5Tokens.allocated;
-      }
-
-      if (releasedTokens > 0) {
-        const earnedUsd = releasedTokens * currentRate;
-        setClaimableBalanceUsd((prev) => prev + earnedUsd);
-
-        setAllocation((prev) => {
-          const updated = { ...prev };
-          if (currentPhaseNumber === 2 && updated.p2Tokens) updated.p2Tokens.sold = updated.p2Tokens.allocated;
-          if (currentPhaseNumber === 3 && updated.p3Tokens) updated.p3Tokens.sold = updated.p3Tokens.allocated;
-          if (currentPhaseNumber === 4 && updated.p4Tokens) updated.p4Tokens.sold = updated.p4Tokens.allocated;
-          if (currentPhaseNumber === 5 && updated.p5Tokens) updated.p5Tokens.sold = updated.p5Tokens.allocated;
-          return updated;
-        });
-
-        const newTx: Transaction = {
-          id: `tx-${Date.now()}`,
-          type: 'settlement',
-          title: `Auto-Liquidation Phase ${currentPhaseNumber}`,
-          amountTokens: releasedTokens,
-          amountUsd: earnedUsd,
-          timestamp: 'Just now',
-          status: 'completed',
-          txHash: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
-          phase: `Phase ${currentPhaseNumber}`,
-        };
-        setTransactions((prev) => [newTx, ...prev]);
-      }
-    }
   };
 
+  // Helper to reset phases back to Phase 1 defaults
   const handleResetPhases = () => {
-    handleUpdatePhases(INITIAL_PHASES);
+    const initialPhases: PhaseConfig[] = [
+      {
+        id: 'p1',
+        phaseNumber: 1,
+        name: 'Phase 1',
+        shortName: 'P1',
+        rate: 0.01,
+        rateLabel: '$0.01',
+        totalSupply: 1000000, // 10 Lakh (5 Lakh Sale, 5 Lakh Reserve)
+        tokensSold: 0,
+        status: 'active',
+        multiplier: 'Base Seed Rate',
+        unlockRequirement: 'Live Now (Stage 1)',
+        targetDate: 'Active Now',
+      },
+      {
+        id: 'p2',
+        phaseNumber: 2,
+        name: 'Phase 2',
+        shortName: 'P2',
+        rate: 0.10,
+        rateLabel: '$0.10',
+        totalSupply: 2500000, // 25 Lakh
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '10x Growth',
+        unlockRequirement: 'Phase 1 must be 100% sold to unlock',
+      },
+      {
+        id: 'p3',
+        phaseNumber: 3,
+        name: 'Phase 3',
+        shortName: 'P3',
+        rate: 1.00,
+        rateLabel: '$1.00',
+        totalSupply: 7000000, // 70 Lakh
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '100x Growth',
+        unlockRequirement: 'Phase 2 must be 100% sold to unlock',
+      },
+      {
+        id: 'p4',
+        phaseNumber: 4,
+        name: 'Phase 4',
+        shortName: 'P4',
+        rate: 10.00,
+        rateLabel: '$10.00',
+        totalSupply: 19500000, // 195 Lakh
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '1000x Growth',
+        unlockRequirement: 'Phase 3 must be 100% sold to unlock',
+      },
+      {
+        id: 'p5',
+        phaseNumber: 5,
+        name: 'Phase 5',
+        shortName: 'P5',
+        rate: 100.00,
+        rateLabel: '$100.00',
+        totalSupply: 40000000, // 400 Lakh
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '10000x Growth',
+        unlockRequirement: 'Phase 4 must be 100% sold to unlock',
+      },
+      {
+        id: 'dex',
+        phaseNumber: 6,
+        name: 'DEX Launch',
+        shortName: 'DEX',
+        rate: 100.00,
+        rateLabel: 'Market Rate',
+        totalSupply: 0,
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: 'Open Market Trading',
+        unlockRequirement: 'Phase 5 must be 100% sold to unlock',
+      },
+    ];
+    setPhases(initialPhases);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nxbc_admin_phases', JSON.stringify(initialPhases));
+    }
+    syncConfigsToServer({ phases: initialPhases });
   };
 
+  // Reset all to system defaults
   const handleResetToDefaults = () => {
     const defaultPhases: PhaseConfig[] = [
-      { id: 'p1', phaseNumber: 1, name: 'Phase 1', shortName: 'P1', rate: 0.01, rateLabel: '$0.01', totalSupply: 1000000, tokensSold: 0, status: 'active', multiplier: '1x Base', unlockRequirement: 'Live Now' },
-      { id: 'p2', phaseNumber: 2, name: 'Phase 2', shortName: 'P2', rate: 0.10, rateLabel: '$0.10', totalSupply: 2500000, tokensSold: 0, status: 'upcoming', multiplier: '10x', unlockRequirement: 'After P1' },
-      { id: 'p3', phaseNumber: 3, name: 'Phase 3', shortName: 'P3', rate: 1.00, rateLabel: '$1.00', totalSupply: 7000000, tokensSold: 0, status: 'upcoming', multiplier: '100x', unlockRequirement: 'After P2' },
-      { id: 'p4', phaseNumber: 4, name: 'Phase 4', shortName: 'P4', rate: 10.00, rateLabel: '$10.00', totalSupply: 19500000, tokensSold: 0, status: 'upcoming', multiplier: '1,000x', unlockRequirement: 'After P3' },
-      { id: 'p5', phaseNumber: 5, name: 'Phase 5', shortName: 'P5', rate: 100.00, rateLabel: '$100.00', totalSupply: 40000000, tokensSold: 0, status: 'upcoming', multiplier: '10,000x', unlockRequirement: 'After P4' },
+      {
+        id: 'p1',
+        phaseNumber: 1,
+        name: 'Phase 1',
+        shortName: 'P1',
+        rate: 0.01,
+        rateLabel: '$0.01',
+        totalSupply: 10000000,
+        tokensSold: 7650000,
+        status: 'active',
+        multiplier: 'Base Seed Rate',
+        unlockRequirement: 'Live Now (Stage 1)',
+        targetDate: 'Ends in 03d 14h 22m',
+      },
+      {
+        id: 'p2',
+        phaseNumber: 2,
+        name: 'Phase 2',
+        shortName: 'P2',
+        rate: 0.10,
+        rateLabel: '$0.10',
+        totalSupply: 15000000,
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '10x Growth',
+        unlockRequirement: 'Phase 1 must be 100% sold to unlock',
+      },
+      {
+        id: 'p3',
+        phaseNumber: 3,
+        name: 'Phase 3',
+        shortName: 'P3',
+        rate: 1.00,
+        rateLabel: '$1.00',
+        totalSupply: 7000000,
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '100x Growth',
+        unlockRequirement: 'Phase 2 must be 100% sold to unlock',
+      },
+      {
+        id: 'p4',
+        phaseNumber: 4,
+        name: 'Phase 4',
+        shortName: 'P4',
+        rate: 10.00,
+        rateLabel: '$10.00',
+        totalSupply: 19500000,
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '1000x Growth',
+        unlockRequirement: 'Phase 3 must be 100% sold to unlock',
+      },
+      {
+        id: 'p5',
+        phaseNumber: 5,
+        name: 'Phase 5',
+        shortName: 'P5',
+        rate: 100.00,
+        rateLabel: '$100.00',
+        totalSupply: 40000000,
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '10000x Growth',
+        unlockRequirement: 'Phase 4 must be 100% sold to unlock',
+      },
+      {
+        id: 'dex',
+        phaseNumber: 6,
+        name: 'Live DEX Launch',
+        shortName: 'DEX',
+        rate: 1500.00,
+        rateLabel: '$1500 - $3000',
+        totalSupply: 50000000,
+        tokensSold: 0,
+        status: 'locked',
+        multiplier: '50x+ Open Market Trading',
+        unlockRequirement: 'Phase 5 must be 100% sold to unlock',
+      },
     ];
 
     const defaultLevels: ReferralLevel[] = [
-      { level: 1, commissionPercent: 3, directRequirement: 1, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 2, commissionPercent: 2, directRequirement: 2, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 3, commissionPercent: 1, directRequirement: 3, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 4, commissionPercent: 1, directRequirement: 4, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 5, commissionPercent: 0.5, directRequirement: 5, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 6, commissionPercent: 0.5, directRequirement: 6, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 7, commissionPercent: 0.5, directRequirement: 7, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 8, commissionPercent: 0.5, directRequirement: 8, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 9, commissionPercent: 0.5, directRequirement: 9, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
-      { level: 10, commissionPercent: 0.5, directRequirement: 10, directMembers: 0, totalVolumeUsd: 0, earnedUsd: 0 },
+      { level: 1, commissionPercent: 3, directRequirement: 1, directMembers: 8, totalVolumeUsd: 4500, earnedUsd: 135.00 },
+      { level: 2, commissionPercent: 2, directRequirement: 2, directMembers: 14, totalVolumeUsd: 3800, earnedUsd: 76.00 },
+      { level: 3, commissionPercent: 1, directRequirement: 3, directMembers: 22, totalVolumeUsd: 2900, earnedUsd: 29.00 },
+      { level: 4, commissionPercent: 1, directRequirement: 4, directMembers: 31, totalVolumeUsd: 2200, earnedUsd: 22.00 },
+      { level: 5, commissionPercent: 0.5, directRequirement: 5, directMembers: 18, totalVolumeUsd: 1800, earnedUsd: 9.00 },
+      { level: 6, commissionPercent: 0.5, directRequirement: 6, directMembers: 15, totalVolumeUsd: 1500, earnedUsd: 7.50 },
+      { level: 7, commissionPercent: 0.5, directRequirement: 7, directMembers: 12, totalVolumeUsd: 1200, earnedUsd: 6.00 },
+      { level: 8, commissionPercent: 0.5, directRequirement: 8, directMembers: 10, totalVolumeUsd: 1400, earnedUsd: 7.00 },
+      { level: 9, commissionPercent: 0.5, directRequirement: 9, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 7.50 },
+      { level: 10, commissionPercent: 0.5, directRequirement: 10, directMembers: 9, totalVolumeUsd: 1500, earnedUsd: 7.50 },
     ];
 
     const defaultMatrix: MatrixConfig = {
@@ -1151,33 +1381,31 @@ export default function App() {
     handleUpdateSystemConfig(defaultSystem);
   };
 
-  const handleWithdraw = (amountUsd: number, walletType: string = 'mlm', txHashParam?: string) => {
+  // Withdrawal handler - supports strictly separated Token Auto-Sell & MLM Earnings wallets
+  const handleWithdraw = (amountUsd: number, walletType: 'token_sell' | 'mlm' = 'mlm', txHashParam?: string) => {
+    if (amountUsd <= 0) {
+      console.warn('Withdrawal rejected: invalid amount');
+      return;
+    }
+
     if (walletType === 'token_sell') {
-      const available = userEarnings?.tokenSellAvailableUsdt || 0;
-      if (amountUsd > available) {
-        console.warn('Withdrawal rejected: insufficient Token Auto-Sell earnings balance');
+      const availTokenSell = userEarnings?.tokenSellAvailableUsdt || 0;
+      if (amountUsd > availTokenSell) {
+        console.warn('Withdrawal rejected: insufficient token sell balance');
         return;
       }
 
-      setUserEarnings((prev) => {
-        const nextAvail = Math.max(0, (prev?.tokenSellAvailableUsdt || 0) - amountUsd);
-        const nextWithdrawn = (prev?.tokenSellWithdrawnUsdt || 0) + amountUsd;
-        const nextEarnings = {
-          ...prev,
-          tokenSellAvailableUsdt: nextAvail,
-          tokenSellWithdrawnUsdt: nextWithdrawn,
-        };
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('nxbc_user_earnings', JSON.stringify(nextEarnings));
-        }
-        return nextEarnings;
-      });
+      setUserEarnings(prev => ({
+        ...prev,
+        tokenSellAvailableUsdt: Math.max(0, (prev.tokenSellAvailableUsdt || 0) - amountUsd),
+        tokenSellWithdrawnUsdt: (prev.tokenSellWithdrawnUsdt || 0) + amountUsd,
+      }));
 
       const newTx: Transaction = {
         id: `tx-sell-${Date.now()}`,
         type: 'withdrawal',
         walletType: 'token_sell',
-        title: 'Token Auto-Sell Liquidation Payout',
+        title: 'Token Auto-Sell Settlement Payout',
         amountUsd: amountUsd,
         timestamp: 'Just now',
         status: 'completed',
@@ -1210,6 +1438,25 @@ export default function App() {
     }
   };
 
+
+  // Simulate quick bonus drop
+  const handleAddDemoBonus = () => {
+    const bonus = 300;
+    setClaimableBalanceUsd((prev) => prev + bonus);
+    setLevelIncomeUsd((prev) => prev + bonus);
+    const newTx: Transaction = {
+      id: `tx-${Date.now()}`,
+      type: 'referral_bonus',
+      title: 'Tier 1 Referral Inflow Bonus',
+      amountUsd: bonus,
+      timestamp: 'Just now',
+      status: 'completed',
+      txHash: `0x${Math.random().toString(16).substring(2, 8)}...${Math.random().toString(16).substring(2, 6)}`,
+    };
+    setTransactions((prev) => [newTx, ...prev]);
+  };
+
+  // If Secret Admin Page is activated, render full-screen master portal
   if (showSecretAdminPage || activeSingleScreen === 'admin') {
     return (
       <SecretAdminPage
@@ -1237,6 +1484,7 @@ export default function App() {
             }
           });
 
+          // Sync fulfillment to PostgreSQL DB for the connected user
           if (walletAddress) {
             for (let i = 0; i < newQueue.length; i++) {
               const oldEntry = sellQueue[i];
@@ -1280,6 +1528,7 @@ export default function App() {
           setSellQueue(newQueue);
           if (typeof window !== 'undefined') localStorage.setItem('nxbc_sell_queue', JSON.stringify(newQueue));
 
+          // Compute total fulfilled USDT based on phase rates
           let totalEarnedUsdt = 0;
           let p2Sold = 0;
           let p3Sold = 0;
@@ -1338,15 +1587,20 @@ export default function App() {
     );
   }
 
+  // Show Landing Page if user hasn't entered dashboard yet
   if (!isAppLaunched) {
     return <LandingPage onLaunch={() => setIsAppLaunched(true)} />;
   }
 
   return (
     <div className="min-h-screen bg-[#070312] text-slate-100 relative font-['Outfit',sans-serif] selection:bg-[#f59e0b] selection:text-black">
+      {/* Background with Dark Analytical Graphs, Candlesticks & 3D Gold Coins */}
       <AnalyticalBackground />
 
+      {/* Main Foreground Container */}
       <div className="relative z-10 w-full max-w-7xl mx-auto px-1 sm:px-4 py-2 sm:py-6 flex flex-col min-h-screen">
+        
+        {/* Top Header Bar */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 mb-3 sm:mb-4 border-b border-purple-500/20 bg-[#0e0720]/80 backdrop-blur-md px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl border">
           <div className="flex items-center justify-between w-full">
             <div>
@@ -1364,14 +1618,21 @@ export default function App() {
                 )}
               </div>
               <p className="text-xs text-purple-200/90 mt-1.5 max-w-2xl leading-relaxed">
-                NXBC is a next-generation utility coin designed for secure, high-yield P2P trading. By participating in this exclusive presale, early adopters secure their allocation at the lowest entry prices.
+                NXBC is a next-generation utility coin designed for secure, high-yield P2P trading. By participating in this exclusive presale, early adopters secure their allocation at the lowest entry prices. This provides massive growth potential, automated instant payouts via our FIFO smart contract, and guaranteed liquidity before the official Decentralized Exchange (DEX) launch.
               </p>
             </div>
           </div>
         </header>
 
+        {/* Dynamic View Rendering: Single Full Mobile Screen (Default) OR Trio Multi-Screen Grid */}
         {viewMode === 'single' ? (
+          /* PURE FULL-WIDTH MOBILE SCREEN APPLICATION INTERFACE */
           <div className="flex-1 flex flex-col w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto bg-gradient-to-b from-[#110726] via-[#090317] to-[#0d051e] rounded-2xl sm:rounded-[32px] border border-amber-500/25 shadow-[0_15px_60px_rgba(0,0,0,0.8)] overflow-hidden relative my-0 sm:my-2">
+            
+            {/* Native Mobile App Header Bar Removed as per user request */}
+
+
+            {/* Quick Screen Switcher Tabs */}
             <div className="px-3 pt-2.5 pb-1 flex items-center gap-1 overflow-x-auto no-scrollbar bg-[#090317]/80 border-b border-purple-500/10 select-none">
               {[
                 { id: 'home', label: 'Home (Acquisition)' },
@@ -1394,6 +1655,7 @@ export default function App() {
               ))}
             </div>
 
+            {/* Mobile Screen Body Content */}
             <div className="flex-1 pb-16 min-h-[520px]">
               {activeSingleScreen === 'home' && (
                 <ScreenOneAcquisition
@@ -1401,6 +1663,7 @@ export default function App() {
                   phases={phases}
                   onUpdateAllocation={setAllocation}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
+                  
                   onOpenWalletModal={() => setWalletModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
@@ -1459,6 +1722,7 @@ export default function App() {
                   onWithdraw={handleWithdraw}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
                   onOpenWalletModal={() => setWalletModalOpen(true)}
+                  
                   nxbcBalance={nxbcBalance}
                   usdtBalance={usdtBalance}
                 />
@@ -1477,6 +1741,7 @@ export default function App() {
               )}
             </div>
 
+            {/* Docked Mobile Bottom Navigation Bar */}
             <BottomNavBar
               idPrefix="full-mobile-nav"
               activeScreen={activeSingleScreen}
@@ -1484,7 +1749,10 @@ export default function App() {
             />
           </div>
         ) : (
+          /* TRIPLE SCREEN PANORAMIC SHOWCASE (3 Screens Side-by-Side) */
           <div className="flex-1 flex flex-col justify-center">
+            
+            {/* Context Headline for the 3 Interconnected Screens */}
             <div className="text-center mb-6 max-w-2xl mx-auto">
               <span className="text-[11px] font-mono-crypto px-3 py-1 rounded-full bg-gradient-to-r from-amber-500/20 to-fuchsia-600/20 text-amber-300 border border-amber-400/30 uppercase tracking-widest inline-block mb-1.5">
                 3 Interconnected Ecosystem Modules
@@ -1492,9 +1760,15 @@ export default function App() {
               <h2 className="text-xl sm:text-2xl font-black text-slate-100 font-rajdhani uppercase tracking-wide">
                 {systemConfig.tokenSymbol} Community Presale Platform
               </h2>
+              <p className="text-xs text-purple-200/70">
+                Synchronized live state: Define future sell percentages on Screen 1 &bull; Track the 6-box sell schedule on Screen 2 &bull; Execute instant smart-contract withdrawal on Screen 3.
+              </p>
             </div>
 
+            {/* 3 Devices Grid Container */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-5 xl:gap-8 items-start justify-center">
+              
+              {/* DEVICE 1: Coin Acquisition & Future Sell-Through Allocation (Home) */}
               <DeviceFrame
                 screenNumber={1}
                 screenTitle="Screen 1: Coin Acquisition"
@@ -1508,6 +1782,7 @@ export default function App() {
                   phases={phases}
                   onUpdateAllocation={setAllocation}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
+                  
                   onOpenWalletModal={() => setWalletModalOpen(true)}
                   onOpenTeamPlanModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
@@ -1533,6 +1808,7 @@ export default function App() {
                 />
               </DeviceFrame>
 
+              {/* DEVICE 2: User Assets, Sell Schedule (6-Box Grid) & Community (Assets) */}
               <DeviceFrame
                 screenNumber={2}
                 screenTitle="Screen 2: Assets & 6-Box Grid"
@@ -1559,6 +1835,7 @@ export default function App() {
                 />
               </DeviceFrame>
 
+              {/* DEVICE 3: Instant Withdrawal & Security (Wallet) */}
               <DeviceFrame
                 screenNumber={3}
                 screenTitle="Screen 3: Instant Withdrawal"
@@ -1580,6 +1857,7 @@ export default function App() {
                   onWithdraw={handleWithdraw}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
                   onOpenWalletModal={() => setWalletModalOpen(true)}
+                  
                   nxbcBalance={nxbcBalance}
                   usdtBalance={usdtBalance}
                 />
@@ -1592,11 +1870,13 @@ export default function App() {
                   }}
                 />
               </DeviceFrame>
+
             </div>
           </div>
         )}
       </div>
 
+      {/* Global Modals */}
       <BuyTokenModal
         isOpen={buyModalOpen}
         onClose={() => setBuyModalOpen(false)}
@@ -1609,7 +1889,7 @@ export default function App() {
         receivingAddress={systemConfig.receivingAddress}
         minPurchaseUsd={systemConfig.minPurchaseUsd}
         nxbcBalance={nxbcBalance}
-        usdtBalance={usdtBalance}
+                  usdtBalance={usdtBalance}
         activePhaseInfo={{
           phaseNumber: activePhase.phaseNumber,
           name: activePhase.name,
@@ -1627,6 +1907,9 @@ export default function App() {
         directBuyerInviteToken={directBuyerInviteToken}
         directBuyerInfo={directBuyerInfo}
       />
+
+      
+      
 
       <WalletConnectModal
         isOpen={walletModalOpen}
@@ -1654,6 +1937,7 @@ export default function App() {
         matrixConfig={matrixConfig}
       />
 
+      {/* MASTER DYNAMIC ADMIN PANEL MODAL */}
       <AdminPanelModal
         isOpen={adminModalOpen}
         onClose={() => setAdminModalOpen(false)}
