@@ -3033,8 +3033,7 @@ async function startServer() {
 
   // Get Live System & Admin Configs
   app.get("/api/admin/configs", async (req, res) => {
-    if (!requireAdmin(req, res)) return;
-    try {
+        try {
       let dbConfigs: Record<string, any> = {};
       try {
         const rows = await db.select().from(systemConfigs);
