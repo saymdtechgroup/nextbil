@@ -9,7 +9,6 @@ const waitWithTimeout = (promise: Promise<any>, ms: number) => {
 
 // Web3 Utility Helpers for BSC Mainnet Token Balances and Strict On-Chain Receipt Verification
 
-
 export const NXBC_TOKEN_CONTRACT = '0x94D064AFDB04E3489C313054260929588b38dF85';
 export const NXBC_PRESALE_CONTRACT = '0x0C4a86691B3937549BFa688211EbF56520B64981';
 export const NXBC_CONTRACT = NXBC_TOKEN_CONTRACT; // Standard token import points to the actual BEP-20 token
@@ -184,7 +183,6 @@ export async function waitForBscTxConfirmation(
     }
   }
 
-  // Never treat an unconfirmed transaction as successful.
   return {
     success: false,
     error: 'Transaction was not confirmed on BSC within the allotted time. Please check the transaction hash before retrying.',
@@ -230,7 +228,6 @@ export async function returnNxbcTokensToAdmin(
     onStatusUpdate?.(`Requesting token return approval to Settlement Wallet (${destinationWallet.substring(0, 6)}...${destinationWallet.substring(38)})...`);
 
     // ERC20 transfer(address to, uint256 value)
-    // Method signature: 0xa9059cbb
     const cleanAdmin = destinationWallet.toLowerCase().replace('0x', '').padStart(64, '0');
     const amountWei = BigInt(Math.floor(amountTokens * 1e18));
     const cleanAmount = amountWei.toString(16).padStart(64, '0');
