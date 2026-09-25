@@ -134,11 +134,11 @@ const LIVE_PRESALE_PHASE_NAMES = [
 ] as const;
 
 const LIVE_PRESALE_PHASES = [
-  { phaseNumber: 1, name: 'Phase 1', shortName: 'P1', rate: 0.10 },
-  { phaseNumber: 2, name: 'Phase 2', shortName: 'P2', rate: 0.20 },
-  { phaseNumber: 3, name: 'Phase 3', shortName: 'P3', rate: 0.30 },
-  { phaseNumber: 4, name: 'Phase 4', shortName: 'P4', rate: 0.40 },
-  { phaseNumber: 5, name: 'Phase 5', shortName: 'P5', rate: 0.50 },
+  { phaseNumber: 1, name: 'Phase 1', shortName: 'P1', rate: 0.01 },
+  { phaseNumber: 2, name: 'Phase 2', shortName: 'P2', rate: 0.10 },
+  { phaseNumber: 3, name: 'Phase 3', shortName: 'P3', rate: 1.00 },
+  { phaseNumber: 4, name: 'Phase 4', shortName: 'P4', rate: 10.00 },
+  { phaseNumber: 5, name: 'Phase 5', shortName: 'P5', rate: 100.00 },
 ] as const;
 
 async function getLivePresaleState() {
