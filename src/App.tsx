@@ -1069,6 +1069,7 @@ export default function App() {
     setSystemConfig(newConfig);
     if (typeof window !== 'undefined') {
       localStorage.setItem('nxbc_admin_system', JSON.stringify(newConfig));
+      window.dispatchEvent(new CustomEvent('nxbc:refresh-presale'));
     }
     syncConfigsToServer({ systemConfig: newConfig });
   };
