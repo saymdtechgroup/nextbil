@@ -1168,12 +1168,46 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     <label className="text-[9px] uppercase text-purple-300 font-rajdhani font-semibold block mb-1">
                       User Sell Queue Share (%)
                     </label>
-                    <input
-                      type="number"
-                      value={localSystem.sellQueueSharePercent ?? 20}
-                      onChange={(e) => setLocalSystem({ ...localSystem, sellQueueSharePercent: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })}
-                      className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-fuchsia-300 font-bold"
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={localSystem.sellQueueSharePercent ?? 20}
+                        onChange={(e) => setLocalSystem({ ...localSystem, sellQueueSharePercent: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })}
+                        className="w-full bg-[#06020c] border border-purple-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-fuchsia-300 font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const shareVal = Number(localSystem.sellQueueSharePercent ?? 20);
+                          const updatedSys = { ...localSystem, sellQueueSharePercent: shareVal };
+                          onUpdateSystemConfig(updatedSys);
+                          try {
+                            const token = typeof window !== 'undefined' ? localStorage.getItem('nxbc_admin_token') : null;
+                            const res = await fetch('/api/admin/configs', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                ...(token ? { 'x-admin-token': token } : {}),
+                              },
+                              body: JSON.stringify({ systemConfig: updatedSys }),
+                            });
+                            if (res.ok) {
+                              alert(`✓ Global FIFO Liquidity updated to ${shareVal}% User Queue / ${100 - shareVal}% Contract Treasury!`);
+                              window.dispatchEvent(new CustomEvent('nxbc:refresh-presale'));
+                            } else {
+                              const errData = await res.json().catch(() => ({}));
+                              alert(errData.error || 'Failed to update. Please check PIN authentication.');
+                            }
+                          } catch (e: any) {
+                            alert('Network error while saving FIFO share.');
+                          }
+                        }}
+                        className="px-2.5 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/50 text-[10px] font-bold font-rajdhani uppercase tracking-wider shrink-0 transition-all cursor-pointer"
+                        title="Instantly save and apply this FIFO split ratio live across all dashboards"
+                      >
+                        ⚡ Apply Ratio
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="text-[9px] uppercase text-purple-300 font-rajdhani font-semibold block mb-1">

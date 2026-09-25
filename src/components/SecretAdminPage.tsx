@@ -1678,18 +1678,55 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                     <label className="text-[9px] uppercase text-fuchsia-300/80 font-bold block mb-1">
                       User Sell Queue Allocation (%)
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="1"
-                      value={Number(localSystem.sellQueueSharePercent ?? 20)}
-                      onChange={(e) => {
-                        const value = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-                        setLocalSystem({ ...localSystem, sellQueueSharePercent: value });
-                      }}
-                      className="w-full bg-[#06020c] border border-fuchsia-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-fuchsia-300 font-bold"
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={Number(localSystem.sellQueueSharePercent ?? 20)}
+                        onChange={(e) => {
+                          const value = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                          setLocalSystem({ ...localSystem, sellQueueSharePercent: value });
+                        }}
+                        className="w-full bg-[#06020c] border border-fuchsia-500/40 rounded-xl py-2 px-3 text-xs font-mono-crypto text-fuchsia-300 font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const shareVal = Number(localSystem.sellQueueSharePercent ?? 20);
+                          const updatedSys = { ...localSystem, sellQueueSharePercent: shareVal };
+                          onUpdateSystemConfig(updatedSys);
+                          if (typeof window !== 'undefined') {
+                            localStorage.setItem('nxbc_admin_system', JSON.stringify(updatedSys));
+                          }
+                          try {
+                            const token = typeof window !== 'undefined' ? localStorage.getItem('nxbc_admin_token') : null;
+                            const res = await fetch('/api/admin/configs', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                ...(token ? { 'x-admin-token': token } : {}),
+                              },
+                              body: JSON.stringify({ systemConfig: updatedSys }),
+                            });
+                            if (res.ok) {
+                              alert(`✓ Global FIFO Liquidity updated to ${shareVal}% User Queue / ${100 - shareVal}% Contract Treasury!`);
+                              window.dispatchEvent(new CustomEvent('nxbc:refresh-presale'));
+                            } else {
+                              const errData = await res.json().catch(() => ({}));
+                              alert(errData.error || 'Failed to update. Please check PIN authentication.');
+                            }
+                          } catch (e: any) {
+                            alert('Network error while saving FIFO share.');
+                          }
+                        }}
+                        className="px-3 py-2 rounded-xl bg-fuchsia-600/30 hover:bg-fuchsia-600/50 text-fuchsia-200 border border-fuchsia-500/50 text-[10px] font-bold font-rajdhani uppercase tracking-wider shrink-0 transition-all cursor-pointer"
+                        title="Instantly save and apply this FIFO split ratio live across all dashboards"
+                      >
+                        ⚡ Apply Ratio
+                      </button>
+                    </div>
                   </div>
 
                   <div>
@@ -1859,9 +1896,13 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                               onClick={async () => {
                                  if (!confirm('Instantly fulfill this specific order? The user will be paid out immediately.')) return;
                                  try {
+                                    const token = typeof window !== 'undefined' ? localStorage.getItem('nxbc_admin_token') : null;
                                     const res = await fetch('/api/admin/sellqueue/instant-fulfill', {
                                        method: 'POST',
-                                       headers: { 'Content-Type': 'application/json' },
+                                       headers: { 
+                                         'Content-Type': 'application/json',
+                                         ...(token ? { 'x-admin-token': token } : {})
+                                       },
                                        body: JSON.stringify({ orderId: entry.id })
                                     });
                                     if (res.ok) {
@@ -1870,8 +1911,16 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                                           newQueue[idx].tokensSold = newQueue[idx].tokensRequested;
                                           onUpdateSellQueue(newQueue);
                                        }
+                                       alert('✓ Order instantly fulfilled and user payout unlocked!');
+                                       window.dispatchEvent(new CustomEvent('nxbc:refresh-presale'));
+                                       window.dispatchEvent(new CustomEvent('nxbc:refresh-sale-orders'));
+                                    } else {
+                                       const err = await res.json().catch(() => ({}));
+                                       alert(err.error || 'Failed to fulfill order. Please check admin authentication.');
                                     }
-                                 } catch(e) {}
+                                 } catch(e) {
+                                    alert('Network error during order fulfillment.');
+                                 }
                               }}
                               className="px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/10 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 transition-all"
                               title="Instantly fulfill and payout this user"
