@@ -193,9 +193,14 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
   }, [walletAddress, tokenSellBalanceUsd]);
 
   // Compute total available from ledger entries or fallback
-  const ledgerTotalAvailableGross = ledgerEntries
-    .filter((e) => e.status !== 'fully_claimed')
-    .reduce((acc, curr) => acc + (curr.availableUsdt || (curr.grossUsdt - curr.withdrawnUsdt)), 0);
+  const ledgerTotalAvailableGross = (ledgerEntries || [])
+    .filter((e) => e && e.status !== 'fully_claimed')
+    .reduce((acc, curr) => {
+      const gross = Number(curr?.grossUsdt) || 0;
+      const withdrawn = Number(curr?.withdrawnUsdt) || 0;
+      const avail = Number(curr?.availableUsdt) || Math.max(0, gross - withdrawn);
+      return acc + avail;
+    }, 0);
 
   // Security: token-sell withdrawals are backed only by the phase ledger. Do not
   // let a cached/global balance bypass the exact token-return calculation.
@@ -217,14 +222,14 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
     }
   }, [mlmBalanceUsd]);
 
-  const pastTransactions = transactions.filter((t) => t.status === 'completed');
+  const pastTransactions = (transactions || []).filter((t) => t && t.status === 'completed');
 
   // Total Sold Tokens Across Phases
-  const totalSoldTokens = ledgerEntries.reduce((acc, curr) => acc + curr.tokensSold, 0) ||
-    ((allocation?.p2Tokens?.sold || 0) +
-      (allocation?.p3Tokens?.sold || 0) +
-      (allocation?.p4Tokens?.sold || 0) +
-      (allocation?.p5Tokens?.sold || 0));
+  const totalSoldTokens = (ledgerEntries || []).reduce((acc, curr) => acc + (Number(curr?.tokensSold) || 0), 0) ||
+    ((Number(allocation?.p2Tokens?.sold) || 0) +
+      (Number(allocation?.p3Tokens?.sold) || 0) +
+      (Number(allocation?.p4Tokens?.sold) || 0) +
+      (Number(allocation?.p5Tokens?.sold) || 0));
 
   // FIFO Phase-by-Phase Token Return Calculation
   const grossSellAmount = parseFloat(tokenSellWithdrawAmount) || 0;
@@ -240,21 +245,26 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
     }> = [];
     let totalTokensToReturn = 0;
 
-    const activeEntries = ledgerEntries.filter((e) => e.status === 'unclaimed' || e.status === 'partially_claimed');
+    const activeEntries = (ledgerEntries || []).filter(
+      (e) => e && (e.status === 'unclaimed' || e.status === 'partially_claimed')
+    );
 
     if (activeEntries.length > 0) {
       for (const entry of activeEntries) {
         if (remainingToDeduct <= 0) break;
-        const entryAvail = entry.availableUsdt || (entry.grossUsdt - entry.withdrawnUsdt);
+        const gross = Number(entry.grossUsdt) || 0;
+        const withdrawn = Number(entry.withdrawnUsdt) || 0;
+        const entryAvail = Number(entry.availableUsdt) || Math.max(0, gross - withdrawn);
         const deduct = Math.min(entryAvail, remainingToDeduct);
-        if (deduct > 0) {
-          const tokens = (deduct / entry.grossUsdt) * entry.tokensSold;
+        if (deduct > 0 && gross > 0) {
+          const sold = Number(entry.tokensSold) || 0;
+          const tokens = (deduct / gross) * sold;
           breakdown.push({
-            phaseIndex: entry.phaseIndex,
-            phaseName: entry.phaseName,
+            phaseIndex: Number(entry.phaseIndex) || 0,
+            phaseName: entry.phaseName || 'Phase',
             tokensToReturn: Math.round(tokens * 100) / 100,
             grossDeducted: deduct,
-            tokenPrice: entry.tokenPrice,
+            tokenPrice: Number(entry.tokenPrice) || 0,
           });
           totalTokensToReturn += tokens;
           remainingToDeduct -= deduct;
@@ -649,18 +659,23 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
               </span>
             </div>
 
-            {ledgerEntries.length === 0 ? (
+            {(!ledgerEntries || ledgerEntries.length === 0) ? (
               <div className="p-2 text-center text-[8.5px] font-mono-crypto text-slate-400">
                 No active phase auto-sell sales recorded yet. Once tokens are sold in P2–P5, they will appear here with exact return collateral.
               </div>
             ) : (
               <div className="space-y-1.5 max-h-36 overflow-y-auto pr-0.5">
-                {ledgerEntries.map((entry) => {
-                  const avail = entry.availableUsdt || (entry.grossUsdt - entry.withdrawnUsdt);
+                {(ledgerEntries || []).map((entry, idx) => {
+                  if (!entry) return null;
+                  const gross = Number(entry.grossUsdt) || 0;
+                  const withdrawn = Number(entry.withdrawnUsdt) || 0;
+                  const avail = Number(entry.availableUsdt) || Math.max(0, gross - withdrawn);
                   const isClaimed = entry.status === 'fully_claimed' || avail <= 0;
+                  const price = Number(entry.tokenPrice) || 0;
+                  const sold = Number(entry.tokensSold) || 0;
                   return (
                     <div
-                      key={entry.id}
+                      key={entry.id || `ledger-${idx}`}
                       className={`p-2 rounded-xl border flex items-center justify-between font-mono-crypto text-[8.5px] ${
                         isClaimed
                           ? 'bg-[#050b16]/40 border-white/5 opacity-60'
@@ -669,14 +684,14 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                     >
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-slate-200">{entry.phaseName}</span>
+                          <span className="font-bold text-slate-200">{entry.phaseName || 'Phase'}</span>
                           <span className="text-[7.5px] px-1.5 py-0.2 rounded bg-amber-400/10 text-amber-300 border border-amber-400/30">
-                            @{entry.tokenPrice.toFixed(2)} USDT
+                            @{price.toFixed(2)} USDT
                           </span>
                         </div>
                         <span className="text-slate-400 block text-[7.5px] mt-0.5">
-                          Sold: <strong className="text-amber-300">{entry.tokensSold} NXBC</strong> → Gross:{' '}
-                          <strong className="text-emerald-400">${entry.grossUsdt.toFixed(2)} USDT</strong>
+                          Sold: <strong className="text-amber-300">{sold.toLocaleString()} NXBC</strong> → Gross:{' '}
+                          <strong className="text-emerald-400">${gross.toFixed(2)} USDT</strong>
                         </span>
                       </div>
 
@@ -689,7 +704,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                           ${avail.toFixed(2)} Available
                         </span>
                         <span className="text-[7.5px] text-slate-400 block">
-                          Return Collateral: {entry.tokensSold} NXBC
+                          Return Collateral: {sold.toLocaleString()} NXBC
                         </span>
                       </div>
                     </div>
@@ -1067,55 +1082,59 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
         </div>
 
         <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
-          {pastTransactions.length === 0 ? (
+          {(!pastTransactions || pastTransactions.length === 0) ? (
             <div className="p-4 rounded-xl bg-[#050b16]/75 border border-white/10 text-center text-xs text-slate-400 font-mono-crypto">
               No transactions yet
             </div>
           ) : (
-            pastTransactions.map((tx) => (
-              <div
-                key={tx.id}
-                className="p-2.5 rounded-xl bg-[#050b16]/75 border border-white/10 hover:border-amber-400/30 transition-colors flex items-center justify-between text-[10px]"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className={`p-1.5 rounded-lg ${
-                      tx.type === 'withdrawal'
-                        ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
-                        : tx.type === 'buy'
-                        ? 'bg-amber-400/10 text-amber-400 border border-amber-400/30'
-                        : 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/30'
-                    }`}
-                  >
-                    {tx.type === 'withdrawal' ? (
-                      <ArrowDownToLine className="w-3.5 h-3.5" />
-                    ) : (
-                      <Zap className="w-3.5 h-3.5" />
-                    )}
+            pastTransactions.map((tx, idx) => {
+              if (!tx) return null;
+              const amt = Number(tx.amountUsd) || 0;
+              return (
+                <div
+                  key={tx.id || `tx-${idx}`}
+                  className="p-2.5 rounded-xl bg-[#050b16]/75 border border-white/10 hover:border-amber-400/30 transition-colors flex items-center justify-between text-[10px]"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={`p-1.5 rounded-lg ${
+                        tx.type === 'withdrawal'
+                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                          : tx.type === 'buy'
+                          ? 'bg-amber-400/10 text-amber-400 border border-amber-400/30'
+                          : 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/30'
+                      }`}
+                    >
+                      {tx.type === 'withdrawal' ? (
+                        <ArrowDownToLine className="w-3.5 h-3.5" />
+                      ) : (
+                        <Zap className="w-3.5 h-3.5" />
+                      )}
+                    </div>
+                    <div>
+                      <span className="font-semibold text-slate-200 block">{tx.title || 'Transaction'}</span>
+                      <span className="text-[8px] font-mono-crypto text-slate-400">
+                        {tx.timestamp || 'Recent'} • {tx.txHash ? (tx.txHash.length > 12 ? `${tx.txHash.slice(0, 6)}...${tx.txHash.slice(-4)}` : tx.txHash) : 'On-Chain'}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-semibold text-slate-200 block">{tx.title}</span>
-                    <span className="text-[8px] font-mono-crypto text-slate-400">
-                      {tx.timestamp} • {tx.txHash}
+
+                  <div className="text-right">
+                    <span
+                      className={`font-mono-crypto font-bold block ${
+                        tx.type === 'withdrawal' ? 'text-rose-400' : 'text-emerald-400'
+                      }`}
+                    >
+                      {tx.type === 'withdrawal' ? '-' : '+'}${amt.toFixed(2)}
+                    </span>
+                    <span className="text-[8px] font-mono-crypto text-emerald-400 flex items-center gap-0.5 justify-end">
+                      <CheckCircle2 className="w-2.5 h-2.5" />
+                      Confirmed
                     </span>
                   </div>
                 </div>
-
-                <div className="text-right">
-                  <span
-                    className={`font-mono-crypto font-bold block ${
-                      tx.type === 'withdrawal' ? 'text-rose-400' : 'text-emerald-400'
-                    }`}
-                  >
-                    {tx.type === 'withdrawal' ? '-' : '+'}${tx.amountUsd.toFixed(2)}
-                  </span>
-                  <span className="text-[8px] font-mono-crypto text-emerald-400 flex items-center gap-0.5 justify-end">
-                    <CheckCircle2 className="w-2.5 h-2.5" />
-                    Confirmed
-                  </span>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </section>

@@ -183,7 +183,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
             
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {[
-                { phase: 1, price: "$0.01", supply: "5 Lakh" },
+                { phase: 1, price: "$0.01", supply: "10 Lakh" },
                 { phase: 2, price: "$0.10", supply: "25 Lakh" },
                 { phase: 3, price: "$1.00", supply: "70 Lakh" },
                 { phase: 4, price: "$10.00", supply: "195 Lakh" },
