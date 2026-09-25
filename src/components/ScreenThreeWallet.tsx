@@ -481,7 +481,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
   };
 
   return (
-    <div className="nxbc-screen flex flex-col w-full max-w-xl mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3 pb-0">
+    <div className="nxbc-screen flex flex-col w-full max-w-xl mx-auto px-3 sm:px-4 py-2 sm:py-3 space-y-2.5 pb-2">
       {/* 1. Header Hero Bar */}
       <section className="relative overflow-hidden rounded-[22px] border border-amber-400/30 bg-[radial-gradient(circle_at_82%_8%,rgba(16,185,129,0.08),transparent_28%),linear-gradient(135deg,#081426_0%,#07101c_60%,#120b19_100%)] shadow-[0_0_28px_rgba(245,158,11,0.08)] p-3.5 sm:p-4">
         <div className="flex items-center justify-between gap-2.5">

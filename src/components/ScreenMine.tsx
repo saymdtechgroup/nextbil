@@ -42,7 +42,7 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
   };
 
   return (
-    <div className="nxbc-screen flex flex-col w-full max-w-xl mx-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3 pb-0">
+    <div className="nxbc-screen flex flex-col w-full max-w-xl mx-auto px-3 sm:px-4 py-2 sm:py-3 space-y-2.5 pb-2">
       {/* 1. Header Bar: Profile & Identity */}
       <section className="relative overflow-hidden rounded-[22px] border border-amber-400/30 bg-[radial-gradient(circle_at_82%_8%,rgba(16,185,129,0.08),transparent_28%),linear-gradient(135deg,#081426_0%,#07101c_60%,#120b19_100%)] shadow-[0_0_28px_rgba(245,158,11,0.08)]">
         <div className="relative p-3.5 sm:p-4">
