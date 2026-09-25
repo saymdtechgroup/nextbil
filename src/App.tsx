@@ -1671,7 +1671,7 @@ export default function App() {
             </div>
 
             {/* Mobile Screen Body Content */}
-            <div className="flex-1 pb-1 min-h-[520px]">
+            <div className={`flex-1 min-h-[520px] ${activeSingleScreen === 'home' ? 'pb-0' : 'pb-1'}`}>
               {activeSingleScreen === 'home' && (
                 <ScreenOneAcquisition
                   allocation={allocation}
@@ -1757,12 +1757,14 @@ export default function App() {
               )}
             </div>
 
-            {/* Docked Mobile Bottom Navigation Bar */}
-            <BottomNavBar
-              idPrefix="full-mobile-nav"
-              activeScreen={activeSingleScreen}
-              onSelectScreen={setActiveSingleScreen}
-            />
+            {/* Docked Mobile Bottom Navigation Bar (Hidden on Home screen where custom buttons & banner exist) */}
+            {activeSingleScreen !== 'home' && (
+              <BottomNavBar
+                idPrefix="full-mobile-nav"
+                activeScreen={activeSingleScreen}
+                onSelectScreen={setActiveSingleScreen}
+              />
+            )}
           </div>
         ) : (
           /* TRIPLE SCREEN PANORAMIC SHOWCASE (3 Screens Side-by-Side) */
