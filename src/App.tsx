@@ -1642,7 +1642,7 @@ export default function App() {
         {/* Dynamic View Rendering: Single Full Mobile Screen (Default) OR Trio Multi-Screen Grid */}
         {viewMode === 'single' ? (
           /* PURE FULL-WIDTH MOBILE SCREEN APPLICATION INTERFACE */
-          <div className="flex-1 flex flex-col w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto bg-gradient-to-b from-[#110726] via-[#090317] to-[#0d051e] rounded-2xl sm:rounded-[32px] border border-amber-500/25 shadow-[0_15px_60px_rgba(0,0,0,0.8)] overflow-hidden relative my-0 sm:my-2">
+          <div className="flex-1 flex flex-col w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto bg-gradient-to-b from-[#110726] via-[#090317] to-[#0d051e] rounded-2xl sm:rounded-[32px] border border-amber-500/25 shadow-[0_15px_60px_rgba(0,0,0,0.8)] overflow-visible relative my-0 sm:my-2">
             
             {/* Native Mobile App Header Bar Removed as per user request */}
 
@@ -1671,7 +1671,7 @@ export default function App() {
             </div>
 
             {/* Mobile Screen Body Content */}
-            <div className={`flex-1 min-h-[520px] ${activeSingleScreen === 'home' ? 'pb-0' : 'pb-1'}`}>
+            <div className={`flex-1 min-h-[520px] overflow-visible ${activeSingleScreen === 'home' ? 'pb-4' : 'pb-1'}`}>
               {activeSingleScreen === 'home' && (
                 <ScreenOneAcquisition
                   allocation={allocation}
