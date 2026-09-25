@@ -93,7 +93,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
           </span>
         </div>
         {!walletConnected && (
-          <button onClick={() => {}} className="px-3 py-1 text-xs font-bold bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-lg">
+          <button onClick={onOpenWalletModal} className="px-3 py-1 text-xs font-bold bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-lg">
             Connect
           </button>
         )}
