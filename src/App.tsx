@@ -1630,9 +1630,11 @@ export default function App() {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-purple-200/90 mt-1.5 max-w-2xl leading-relaxed">
-                NXBC is a next-generation utility coin designed for secure, high-yield P2P trading. By participating in this exclusive presale, early adopters secure their allocation at the lowest entry prices. This provides massive growth potential, automated instant payouts via our FIFO smart contract, and guaranteed liquidity before the official Decentralized Exchange (DEX) launch.
-              </p>
+              {(activeSingleScreen === 'home' || viewMode === 'trio') && (
+                <p className="text-xs text-purple-200/90 mt-1.5 max-w-2xl leading-relaxed">
+                  NXBC is a next-generation utility coin designed for secure, high-yield P2P trading. By participating in this exclusive presale, early adopters secure their allocation at the lowest entry prices. This provides massive growth potential, automated instant payouts via our FIFO smart contract, and guaranteed liquidity before the official Decentralized Exchange (DEX) launch.
+                </p>
+              )}
             </div>
           </div>
         </header>
@@ -1669,7 +1671,7 @@ export default function App() {
             </div>
 
             {/* Mobile Screen Body Content */}
-            <div className="flex-1 pb-16 min-h-[520px]">
+            <div className="flex-1 pb-1 min-h-[520px]">
               {activeSingleScreen === 'home' && (
                 <ScreenOneAcquisition
                   allocation={allocation}
