@@ -393,6 +393,22 @@ export default function App() {
     return () => window.removeEventListener('storage', handleStorageEvent);
   }, []);
 
+  // Capture referral links before wallet registration. Supports both /ref/CODE and ?ref=CODE.
+  // Never overwrite an already-captured sponsor in this browser. The backend also treats sponsor attribution as first-write-only.
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const pathMatch = url.pathname.match(/^\/ref\/([^/]+)\/?$/i);
+      const queryRef = url.searchParams.get('ref');
+      const ref = (pathMatch?.[1] || queryRef || '').trim();
+      if (!ref) return;
+      if (!/^[A-Za-z0-9_-]{3,64}$/.test(ref)) return;
+      if (!localStorage.getItem('nxbc_sponsor_ref')) {
+        localStorage.setItem('nxbc_sponsor_ref', ref.toUpperCase());
+      }
+    } catch {}
+  }, []);
+
   // Sync user with PostgreSQL backend when wallet connects
   useEffect(() => {
     if (walletConnected && walletAddress) {
@@ -1764,6 +1780,7 @@ export default function App() {
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
                   totalInvestedUsd={totalInvestedUsd}
                   minMlmQualifyUsd={systemConfig.minMlmQualifyUsd || 100}
+                  referralCode={userRefCode}
                   onResetAllData={handleResetAllData}
                   onOpenAdmin={() => setShowSecretAdminPage(true)}
                 />
@@ -1805,7 +1822,7 @@ export default function App() {
                 screenTitle="Screen 1: Coin Acquisition"
                 badgeText="Plan Sell-Through"
                 badgeColor="gold"
-                url="nxbc.network"
+                url="nxbc.tech"
                 isHero={false}
               >
                 <ScreenOneAcquisition
@@ -1845,7 +1862,7 @@ export default function App() {
                 screenTitle="Screen 2: Assets & 6-Box Grid"
                 badgeText="6 Phase Vectors"
                 badgeColor="magenta"
-                url="nxbc.network/assets"
+                url="nxbc.tech/assets"
                 isHero={true}
               >
                 <ScreenTwoAssets
@@ -1875,7 +1892,7 @@ export default function App() {
                 screenTitle="Screen 3: Instant Withdrawal"
                 badgeText="Hot Multi-Sig"
                 badgeColor="purple"
-                url="nxbc.network/wallet"
+                url="nxbc.tech/wallet"
                 isHero={false}
               >
                 <ScreenThreeWallet
