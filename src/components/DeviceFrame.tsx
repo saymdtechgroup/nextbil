@@ -16,7 +16,7 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
   screenTitle,
   badgeText,
   badgeColor = 'gold',
-  url = 'nxbc.network',
+  url = 'nxbc.tech',
   children,
   isHero = false,
 }) => {

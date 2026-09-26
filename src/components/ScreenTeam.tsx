@@ -124,7 +124,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
   const remainingToQualify = Math.max(0, minMlmQualifyUsd - totalInvestedUsd);
 
   const copyRef = () => {
-    void navigator.clipboard.writeText(`https://nxbc.network?ref=${referralCode}`);
+    void navigator.clipboard.writeText(`https://nxbc.tech/ref/${referralCode}`);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   };

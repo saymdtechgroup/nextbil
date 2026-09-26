@@ -47,7 +47,7 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
   if (!isOpen) return null;
 
   const copyRef = () => {
-    navigator.clipboard.writeText(`https://nxbc.network?ref=${referralCode}`);
+    navigator.clipboard.writeText(`https://nxbc.tech/ref/${referralCode}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -152,7 +152,7 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
             </label>
             <div className="flex items-center gap-2 bg-[#020813] border border-cyan-500/30 rounded-xl p-1.5 pl-3">
               <span className="text-xs font-mono-crypto text-amber-300 truncate flex-1">
-                nxbc.network?ref={referralCode}
+                nxbc.tech/ref/{referralCode}
               </span>
               <button
                 onClick={copyRef}

@@ -11,6 +11,7 @@ interface ScreenMineProps {
   onResetAllData?: () => void;
   totalInvestedUsd?: number;
   minMlmQualifyUsd?: number;
+  referralCode?: string;
 }
 
 export const ScreenMine: React.FC<ScreenMineProps> = ({
@@ -21,6 +22,7 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
   onResetAllData,
   totalInvestedUsd = 0,
   minMlmQualifyUsd = 100,
+  referralCode = '',
 }) => {
   const isMlmQualified = totalInvestedUsd >= minMlmQualifyUsd;
   const [copied, setCopied] = useState(false);
@@ -29,7 +31,7 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(`https://nxbc.network/ref/${walletAddress ? walletAddress.substring(2, 8) : 'guest'}`);
+      await navigator.clipboard.writeText(`https://nxbc.tech/ref/${referralCode || 'guest'}`);
     } catch {}
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -127,7 +129,7 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
         <div className="p-2 sm:p-2.5 rounded-[16px] bg-[#050b16]/80 border border-white/10 flex items-center gap-2">
           <div className="flex-1 overflow-hidden">
             <p className="text-xs font-mono-crypto text-slate-300 truncate">
-              https://nxbc.network/ref/{walletAddress ? walletAddress.substring(2, 8) : 'guest'}
+              https://nxbc.tech/ref/{referralCode || 'guest'}
             </p>
           </div>
           <button
