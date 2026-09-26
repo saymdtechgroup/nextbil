@@ -315,6 +315,16 @@ export default function App() {
               : (prev.withdrawalFeePercent ?? 2),
           }));
         }
+
+        if (Array.isArray(data.rankRewards) && data.rankRewards.length > 0) {
+          setRankRewards(data.rankRewards);
+        }
+        if (Array.isArray(data.referralLevels) && data.referralLevels.length > 0) {
+          setReferralLevels(data.referralLevels);
+        }
+        if (data.matrixConfig && typeof data.matrixConfig === 'object') {
+          setMatrixConfig(data.matrixConfig);
+        }
       } catch (err) {
         console.warn('[LIVE PRESALE] Could not read BSC phase state:', err);
       }
@@ -1053,6 +1063,7 @@ export default function App() {
     setReferralLevels(newLevels);
     if (typeof window !== 'undefined') {
       localStorage.setItem('nxbc_admin_levels', JSON.stringify(newLevels));
+      window.dispatchEvent(new CustomEvent('nxbc:refresh-presale'));
     }
     syncConfigsToServer({ referralLevels: newLevels });
   };
@@ -1061,6 +1072,7 @@ export default function App() {
     setRankRewards(newRanks);
     if (typeof window !== 'undefined') {
       localStorage.setItem('nxbc_admin_ranks', JSON.stringify(newRanks));
+      window.dispatchEvent(new CustomEvent('nxbc:refresh-presale'));
     }
     syncConfigsToServer({ rankRewards: newRanks });
   };
@@ -1078,6 +1090,7 @@ export default function App() {
     setMatrixConfig(newMatrix);
     if (typeof window !== 'undefined') {
       localStorage.setItem('nxbc_admin_matrix', JSON.stringify(newMatrix));
+      window.dispatchEvent(new CustomEvent('nxbc:refresh-presale'));
     }
     syncConfigsToServer({ matrixConfig: newMatrix });
   };
@@ -1642,7 +1655,7 @@ export default function App() {
         {/* Dynamic View Rendering: Single Full Mobile Screen (Default) OR Trio Multi-Screen Grid */}
         {viewMode === 'single' ? (
           /* PURE FULL-WIDTH MOBILE SCREEN APPLICATION INTERFACE */
-          <div className="flex-1 flex flex-col w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto bg-gradient-to-b from-[#110726] via-[#090317] to-[#0d051e] rounded-2xl sm:rounded-[32px] border border-amber-500/25 shadow-[0_15px_60px_rgba(0,0,0,0.8)] overflow-visible relative my-0 sm:my-2">
+          <div className="flex-1 flex flex-col w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto bg-gradient-to-b from-[#110726] via-[#090317] to-[#0d051e] rounded-2xl sm:rounded-[32px] border border-amber-500/25 shadow-[0_15px_60px_rgba(0,0,0,0.8)] overflow-hidden relative my-0 sm:my-2">
             
             {/* Native Mobile App Header Bar Removed as per user request */}
 
@@ -1671,7 +1684,7 @@ export default function App() {
             </div>
 
             {/* Mobile Screen Body Content */}
-            <div className={`flex-1 min-h-[520px] overflow-visible ${activeSingleScreen === 'home' ? 'pb-4' : 'pb-1'}`}>
+            <div className={`flex-1 min-h-[520px] ${activeSingleScreen === 'home' ? 'pb-0' : 'pb-1'}`}>
               {activeSingleScreen === 'home' && (
                 <ScreenOneAcquisition
                   allocation={allocation}
