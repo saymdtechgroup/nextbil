@@ -2639,20 +2639,48 @@ async function startServer() {
       if (!user) return res.json({ success: true, orders: [] });
       const orders = await db.select().from(sellOrders)
         .where(eq(sellOrders.userId, user.id))
-        .orderBy(asc(sellOrders.priority), asc(sellOrders.createdAt), asc(sellOrders.id));
-      const allActive = await db.select({ id: sellOrders.id, phaseNumber: sellOrders.phaseNumber, fifoNumber: sellOrders.fifoNumber, priority: sellOrders.priority })
+        .orderBy(asc(sellOrders.phaseNumber), asc(sellOrders.priority), asc(sellOrders.createdAt), asc(sellOrders.id));
+
+      // Personal queue position is phase-specific. It is based on the same
+      // execution ordering used by the global FIFO (priority -> createdAt -> id),
+      // but it is calculated across every non-cancelled sell allocation in that
+      // phase. This keeps a user's original queue position stable even after an
+      // earlier order is completed, while direct-buyer settlement does not rewrite
+      // the user's normal FIFO position.
+      const allPhaseOrders = await db.select({
+        id: sellOrders.id,
+        phaseNumber: sellOrders.phaseNumber,
+        fifoNumber: sellOrders.fifoNumber,
+        priority: sellOrders.priority,
+        createdAt: sellOrders.createdAt,
+        status: sellOrders.status,
+      })
+        .from(sellOrders)
+        .where(sql`status <> 'cancelled'`)
+        .orderBy(asc(sellOrders.phaseNumber), asc(sellOrders.priority), asc(sellOrders.createdAt), asc(sellOrders.id));
+
+      const phasePositionMap = new Map<number, number>();
+      const phaseAheadMap = new Map<number, number>();
+      const phaseCurrentMap = new Map<number, number | null>();
+      const phaseSeen = new Map<number, number>();
+      for (const o of allPhaseOrders as any[]) {
+        const phase = Number(o.phaseNumber);
+        const position = (phaseSeen.get(phase) || 0) + 1;
+        phaseSeen.set(phase, position);
+        phasePositionMap.set(Number(o.id), position);
+      }
+
+      // Current global FIFO runner for each phase is the first active order.
+      const allActive = (await db.select({
+        id: sellOrders.id, phaseNumber: sellOrders.phaseNumber, fifoNumber: sellOrders.fifoNumber,
+        priority: sellOrders.priority, createdAt: sellOrders.createdAt
+      })
         .from(sellOrders)
         .where(inArray(sellOrders.status, ['open', 'partially_filled']))
-        .orderBy(asc(sellOrders.phaseNumber), asc(sellOrders.priority), asc(sellOrders.createdAt), asc(sellOrders.id));
-      const positionMap = new Map<number, number>();
-      const runningByPhase = new Map<number, number>();
-      const seenByPhase = new Map<number, number>();
-      for (const o of allActive as any[]) {
+        .orderBy(asc(sellOrders.phaseNumber), asc(sellOrders.priority), asc(sellOrders.createdAt), asc(sellOrders.id))) as any[];
+      for (const o of allActive) {
         const phase = Number(o.phaseNumber);
-        if (!runningByPhase.has(phase)) runningByPhase.set(phase, Number(o.fifoNumber || o.priority || 0));
-        const idx = seenByPhase.get(phase) || 0;
-        positionMap.set(Number(o.id), idx);
-        seenByPhase.set(phase, idx + 1);
+        if (!phaseCurrentMap.has(phase)) phaseCurrentMap.set(phase, Number(o.fifoNumber || 0) || null);
       }
       res.json({
         success: true,
@@ -2672,8 +2700,12 @@ async function startServer() {
             realizedUsdt: sold * price,
             remainingUsdt: remaining * price,
             status: o.status,
-            // Real persisted FIFO number only. Never expose priority/demo values as FIFO.
+            // Real persisted global FIFO reference. The user-facing queue position
+            // below is phase-specific and is intentionally separate from this value.
             fifoNumber: Number(o.fifoNumber || 0),
+            phasePosition: phasePositionMap.get(Number(o.id)) || 0,
+            ordersAhead: Math.max(0, (phasePositionMap.get(Number(o.id)) || 1) - 1),
+            currentRunningFifoNumber: phaseCurrentMap.get(Number(o.phaseNumber)) ?? null,
             createdAt: o.createdAt,
           };
         }),
