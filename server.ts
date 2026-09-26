@@ -2223,7 +2223,14 @@ async function startServer() {
       const sum = (obj: Record<string, number>) => Object.values(obj).reduce((a, b) => a + b, 0);
 
       res.json({
-        leader: { userId: leader.id, walletAddress: leader.walletAddress, referralCode: leader.referralCode },
+        leader: {
+          userId: leader.id,
+          walletAddress: leader.walletAddress,
+          referralCode: leader.referralCode,
+          totalDirectVolume: Number(leader.totalDirectVolume || 0),
+          totalTeamVolume: Number(leader.totalTeamVolume || 0),
+          highestRankAchieved: Number(leader.highestRankAchieved || 0),
+        },
         directMembers: unilevelLevels["1"],
         levels: matrixLevels,
         counts,
@@ -3036,11 +3043,41 @@ async function startServer() {
   // Admin configuration remains protected by requireAdmin below.
   app.get("/api/presale/config", async (_req, res) => {
     try {
-      const live = await getLivePresaleState();
+      let live: any;
+      try {
+        live = await getLivePresaleState();
+      } catch (rpcErr: any) {
+        console.warn("[RPC FALLBACK] BSC RPC unavailable, using local phase data:", rpcErr?.message || rpcErr);
+        const phaseRow = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'phases') });
+        let dbPhases = null;
+        if (phaseRow?.value) {
+          try { dbPhases = JSON.parse(phaseRow.value); } catch {}
+        }
+        live = {
+          active: true,
+          currentPhase: 1,
+          price: 0.01,
+          currentRemaining: 1000000,
+          totalSold: 0,
+          presaleBalance: 1000000,
+          phases: Array.isArray(dbPhases) && dbPhases.length ? dbPhases : [
+            { id: 'p1', phaseNumber: 1, name: 'Phase 1 - Seed Sale', shortName: 'Phase 1', rate: 0.01, rateLabel: '$0.01', totalSupply: 1000000, tokensSold: 0, remaining: 1000000, status: 'active', unlockRequirement: 'Live Now' },
+            { id: 'p2', phaseNumber: 2, name: 'Phase 2 - Private Sale', shortName: 'Phase 2', rate: 0.10, rateLabel: '$0.10', totalSupply: 2500000, tokensSold: 0, remaining: 2500000, status: 'upcoming', unlockRequirement: 'After P1' },
+            { id: 'p3', phaseNumber: 3, name: 'Phase 3 - Strategic Sale', shortName: 'Phase 3', rate: 1.00, rateLabel: '$1.00', totalSupply: 7000000, tokensSold: 0, remaining: 7000000, status: 'upcoming', unlockRequirement: 'After P2' },
+            { id: 'p4', phaseNumber: 4, name: 'Phase 4 - Community Sale', shortName: 'Phase 4', rate: 10.00, rateLabel: '$10.00', totalSupply: 19500000, tokensSold: 0, remaining: 19500000, status: 'upcoming', unlockRequirement: 'After P3' },
+            { id: 'p5', phaseNumber: 5, name: 'Phase 5 - Public Listing', shortName: 'Phase 5', rate: 100.00, rateLabel: '$100.00', totalSupply: 40000000, tokensSold: 0, remaining: 40000000, status: 'upcoming', unlockRequirement: 'After P4' },
+          ]
+        };
+      }
 
-      const socialRecord = await db.query.systemConfigs.findFirst({
-        where: eq(systemConfigs.key, "systemConfig"),
-      });
+      let socialRecord: any = null;
+      try {
+        socialRecord = await db.query.systemConfigs.findFirst({
+          where: eq(systemConfigs.key, "systemConfig"),
+        });
+      } catch (dbErr) {
+        console.warn("Notice: could not load systemConfig from DB:", dbErr);
+      }
       let publicSystemConfig: any = {
         tokenName: 'NXBC',
         tokenSymbol: 'NXBC',
@@ -3077,6 +3114,31 @@ async function startServer() {
         if (inMemoryWithdrawalFeePercent !== null) publicSystemConfig.withdrawalFeePercent = inMemoryWithdrawalFeePercent;
       }
 
+      // Fetch live rankRewards, referralLevels, and matrixConfig for user dashboards
+      let publicRankRewards: any[] | null = null;
+      let publicReferralLevels: any[] | null = null;
+      let publicMatrixConfig: any = null;
+      try {
+        const extraConfigs = await db.select().from(systemConfigs).where(
+          sql`${systemConfigs.key} IN ('rankRewards', 'referralLevels', 'matrixConfig')`
+        );
+        for (const item of extraConfigs) {
+          if (!item.value) continue;
+          try {
+            const parsed = JSON.parse(item.value);
+            if (item.key === 'rankRewards' && Array.isArray(parsed) && parsed.length > 0) {
+              publicRankRewards = parsed;
+            } else if (item.key === 'referralLevels' && Array.isArray(parsed) && parsed.length > 0) {
+              publicReferralLevels = parsed;
+            } else if (item.key === 'matrixConfig' && parsed && typeof parsed === 'object') {
+              publicMatrixConfig = parsed;
+            }
+          } catch {}
+        }
+      } catch (extraConfErr) {
+        console.warn("Notice reading extra systemConfigs for presale/config:", extraConfErr);
+      }
+
       // FIX: the on-chain phases(i).sold counter can stay at 0 (e.g. different
       // contract layout / indexing) even though purchases were verified on BSC
       // and stored in the DB. Use the larger of on-chain sold and the sum of
@@ -3108,6 +3170,9 @@ async function startServer() {
         presaleActive: live.active,
         presaleNXBCBalance: live.presaleBalance,
         systemConfig: publicSystemConfig,
+        rankRewards: publicRankRewards,
+        referralLevels: publicReferralLevels,
+        matrixConfig: publicMatrixConfig,
       });
     } catch (error: any) {
       console.error("Error in /api/presale/config:", error);
