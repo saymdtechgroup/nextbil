@@ -57,12 +57,12 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   const [saleOrders, setSaleOrders] = useState<Array<{
     id: number; phaseNumber: number; amountTokens: number; soldTokens: number;
     remainingTokens: number; tokenPrice: number; expectedUsdt: number;
-    realizedUsdt: number; remainingUsdt: number; status: string; fifoNumber?: number; currentRunningFifoNumber?: number | null; positionsAhead?: number; createdAt?: string;
+    realizedUsdt: number; remainingUsdt: number; status: string; fifoNumber?: number; phasePosition?: number; ordersAhead?: number; currentRunningFifoNumber?: number | null; positionsAhead?: number; createdAt?: string;
   }>>([]);
   const [globalFifo, setGlobalFifo] = useState<Array<{
     phaseNumber: number; totalOrders: number; totalQueuedTokens: number;
     orders: Array<{ id: number; userId: number; walletAddress: string; amountTokens: number;
-      remainingTokens: number; tokenPrice: number; status: string; position: number;
+      remainingTokens: number; tokenPrice: number; status: string; position: number; fifoNumber: number;
       aheadTokens: number; expectedRemainingUsdt: number; createdAt?: string; }>;
   }>>([]);
   const [fifoLoading, setFifoLoading] = useState(true);
@@ -450,11 +450,16 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               const remaining = orders.length > 0 ? orderRemaining : allocated;
               const realized = Math.max(0, orders.reduce((sum, o) => sum + Number(o.realizedUsdt || 0), 0));
               const pending = Math.max(0, remaining * item.rate);
+              const phasePositions = orders
+                .map((o) => Number(o.phasePosition || 0))
+                .filter((n) => n > 0)
+                .sort((a, b) => a - b);
               const fifoNumbers = orders
                 .map((o) => Number(o.fifoNumber || 0))
                 .filter((n) => n > 0)
                 .sort((a, b) => a - b);
-              const fifoText = fifoNumbers.length ? fifoNumbers.map((n) => `#${n}`).join(', ') : '0';
+              const positionText = phasePositions.length ? phasePositions.map((n) => `#${n}`).join(', ') : '—';
+              const fifoText = fifoNumbers.length ? fifoNumbers.map((n) => `#${n}`).join(', ') : '—';
               const status = allocated <= 0
                 ? 'NO ALLOCATION'
                 : remaining <= 0 && sold > 0
@@ -476,7 +481,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                       {item.label}
                     </span>
                     <span className={`text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full ${badgeBg} ${text} font-bold`}>
-                      FIFO {fifoText}
+                      QUEUE {positionText}
                     </span>
                   </div>
 
@@ -487,6 +492,11 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                     <span className={`text-[8.5px] sm:text-[9.5px] font-mono-crypto ${text} font-semibold`}>
                       @ ${item.rate.toFixed(2)} Rate
                     </span>
+                    {fifoNumbers.length > 0 && (
+                      <span className="text-[7px] sm:text-[7.5px] font-mono-crypto text-slate-400 font-semibold block mt-0.5">
+                        Global FIFO {fifoText}
+                      </span>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-x-2 gap-y-1 border-t border-white/10 pt-1.5 mt-1 text-[7.5px] sm:text-[8px] font-mono-crypto">
@@ -611,6 +621,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                     </span>
                     <span className="text-[8px] sm:text-[9px] text-slate-300 font-mono-crypto">
                       {totalOrders} orders • {totalQueuedTokens.toLocaleString()} NXBC queued
+                      {orders.length > 0 && ` • Running Global FIFO #${orders[0].fifoNumber}`}
                     </span>
                   </div>
 
@@ -631,7 +642,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                           }`}
                         >
                           <div className="flex items-center justify-between gap-2 text-[8px] sm:text-[9px] font-mono-crypto">
-                            <span className="text-white font-bold">#{o.position} {o.walletAddress}</span>
+                            <span className="text-white font-bold">Global FIFO #{o.fifoNumber} · Queue #{o.position} · {o.walletAddress}</span>
                             <span className="text-amber-300 font-bold">{o.remainingTokens.toLocaleString()} NXBC</span>
                           </div>
                           <div className="flex items-center justify-between mt-1 text-[7.5px] sm:text-[8px] font-mono-crypto text-slate-300">
@@ -668,15 +679,15 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                     <div key={o.id} className="rounded-[12px] border border-white/10 bg-[#071426]/60 p-2.5 text-[8px] font-mono-crypto space-y-2">
                       <div className="flex justify-between items-center">
                         <div>
-                          <span className="text-amber-300 font-bold">Phase {o.phaseNumber}</span> · FIFO #{o.fifoNumber || o.id}
+                          <span className="text-amber-300 font-bold">Phase {o.phaseNumber}</span> · Queue #{o.phasePosition || '—'} · Global FIFO #{o.fifoNumber || o.id}
                         </div>
                         <span className="text-emerald-300 font-bold">{o.status.toUpperCase()}</span>
                       </div>
                       <div className="grid grid-cols-2 gap-1 text-slate-300">
                         <span>Allocation: <b className="text-white">{o.amountTokens.toLocaleString()}</b></span>
                         <span>Remaining: <b className="text-amber-300">{o.remainingTokens.toLocaleString()}</b></span>
-                        <span>Running: <b className="text-cyan-300">#{o.currentRunningFifoNumber || '—'}</b></span>
-                        <span>Ahead: <b className="text-cyan-300">{o.positionsAhead ?? 0} orders</b></span>
+                        <span>Global Running: <b className="text-cyan-300">#{o.currentRunningFifoNumber || '—'}</b></span>
+                        <span>Ahead: <b className="text-cyan-300">{o.ordersAhead ?? o.positionsAhead ?? 0} orders</b></span>
                         <span>Price: <b className="text-emerald-300">${o.tokenPrice.toFixed(2)}</b></span>
                       </div>
                       {canInvite && (
