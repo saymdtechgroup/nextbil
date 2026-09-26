@@ -651,55 +651,108 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
 
             {/* 5 Major Leadership Rank Cards */}
             <div className="space-y-2.5">
-              {effectiveRankRewards.map((rank) => (
-                <div
-                  key={rank.id}
-                  className="p-3 sm:p-3.5 rounded-2xl bg-[#081426] border border-amber-500/25 hover:border-amber-400/50 transition-all space-y-2.5 shadow-md"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <span className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-400/10 text-amber-300 font-rajdhani font-black text-xs border border-amber-400/40">
-                        Fund #{rank.rankNumber}
-                      </span>
-                      <div>
-                        <h4 className="text-xs sm:text-sm font-bold text-slate-100 font-rajdhani">
-                          {rank.name}
-                        </h4>
-                        <span className="text-[10px] text-amber-300 font-mono-crypto font-bold">
-                          {rank.rewardTitle}
+              {effectiveRankRewards.map((rank) => {
+                const leaderRank = Number(teamData?.leader?.highestRankAchieved || 0);
+                const directVol = Number(teamData?.leader?.totalDirectVolume || 0);
+                const teamVol = Number(teamData?.leader?.totalTeamVolume || 0);
+                const isAchieved = leaderRank >= rank.rankNumber;
+                const directPercent = rank.requiredDirectVolume > 0
+                  ? Math.min(100, Math.round((directVol / rank.requiredDirectVolume) * 100))
+                  : 100;
+                const teamPercent = rank.requiredTeamVolume > 0
+                  ? Math.min(100, Math.round((teamVol / rank.requiredTeamVolume) * 100))
+                  : 100;
+
+                return (
+                  <div
+                    key={rank.id}
+                    className={`p-3 sm:p-3.5 rounded-2xl border transition-all space-y-2.5 shadow-md ${
+                      isAchieved
+                        ? 'bg-gradient-to-br from-[#041a12] via-[#072419] to-[#081426] border-emerald-400/50 shadow-[0_0_20px_rgba(16,185,129,0.15)]'
+                        : 'bg-[#081426] border-amber-500/25 hover:border-amber-400/50'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <span className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-400/10 text-amber-300 font-rajdhani font-black text-xs border border-amber-400/40">
+                          Fund #{rank.rankNumber}
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs sm:text-sm font-bold text-slate-100 font-rajdhani">
+                              {rank.name}
+                            </h4>
+                            {isAchieved ? (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-mono-crypto">
+                                ✓ QUALIFIED
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/10 text-amber-300/80 border border-amber-500/30 font-mono-crypto">
+                                TARGET
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-amber-300 font-mono-crypto font-bold">
+                            {rank.rewardTitle}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-xs sm:text-sm font-black font-mono-crypto text-emerald-400 block">
+                          {rank.monthlySalaryUsd
+                            ? `$${rank.monthlySalaryUsd}/Month (${rank.salaryMonths || 12} Mo)`
+                            : `$${rank.oneTimeBonusUsd.toLocaleString()} USD Payout`}
+                        </span>
+                        <span className="text-[9px] font-mono-crypto text-cyan-300/70">
+                          Pure USDT Reward
                         </span>
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <span className="text-xs sm:text-sm font-black font-mono-crypto text-emerald-400 block">
-                        {rank.monthlySalaryUsd
-                          ? `$${rank.monthlySalaryUsd}/Month Salary`
-                          : `$${rank.oneTimeBonusUsd.toLocaleString()} USD Payout`}
-                      </span>
-                      <span className="text-[9px] font-mono-crypto text-cyan-300/70">
-                        Pure USDT Reward
-                      </span>
-                    </div>
-                  </div>
+                    {/* Qualification Turnover Targets & Live Progress */}
+                    <div className="grid grid-cols-2 gap-2 text-[10px] bg-[#050b16] p-2.5 rounded-xl border border-cyan-500/15 font-mono-crypto">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-cyan-400 text-[8px] uppercase font-bold">1. Direct Business Goal</span>
+                          <span className="text-amber-300 text-[9px] font-bold">{directPercent}%</span>
+                        </div>
+                        <strong className="text-amber-300 text-xs block mt-0.5">
+                          ${(rank.requiredDirectVolume || 0).toLocaleString()} USD
+                        </strong>
+                        <div className="w-full h-1.5 rounded-full bg-[#081426] border border-amber-500/20 mt-1 overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full"
+                            style={{ width: `${directPercent}%` }}
+                          />
+                        </div>
+                        <span className="text-[8px] text-cyan-400/80 block mt-0.5">
+                          Current: ${directVol.toLocaleString()} USD
+                        </span>
+                      </div>
 
-                  {/* Qualification Turnover Targets */}
-                  <div className="grid grid-cols-2 gap-2 text-[10px] bg-[#050b16] p-2.5 rounded-xl border border-cyan-500/15 font-mono-crypto">
-                    <div>
-                      <span className="text-cyan-400 text-[8px] uppercase font-bold block">1. Direct Business Goal</span>
-                      <strong className="text-amber-300 text-xs block mt-0.5">
-                        ${(rank.requiredDirectVolume || 0).toLocaleString()} USD
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="text-cyan-400 text-[8px] uppercase font-bold block">2. Total Team Business Goal</span>
-                      <strong className="text-emerald-400 text-xs block mt-0.5">
-                        ${(rank.requiredTeamVolume || 0).toLocaleString()} USD
-                      </strong>
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-cyan-400 text-[8px] uppercase font-bold">2. Total Team Business Goal</span>
+                          <span className="text-emerald-400 text-[9px] font-bold">{teamPercent}%</span>
+                        </div>
+                        <strong className="text-emerald-400 text-xs block mt-0.5">
+                          ${(rank.requiredTeamVolume || 0).toLocaleString()} USD
+                        </strong>
+                        <div className="w-full h-1.5 rounded-full bg-[#081426] border border-emerald-500/20 mt-1 overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
+                            style={{ width: `${teamPercent}%` }}
+                          />
+                        </div>
+                        <span className="text-[8px] text-cyan-400/80 block mt-0.5">
+                          Current: ${teamVol.toLocaleString()} USD
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Guaranteed Leadership Salary Note */}
