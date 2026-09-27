@@ -59,6 +59,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
   // 'matrix' = 2x2 binary auto-spillover placement
   // 'leadership' = 5 Major Funds & Salary based on volume
   const [incomeTab, setIncomeTab] = useState<'unilevel' | 'matrix' | 'leadership'>('unilevel');
+  const [expandedReport, setExpandedReport] = useState<string | null>(null);
 
   // Load team data only when the wallet changes or when the user presses Refresh
   const loadTeam = useCallback(async () => {
@@ -257,9 +258,9 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
         <div className="p-3 rounded-2xl bg-[#050b16] border border-cyan-500/20 text-center">
           <span className="text-[9px] uppercase font-bold text-cyan-300/80 block font-mono-crypto">Unilevel Income</span>
           <span className="text-xl sm:text-2xl font-black font-mono-crypto text-emerald-400 block mt-0.5">
-            ${levelIncomeUsd.toFixed(2)}
+            ${Number(teamData?.totalUnilevelIncome ?? levelIncomeUsd ?? 0).toFixed(2)}
           </span>
-          <span className="text-[8px] text-emerald-300/70 font-mono-crypto">10-Tier Generations</span>
+          <span className="text-[8px] text-emerald-300/70 font-mono-crypto">Direct + 10 Generations</span>
         </div>
 
         <div className="p-3 rounded-2xl bg-[#050b16] border border-cyan-500/20 text-center">
@@ -451,20 +452,52 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
             </div>
 
             {/* Direct Sponsor Commission Highlight */}
-            <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-cyan-900/40 to-[#100524] border border-amber-400/40 flex items-center justify-between">
-              <div>
-                <span className="text-[10px] uppercase text-cyan-300 font-semibold font-rajdhani flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-amber-400" />
-                  Direct Sponsor Bonus
-                </span>
-                <div className="text-base sm:text-lg font-black font-mono-crypto gold-gradient-text">
-                  {directSponsorPercent}% Instant Commission
+            <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-cyan-900/40 to-[#100524] border border-amber-400/40">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <span className="text-[10px] uppercase text-cyan-300 font-semibold font-rajdhani flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    Direct Sponsor Bonus
+                  </span>
+                  <div className="text-base sm:text-lg font-black font-mono-crypto gold-gradient-text">
+                    {directSponsorPercent}% Instant Commission
+                  </div>
+                  <span className="text-[10px] text-cyan-300/80 font-mono-crypto">
+                    Direct income is stored separately as Level 0 so the user can clearly distinguish it from L1-L10 generation income.
+                  </span>
                 </div>
-                <span className="text-[10px] text-cyan-300/80 font-mono-crypto">
-                  Instant reward credited on every token purchase made by your directly invited members
-                </span>
+                <div className="text-right shrink-0">
+                  <span className="text-[9px] text-cyan-300/80 font-mono-crypto block uppercase">Earned</span>
+                  <span className="text-lg sm:text-xl font-black font-mono-crypto text-emerald-400 block">
+                    +${Number(teamData?.directSponsorIncome || 0).toFixed(2)}
+                  </span>
+                  <span className="text-[9px] text-cyan-300 font-mono-crypto">
+                    {Array.isArray(teamData?.directSponsorIncomeDetails) ? teamData.directSponsorIncomeDetails.length : 0} income events
+                  </span>
+                </div>
               </div>
-              <span className="text-[10px] font-mono-crypto px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-400/40 font-bold shrink-0">
+              <button
+                type="button"
+                onClick={() => setExpandedReport(expandedReport === 'direct' ? null : 'direct')}
+                className="mt-2 text-[9px] font-mono-crypto text-amber-300 hover:text-white underline underline-offset-2"
+              >
+                {expandedReport === 'direct' ? 'Hide source details' : 'Show source details'}
+              </button>
+              {expandedReport === 'direct' && Array.isArray(teamData?.directSponsorIncomeDetails) && (
+                <div className="mt-2 space-y-1.5 border-t border-amber-400/15 pt-2">
+                  {teamData.directSponsorIncomeDetails.length === 0 ? (
+                    <div className="text-[9px] text-slate-400 font-mono-crypto">No direct sponsor income recorded yet.</div>
+                  ) : teamData.directSponsorIncomeDetails.slice(0, 20).map((item: any) => (
+                    <div key={`direct-income-${item.earningId}`} className="flex items-center justify-between gap-2 text-[9px] font-mono-crypto">
+                      <span className="truncate text-cyan-300/90">
+                        {String(item.sourceWalletAddress || item.sourceReferralCode || 'Unknown source').slice(0, 10)}...
+                      </span>
+                      <span className="text-emerald-400 font-bold shrink-0">+${Number(item.amount || 0).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <span className="mt-2 inline-block text-[10px] font-mono-crypto px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-400/40 font-bold">
                 Level 0 (Direct)
               </span>
             </div>
@@ -529,6 +562,23 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                         )}
                       </div>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setExpandedReport(expandedReport === `uni-${level.level}` ? null : `uni-${level.level}`)}
+                      className="ml-9 mt-1 text-[8.5px] font-mono-crypto text-cyan-300 hover:text-white underline underline-offset-2"
+                    >
+                      {expandedReport === `uni-${level.level}` ? 'Hide income sources' : `Show ${Array.isArray(teamData?.unilevelIncomeDetails?.[String(level.level)]) ? teamData.unilevelIncomeDetails[String(level.level)].length : 0} income sources`}
+                    </button>
+                    {expandedReport === `uni-${level.level}` && (
+                      <div className="ml-9 mt-1 p-2 rounded-lg bg-cyan-950/20 border border-cyan-500/10 space-y-1">
+                        {(Array.isArray(teamData?.unilevelIncomeDetails?.[String(level.level)]) ? teamData.unilevelIncomeDetails[String(level.level)] : []).slice(0, 20).map((item: any) => (
+                          <div key={`uni-income-${item.earningId}`} className="flex items-center justify-between gap-2 text-[8.5px] font-mono-crypto">
+                            <span className="truncate text-cyan-300/90">{String(item.sourceWalletAddress || item.sourceReferralCode || 'Unknown source').slice(0, 12)}...</span>
+                            <span className="text-emerald-400 font-bold shrink-0">+${Number(item.amount || 0).toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -591,8 +641,9 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                 {matrixLevels.map((level) => (
                   <div
                     key={`mat-${level.level}`}
-                    className="p-2.5 rounded-xl bg-[#081426] border border-cyan-500/15 hover:border-cyan-400/40 transition-colors flex items-center justify-between text-xs"
+                    className="p-2.5 rounded-xl bg-[#081426] border border-cyan-500/15 hover:border-cyan-400/40 transition-colors text-xs"
                   >
+                    <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2.5">
                       <span className="w-7 h-7 rounded-xl bg-cyan-900/60 text-cyan-200 font-mono-crypto font-bold text-xs flex items-center justify-center border border-cyan-700/60 shrink-0">
                         M{level.level}
@@ -615,6 +666,24 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                         {level.members} member{level.members === 1 ? '' : 's'}
                       </span>
                     </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedReport(expandedReport === `mat-${level.level}` ? null : `mat-${level.level}`)}
+                      className="mt-1 text-[8.5px] font-mono-crypto text-cyan-300 hover:text-white underline underline-offset-2"
+                    >
+                      {expandedReport === `mat-${level.level}` ? 'Hide income sources' : `Show ${Array.isArray(teamData?.matrixIncomeDetails?.[String(level.level)]) ? teamData.matrixIncomeDetails[String(level.level)].length : 0} income sources`}
+                    </button>
+                    {expandedReport === `mat-${level.level}` && (
+                      <div className="mt-1 p-2 rounded-lg bg-cyan-950/20 border border-cyan-500/10 space-y-1">
+                        {(Array.isArray(teamData?.matrixIncomeDetails?.[String(level.level)]) ? teamData.matrixIncomeDetails[String(level.level)] : []).slice(0, 20).map((item: any) => (
+                          <div key={`mat-income-${item.earningId}`} className="flex items-center justify-between gap-2 text-[8.5px] font-mono-crypto">
+                            <span className="truncate text-cyan-300/90">{String(item.sourceWalletAddress || item.sourceReferralCode || 'Unknown source').slice(0, 12)}...</span>
+                            <span className="text-emerald-400 font-bold shrink-0">+${Number(item.amount || 0).toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
