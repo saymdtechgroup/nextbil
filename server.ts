@@ -2207,16 +2207,49 @@ async function startServer() {
       const earnings = await db.select().from(levelEarnings).where(eq(levelEarnings.beneficiaryId, leader.id));
       const unilevelIncome: Record<string, number> = {};
       const matrixIncome: Record<string, number> = {};
+      const unilevelIncomeDetails: Record<string, any[]> = {};
+      const matrixIncomeDetails: Record<string, any[]> = {};
+      let directSponsorIncome = 0;
+      const directSponsorIncomeDetails: any[] = [];
       for (let i = 1; i <= 10; i++) {
         unilevelIncome[String(i)] = 0;
         matrixIncome[String(i)] = 0;
+        unilevelIncomeDetails[String(i)] = [];
+        matrixIncomeDetails[String(i)] = [];
       }
+
+      // Build a transparent income ledger from the database. level_number=0 is
+      // the separate Direct Sponsor commission; levels 1-10 are Unilevel and
+      // matrix_join entries are the independent 2x2 Matrix income stream.
       for (const earning of earnings as any[]) {
         const level = Number(earning.levelNumber);
-        if (level < 1 || level > 10) continue;
         const amount = Number(earning.commissionUsdt || 0);
-        if (earning.txType === 'matrix_join') matrixIncome[String(level)] += amount;
-        else if (earning.txType === 'token_purchase') unilevelIncome[String(level)] += amount;
+        const source = earning.sourceUserId ? userById.get(Number(earning.sourceUserId)) : null;
+        const detail = {
+          earningId: earning.id,
+          sourceUserId: earning.sourceUserId ?? null,
+          sourceWalletAddress: source?.walletAddress || null,
+          sourceReferralCode: source?.referralCode || null,
+          amount,
+          percentage: Number(earning.percentage || 0),
+          txType: earning.txType,
+          createdAt: earning.createdAt ? new Date(earning.createdAt).toISOString() : null,
+        };
+
+        if (earning.txType === 'matrix_join') {
+          if (level >= 1 && level <= 10) {
+            matrixIncome[String(level)] += amount;
+            matrixIncomeDetails[String(level)].push(detail);
+          }
+        } else if (earning.txType === 'token_purchase') {
+          if (level === 0) {
+            directSponsorIncome += amount;
+            directSponsorIncomeDetails.push(detail);
+          } else if (level >= 1 && level <= 10) {
+            unilevelIncome[String(level)] += amount;
+            unilevelIncomeDetails[String(level)].push(detail);
+          }
+        }
       }
 
       const counts = Object.fromEntries(Object.entries(matrixLevels).map(([k, v]) => [k, v.length]));
@@ -2243,7 +2276,12 @@ async function startServer() {
         unilevelCounts,
         unilevelIncome,
         matrixIncome,
-        totalUnilevelIncome: sum(unilevelIncome),
+        directSponsorIncome,
+        directSponsorIncomeDetails,
+        unilevelIncomeDetails,
+        matrixIncomeDetails,
+        totalUnilevelIncome: directSponsorIncome + sum(unilevelIncome),
+        totalGenerationIncome: sum(unilevelIncome),
         totalMatrixIncome: sum(matrixIncome),
         maxLevel: 10,
         structure: '2x2 forced matrix',
