@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Database,
   Info,
+  Crown,
 } from 'lucide-react';
 import { Transaction, AllocationState, TokenSellLedgerItem } from '../types/crypto';
 import {
@@ -1104,7 +1105,8 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
               const isPresale = tx.type === 'buy';
               const isMatrix = tx.type === 'matrix_spillover';
               const isSettlement = tx.type === 'token_sell_settlement';
-              const isLevel = tx.type === 'referral_bonus';
+              const isRankReward = tx.title?.toLowerCase().includes('rank') || tx.title?.toLowerCase().includes('reward');
+              const isLevel = tx.type === 'referral_bonus' && !isRankReward;
 
               return (
                 <div
@@ -1118,6 +1120,8 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                           ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
                           : isPresale
                           ? 'bg-amber-400/15 text-amber-400 border border-amber-400/30'
+                          : isRankReward
+                          ? 'bg-gradient-to-br from-yellow-400/20 to-amber-500/30 text-yellow-300 border border-yellow-400/50'
                           : isMatrix
                           ? 'bg-cyan-400/15 text-cyan-400 border border-cyan-400/30'
                           : isSettlement
@@ -1129,6 +1133,8 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                         <ArrowDownToLine className="w-3.5 h-3.5" />
                       ) : isPresale ? (
                         <Coins className="w-3.5 h-3.5" />
+                      ) : isRankReward ? (
+                        <Crown className="w-3.5 h-3.5 text-yellow-300" />
                       ) : isMatrix ? (
                         <Layers className="w-3.5 h-3.5" />
                       ) : isSettlement ? (
@@ -1138,7 +1144,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                       )}
                     </div>
                     <div className="min-w-0">
-                      <span className="font-semibold text-slate-100 block truncate text-[11px]">
+                      <span className={`font-semibold block truncate text-[11px] ${isRankReward ? 'text-yellow-300 font-bold' : 'text-slate-100'}`}>
                         {tx.title || 'Transaction Credit'}
                       </span>
                       <span className="text-[8px] font-mono-crypto text-slate-400 block truncate mt-0.5">
@@ -1152,7 +1158,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                   <div className="text-right shrink-0 pl-2.5">
                     <span
                       className={`font-mono-crypto font-bold block text-[11px] ${
-                        isDebit ? 'text-rose-400' : 'text-emerald-400'
+                        isDebit ? 'text-rose-400' : isRankReward ? 'text-yellow-300' : 'text-emerald-400'
                       }`}
                     >
                       {isDebit ? '-' : '+'}${amt.toFixed(2)} USDT
