@@ -71,7 +71,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
   // 3 Distinct income stream tabs to eliminate all confusion:
   // 'unilevel' = 10 Generation referral tree
   // 'matrix' = 2x2 binary auto-spillover placement
-  // 'leadership' = 5 Major Funds & Salary based on volume
+  // 'leadership' = 5 Major Leadership Milestone Rewards based on volume
   const [incomeTab, setIncomeTab] = useState<'unilevel' | 'matrix' | 'leadership'>('unilevel');
 
   // Load team data only when the wallet changes or when the user presses Refresh
@@ -463,7 +463,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
               }`}
             >
               <Crown className="w-4 h-4 shrink-0" />
-              <span>3. Leadership Funds & Salary</span>
+              <span>3. Leadership Rank Rewards</span>
               <span
                 className={`text-[10px] px-2 py-0.5 rounded-full font-mono-crypto font-bold ${
                   incomeTab === 'leadership'
@@ -941,7 +941,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
           </div>
         )}
 
-        {/* ----------------- TAB 3: LEADERSHIP FUNDS & MONTHLY SALARY ----------------- */}
+        {/* ----------------- TAB 3: LEADERSHIP RANK REWARDS ----------------- */}
         {incomeTab === 'leadership' && (
           <div className="rounded-3xl border border-amber-500/40 bg-gradient-to-br from-[#050b16] via-[#081426] to-[#050b16] p-4 sm:p-5 space-y-4 shadow-xl">
             {/* Tab Explanation Banner */}
@@ -949,14 +949,14 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-sm sm:text-base font-black text-slate-100 font-rajdhani uppercase tracking-wider">
-                    👑 Leadership Funds & Salary Rewards (5 Major Funds)
+                    👑 Leadership Rank Milestone Rewards (5 Major Ranks)
                   </h2>
                   <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-400/40 font-mono-crypto">
                     Volume Based
                   </span>
                 </div>
                 <p className="text-[11px] text-cyan-200/80 font-mono-crypto mt-1">
-                  The 5 Major Leadership Funds and Monthly Salaries are unlocked through cumulative Direct and Team business volume milestones. Independent from generation commissions.
+                  The 5 Major Leadership Milestone Rewards are unlocked instantly in pure USDT through cumulative Direct and Team business volume milestones.
                 </p>
               </div>
 
@@ -1019,9 +1019,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
 
                       <div className="text-right">
                         <span className="text-xs sm:text-sm font-black font-mono-crypto text-emerald-400 block">
-                          {rank.monthlySalaryUsd
-                            ? `$${rank.monthlySalaryUsd}/Month (${rank.salaryMonths || 12} Mo)`
-                            : `$${rank.oneTimeBonusUsd.toLocaleString()} USD Payout`}
+                          ${rank.oneTimeBonusUsd.toLocaleString()} USD Payout
                         </span>
                         <span className="text-[9px] font-mono-crypto text-cyan-300/70">
                           Pure USDT Reward
@@ -1074,11 +1072,11 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
               })}
             </div>
 
-            {/* Guaranteed Leadership Salary Note */}
+            {/* Leadership Milestone Reward Info Note */}
             <div className="p-3 rounded-2xl bg-amber-950/30 border border-amber-500/30 text-[11px] text-amber-200/90 font-mono-crypto flex items-start gap-2">
               <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <span>
-                <strong>Guaranteed Monthly Salary:</strong> Once qualification business volume targets are achieved, the smart contract automatically credits the scheduled monthly USDT salary directly to your connected wallet for 12 consecutive months.
+                <strong>Instant USDT Rank Milestone Reward:</strong> As soon as the required Direct and Team business volume targets are achieved, the one-time USDT reward is automatically credited directly to your affiliate earnings balance.
               </span>
             </div>
           </div>

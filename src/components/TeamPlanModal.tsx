@@ -47,7 +47,7 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
   if (!isOpen) return null;
 
   const copyRef = () => {
-    navigator.clipboard.writeText(`https://nxbc.tech/ref/${referralCode}`);
+    navigator.clipboard.writeText(`https://nxbc.network?ref=${referralCode}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -106,7 +106,7 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
             }`}
           >
             <Award className="w-3.5 h-3.5" />
-            <span>👑 Leadership Funds & Salary</span>
+            <span>👑 Leadership Rank Rewards</span>
           </button>
         </div>
 
@@ -152,7 +152,7 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
             </label>
             <div className="flex items-center gap-2 bg-[#020813] border border-cyan-500/30 rounded-xl p-1.5 pl-3">
               <span className="text-xs font-mono-crypto text-amber-300 truncate flex-1">
-                nxbc.tech/ref/{referralCode}
+                nxbc.network?ref={referralCode}
               </span>
               <button
                 onClick={copyRef}
@@ -211,7 +211,7 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-slate-200 uppercase font-rajdhani">
-                  Leadership Funds, Salary & Royalty Pool
+                  Leadership Rank & Milestone Rewards
                 </h3>
                 <span className="text-[9px] font-mono-crypto text-amber-300">
                   Direct & Team Business Goals
@@ -258,9 +258,7 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
                         <div>
                           <span className="text-cyan-400 block text-[8px] uppercase font-bold">Reward Payout</span>
                           <span className="font-mono-crypto text-emerald-400 font-black text-xs block">
-                            {rank.monthlySalaryUsd 
-                              ? `$${rank.monthlySalaryUsd}/Month (${rank.salaryMonths} Mo)` 
-                              : `$${rank.oneTimeBonusUsd.toLocaleString()} USD`}
+                            ${rank.oneTimeBonusUsd.toLocaleString()} USD
                           </span>
                         </div>
                         <span className="text-[8px] font-mono-crypto text-amber-300 font-semibold">
