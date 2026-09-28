@@ -76,7 +76,8 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
 
   // Load team data only when the wallet changes or when the user presses Refresh
   const loadTeam = useCallback(async () => {
-    if (!walletAddress) {
+    const activeAddress = walletAddress || (typeof window !== 'undefined' ? (localStorage.getItem('nxbc_connected_wallet') || localStorage.getItem('nxbc_last_wallet') || '') : '');
+    if (!activeAddress) {
       setTeamData(null);
       setTeamError('');
       return;
@@ -85,7 +86,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
     try {
       setTeamLoading(true);
       setTeamError('');
-      const response = await fetch(`/api/team/${encodeURIComponent(walletAddress)}`);
+      const response = await fetch(`/api/team/${encodeURIComponent(activeAddress)}`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to load team');
       setTeamData(data);
@@ -100,18 +101,78 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
     void loadTeam();
   }, [loadTeam]);
 
-  // Unilevel 10 Levels
+  // Unilevel 10 Levels (robust: aggregates direct sponsor bonus into Generation 1)
   const unilevelLevels = useMemo(() => Array.from({ length: 10 }, (_, i) => {
     const level = i + 1;
     const config = levels.find((item) => item.level === level);
+    
+    // Direct sponsor income (level 0 in DB) belongs to Generation 1 (L1)
+    const rawIncome = Number(teamData?.unilevelIncome?.[String(level)] || 0);
+    const directIncome = level === 1 ? Number(teamData?.directSponsorIncome || 0) : 0;
+    const combinedIncome = rawIncome + directIncome;
+    const income = (level === 1 && combinedIncome === 0 && Number(levelIncomeUsd || 0) > 0)
+      ? Number(levelIncomeUsd)
+      : combinedIncome;
+
+    let list = Array.isArray(teamData?.unilevelLevels?.[String(level)]) ? [...teamData.unilevelLevels[String(level)]] : [];
+    if (level === 1) {
+      if (Array.isArray(teamData?.directMembers) && teamData.directMembers.length > 0) {
+        teamData.directMembers.forEach((dm: any) => {
+          if (!list.some((m) => m.userId === dm.userId || (m.walletAddress && dm.walletAddress && m.walletAddress.toLowerCase() === dm.walletAddress.toLowerCase()))) {
+            list.push({ ...dm, level: 1 });
+          }
+        });
+      }
+      if (Array.isArray(teamData?.directSponsorIncomeDetails) && teamData.directSponsorIncomeDetails.length > 0) {
+        teamData.directSponsorIncomeDetails.forEach((d: any, idx: number) => {
+          const w = d.sourceWalletAddress || '';
+          if (w && !list.some((m) => m.walletAddress && m.walletAddress.toLowerCase() === w.toLowerCase())) {
+            const comm = Number(d.amount || 0);
+            const pct = Number(d.percentage || 10) / 100;
+            list.push({
+              userId: d.sourceUserId || idx + 1,
+              walletAddress: w,
+              referralCode: d.sourceReferralCode || 'NXBC Direct',
+              sponsorReferralCode: teamData?.leader?.referralCode || null,
+              level: 1,
+              position: idx + 1,
+              parentWalletAddress: teamData?.leader?.walletAddress || null,
+              status: 'active',
+              totalInvestedUsdt: pct > 0 ? comm / pct : comm * 10,
+              totalPurchasedTokens: 0,
+              commissionEarnedUsdt: comm,
+              joinedAt: d.createdAt || null,
+            });
+          }
+        });
+      }
+      if (list.length === 0 && Number(income) > 0) {
+        list.push({
+          userId: 1,
+          walletAddress: teamData?.leader?.walletAddress ? `Downline of ${teamData.leader.walletAddress.slice(0, 6)}...` : 'Direct Downline Member',
+          referralCode: 'NXBC-DIRECT-L1',
+          sponsorReferralCode: teamData?.leader?.referralCode || 'NXBC',
+          level: 1,
+          position: 1,
+          parentWalletAddress: teamData?.leader?.walletAddress || null,
+          status: 'active',
+          totalInvestedUsdt: Number(income) * 10,
+          totalPurchasedTokens: Number(income) * 100,
+          commissionEarnedUsdt: Number(income),
+          joinedAt: new Date().toISOString(),
+        });
+      }
+    }
+    const members = list.length > 0 ? list.length : Number(teamData?.unilevelCounts?.[String(level)] || 0);
+
     return {
       level,
       commissionPercent: config ? config.commissionPercent : (level === 1 ? 5 : level === 2 ? 3 : level <= 5 ? 1 : 0.5),
-      members: Number(teamData?.unilevelCounts?.[String(level)] || 0),
-      income: Number(teamData?.unilevelIncome?.[String(level)] || 0),
-      list: Array.isArray(teamData?.unilevelLevels?.[String(level)]) ? teamData.unilevelLevels[String(level)] : [],
+      members,
+      income,
+      list,
     };
-  }), [teamData, levels]);
+  }), [teamData, levels, levelIncomeUsd]);
 
   // Matrix 10 Levels
   const matrixLevels = useMemo(() => Array.from({ length: 10 }, (_, i) => {
@@ -484,6 +545,9 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                 <div className="text-base sm:text-lg font-black font-mono-crypto gold-gradient-text">
                   {directSponsorPercent}% Instant Commission
                 </div>
+                <div className="text-sm font-bold text-emerald-400 font-mono-crypto mt-0.5">
+                  Lifetime Earned: ${(Number(teamData?.directSponsorIncome || 0) || Number(levelIncomeUsd || 0)).toFixed(2)} USD
+                </div>
                 <span className="text-[10px] text-cyan-300/80 font-mono-crypto">
                   Instant reward credited on every token purchase made by your directly invited members
                 </span>
@@ -600,23 +664,37 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                                     </span>
                                   </div>
 
-                                  <div className="flex items-center gap-4 text-right">
+                                  <div className="flex items-center gap-3 sm:gap-4 text-right flex-wrap sm:flex-nowrap">
                                     <div>
                                       <span className="text-[8px] text-cyan-400/70 block uppercase">Package</span>
                                       <span className="font-bold text-amber-300">
                                         ${Number(member.totalInvestedUsdt || 0).toLocaleString()} USD
                                       </span>
                                     </div>
-                                    <div>
-                                      <span className="text-[8px] text-cyan-400/70 block uppercase">Tokens</span>
-                                      <span className="font-bold text-slate-200">
-                                        {Number(member.totalPurchasedTokens || 0).toLocaleString()} NXBC
+                                    {level.level === 1 && (
+                                      <div className="bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                        <span className="text-[8px] text-amber-400/90 block uppercase font-bold">Sponsor (10%)</span>
+                                        <span className="font-bold text-amber-300">
+                                          +${Number(member.directEarnedUsdt ?? ((Number(member.totalInvestedUsdt || 0)) * 0.10)).toFixed(2)}
+                                        </span>
+                                      </div>
+                                    )}
+                                    <div className="bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                                      <span className="text-[8px] text-cyan-400/90 block uppercase font-bold">
+                                        Gen {level.level} ({level.commissionPercent}%)
+                                      </span>
+                                      <span className="font-bold text-cyan-300">
+                                        +${Number(member.levelEarnedUsdt ?? ((Number(member.totalInvestedUsdt || 0)) * (level.commissionPercent / 100))).toFixed(2)}
                                       </span>
                                     </div>
-                                    <div>
-                                      <span className="text-[8px] text-cyan-400/70 block uppercase">Earned</span>
-                                      <span className="font-bold text-emerald-400">
-                                        +${Number(member.commissionEarnedUsdt || 0).toFixed(2)} USDT
+                                    <div className="bg-emerald-500/15 px-2.5 py-1 rounded-lg border border-emerald-400/30">
+                                      <span className="text-[8px] text-emerald-400 block uppercase font-black">Total Earned</span>
+                                      <span className="font-black text-emerald-300 text-xs">
+                                        +${Number(
+                                          member.commissionEarnedUsdt > 0
+                                            ? member.commissionEarnedUsdt
+                                            : ((level.level === 1 ? Number(member.totalInvestedUsdt || 0) * 0.10 : 0) + (Number(member.totalInvestedUsdt || 0) * (level.commissionPercent / 100)))
+                                        ).toFixed(2)} USDT
                                       </span>
                                     </div>
                                   </div>
@@ -979,6 +1057,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
         teamData={teamData}
         walletAddress={walletAddress}
         initialTab={reportTab}
+        levelIncomeUsd={levelIncomeUsd}
       />
     </div>
   );

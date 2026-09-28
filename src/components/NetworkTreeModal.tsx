@@ -4,9 +4,11 @@ import { X, Network, User, ChevronDown, ChevronRight, UserPlus, Users, Search, T
 interface NetworkTreeModalProps {
   isOpen: boolean;
   onClose: () => void;
+  teamData?: any;
+  walletAddress?: string;
 }
 
-// Dummy Tree Data Type
+// Tree Node Data Type
 type TreeNode = {
   id: string;
   name: string;
@@ -14,25 +16,82 @@ type TreeNode = {
   rank: string;
   totalTeam: number;
   investment: number;
+  commission: number;
   isExpanded?: boolean;
   children?: TreeNode[];
 };
 
-// Dummy Data Generator
-const myTree: TreeNode = {
-  id: 'me',
-  name: 'Your Network',
-  wallet: 'Connect wallet to view network',
-  rank: '—',
-  totalTeam: 0,
-  investment: 0,
-  isExpanded: true,
-  children: [],
-};
-
-export const NetworkTreeModal: React.FC<NetworkTreeModalProps> = ({ isOpen, onClose }) => {
-  const [treeData, setTreeData] = useState<TreeNode>(myTree);
+export const NetworkTreeModal: React.FC<NetworkTreeModalProps> = ({ isOpen, onClose, teamData, walletAddress }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [treeData, setTreeData] = useState<TreeNode>(() => {
+    return {
+      id: 'me',
+      name: 'You (Root Leader)',
+      wallet: walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : 'Connect wallet to view network',
+      rank: 'Leader',
+      totalTeam: 0,
+      investment: 0,
+      commission: 0,
+      isExpanded: true,
+      children: [],
+    };
+  });
+
+  React.useEffect(() => {
+    if (!teamData) return;
+
+    const leader = teamData.leader || {};
+    const l1Members = Array.isArray(teamData.unilevelLevels?.['1']) ? teamData.unilevelLevels['1'] : [];
+    const l2Members = Array.isArray(teamData.unilevelLevels?.['2']) ? teamData.unilevelLevels['2'] : [];
+
+    const l1Children: TreeNode[] = l1Members.map((m: any, idx: number) => {
+      // Find L2 members referred by this L1 member if any
+      const myDownlines = l2Members.filter((l2: any) =>
+        (l2.sponsorReferralCode && l2.sponsorReferralCode.toUpperCase() === m.referralCode?.toUpperCase()) ||
+        (l2.parentWalletAddress && l2.parentWalletAddress.toLowerCase() === m.walletAddress?.toLowerCase())
+      );
+
+      const commEarned = Number(
+        (m.commissionEarnedUsdt || 0) > 0
+          ? m.commissionEarnedUsdt
+          : ((m.directEarnedUsdt || (Number(m.totalInvestedUsdt || 0) * 0.10)) + (m.levelEarnedUsdt || (Number(m.totalInvestedUsdt || 0) * 0.03)))
+      );
+
+      return {
+        id: `l1-${m.userId || idx}`,
+        name: `Direct Downline #${idx + 1}`,
+        wallet: m.walletAddress || '—',
+        rank: m.status === 'active' ? 'Qualified ($100+)' : 'Investor',
+        totalTeam: myDownlines.length,
+        investment: Number(m.totalInvestedUsdt || 0),
+        commission: commEarned,
+        isExpanded: false,
+        children: myDownlines.map((l2: any, l2Idx: number) => ({
+          id: `l2-${l2.userId || l2Idx}`,
+          name: `Level 2 Member #${l2Idx + 1}`,
+          wallet: l2.walletAddress || '—',
+          rank: l2.status === 'active' ? 'Qualified' : 'Investor',
+          totalTeam: 0,
+          investment: Number(l2.totalInvestedUsdt || 0),
+          commission: Number(l2.commissionEarnedUsdt || (Number(l2.totalInvestedUsdt || 0) * 0.02)),
+          isExpanded: false,
+          children: [],
+        })),
+      };
+    });
+
+    setTreeData({
+      id: 'me',
+      name: 'You (Team Leader)',
+      wallet: leader.walletAddress ? `${leader.walletAddress.slice(0, 6)}...${leader.walletAddress.slice(-4)}` : (walletAddress || 'Connected Wallet'),
+      rank: leader.highestRankAchieved ? `Fund #${leader.highestRankAchieved}` : 'Team Leader',
+      totalTeam: teamData.totalDirectMembers || l1Members.length,
+      investment: Number(leader.totalDirectVolume || 0),
+      commission: Number(teamData.totalUnilevelIncome || 0),
+      isExpanded: true,
+      children: l1Children,
+    });
+  }, [teamData, walletAddress]);
 
   if (!isOpen) return null;
 
@@ -93,7 +152,9 @@ export const NetworkTreeModal: React.FC<NetworkTreeModalProps> = ({ isOpen, onCl
                 <div className="text-[9px] text-cyan-300/70 font-mono-crypto flex items-center gap-2 mt-0.5">
                   <span>{node.wallet}</span>
                   <span>•</span>
-                  <span className="text-emerald-400 font-semibold">${node.investment} Inv.</span>
+                  <span className="text-amber-300 font-semibold">${node.investment} Inv.</span>
+                  <span>•</span>
+                  <span className="text-emerald-400 font-bold">+${node.commission.toFixed(2)} Earned</span>
                 </div>
               </div>
             </div>

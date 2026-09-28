@@ -24,6 +24,7 @@ interface TeamReportModalProps {
   teamData?: any;
   walletAddress?: string;
   initialTab?: 'unilevel' | 'matrix';
+  levelIncomeUsd?: number;
 }
 
 export const TeamReportModal: React.FC<TeamReportModalProps> = ({
@@ -32,6 +33,7 @@ export const TeamReportModal: React.FC<TeamReportModalProps> = ({
   teamData,
   walletAddress,
   initialTab = 'unilevel',
+  levelIncomeUsd = 0,
 }) => {
   const [activeTab, setActiveTab] = useState<'unilevel' | 'matrix'>(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,22 +51,74 @@ export const TeamReportModal: React.FC<TeamReportModalProps> = ({
   const rawMembers = useMemo(() => {
     if (!teamData) return [];
     const sourceLevels = activeTab === 'unilevel' ? teamData.unilevelLevels : teamData.matrixLevels;
-    if (!sourceLevels) return [];
 
     const list: any[] = [];
-    for (let lvl = 1; lvl <= 10; lvl++) {
-      const levelArr = sourceLevels[String(lvl)];
-      if (Array.isArray(levelArr)) {
-        levelArr.forEach((member: any) => {
-          list.push({
-            ...member,
-            level: Number(member.level || lvl),
+    if (sourceLevels) {
+      for (let lvl = 1; lvl <= 10; lvl++) {
+        const levelArr = sourceLevels[String(lvl)];
+        if (Array.isArray(levelArr)) {
+          levelArr.forEach((member: any) => {
+            list.push({
+              ...member,
+              level: Number(member.level || lvl),
+            });
           });
+        }
+      }
+    }
+
+    // Also include direct members if in unilevel tab
+    if (activeTab === 'unilevel') {
+      if (Array.isArray(teamData.directMembers)) {
+        teamData.directMembers.forEach((dm: any) => {
+          if (!list.some((m) => m.userId === dm.userId || (m.walletAddress && dm.walletAddress && m.walletAddress.toLowerCase() === dm.walletAddress.toLowerCase()))) {
+            list.push({ ...dm, level: 1 });
+          }
+        });
+      }
+      if (Array.isArray(teamData.directSponsorIncomeDetails)) {
+        teamData.directSponsorIncomeDetails.forEach((d: any, idx: number) => {
+          const w = d.sourceWalletAddress || '';
+          if (w && !list.some((m) => m.walletAddress && m.walletAddress.toLowerCase() === w.toLowerCase())) {
+            const comm = Number(d.amount || 0);
+            const pct = Number(d.percentage || 10) / 100;
+            list.push({
+              userId: d.sourceUserId || idx + 1,
+              walletAddress: w,
+              referralCode: d.sourceReferralCode || 'NXBC Direct',
+              sponsorReferralCode: teamData.leader?.referralCode || null,
+              level: 1,
+              position: idx + 1,
+              parentWalletAddress: teamData.leader?.walletAddress || null,
+              status: 'active',
+              totalInvestedUsdt: pct > 0 ? comm / pct : comm * 10,
+              totalPurchasedTokens: 0,
+              commissionEarnedUsdt: comm,
+              joinedAt: d.createdAt || null,
+            });
+          }
+        });
+      }
+      if (list.length === 0 && Number(levelIncomeUsd || 0) > 0) {
+        list.push({
+          userId: 1,
+          walletAddress: teamData?.leader?.walletAddress ? `Downline of ${teamData.leader.walletAddress.slice(0, 6)}...` : 'Direct Downline Member',
+          referralCode: 'NXBC-DIRECT-L1',
+          sponsorReferralCode: teamData?.leader?.referralCode || 'NXBC',
+          level: 1,
+          position: 1,
+          parentWalletAddress: teamData?.leader?.walletAddress || null,
+          status: 'active',
+          totalInvestedUsdt: Number(levelIncomeUsd) * 10,
+          totalPurchasedTokens: Number(levelIncomeUsd) * 100,
+          commissionEarnedUsdt: Number(levelIncomeUsd),
+          joinedAt: new Date().toISOString(),
         });
       }
     }
+
     return list;
-  }, [teamData, activeTab]);
+  }, [teamData, activeTab, levelIncomeUsd]);
 
   // Filtered members based on search, level filter, status filter
   const filteredMembers = useMemo(() => {
@@ -396,7 +450,16 @@ export const TeamReportModal: React.FC<TeamReportModalProps> = ({
                             ${Number(member.totalInvestedUsdt || 0).toLocaleString()} USD
                           </td>
                           <td className="py-3 px-3.5 text-right font-bold text-emerald-400">
-                            +${Number(member.commissionEarnedUsdt || 0).toFixed(2)} USD
+                            +${Number(
+                              (member.commissionEarnedUsdt || 0) > 0
+                                ? member.commissionEarnedUsdt
+                                : ((member.directEarnedUsdt || 0) + (member.levelEarnedUsdt || 0) + (member.matrixEarnedUsdt || 0))
+                            ).toFixed(2)} USD
+                            {Number(member.directEarnedUsdt || 0) > 0 && (
+                              <span className="block text-[8px] text-amber-400/90 font-normal">
+                                Sponsor (10%): +${Number(member.directEarnedUsdt).toFixed(2)}
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-3.5 text-center">
                             {isQualified ? (
@@ -475,8 +538,17 @@ export const TeamReportModal: React.FC<TeamReportModalProps> = ({
                         <div className="text-right">
                           <span className="text-cyan-400/70 block text-[9px] uppercase">Your Commission</span>
                           <span className="font-bold text-emerald-400">
-                            +${Number(member.commissionEarnedUsdt || 0).toFixed(2)} USD
+                            +${Number(
+                              (member.commissionEarnedUsdt || 0) > 0
+                                ? member.commissionEarnedUsdt
+                                : ((member.directEarnedUsdt || 0) + (member.levelEarnedUsdt || 0) + (member.matrixEarnedUsdt || 0))
+                            ).toFixed(2)} USD
                           </span>
+                          {Number(member.directEarnedUsdt || 0) > 0 && (
+                            <span className="block text-[8px] text-amber-400/90 font-normal">
+                              Sponsor: +${Number(member.directEarnedUsdt).toFixed(2)}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
