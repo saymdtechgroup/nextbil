@@ -174,18 +174,19 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
     };
   }), [teamData, levels, levelIncomeUsd]);
 
-  // Matrix 10 Levels
+  // Matrix 10 Levels - strictly filter out $0 users so only paid/invested users count
   const matrixLevels = useMemo(() => Array.from({ length: 10 }, (_, i) => {
     const level = i + 1;
-    const list = Array.isArray(teamData?.matrixLevels?.[String(level)]) ? teamData.matrixLevels[String(level)] : [];
+    const rawList = Array.isArray(teamData?.matrixLevels?.[String(level)]) ? teamData.matrixLevels[String(level)] : [];
+    const list = rawList.filter((m: any) => Number(m.totalInvestedUsdt || 0) > 0);
     const defaultRewardPerSlot = level === 1 ? 1.00 : 0.10;
     const computedIncome = list.length > 0
       ? list.reduce((sum: number, m: any) => sum + Number((level === 1 ? Math.max(1.00, Number(m.matrixEarnedUsdt || 0)) : (m.matrixEarnedUsdt > 0 ? m.matrixEarnedUsdt : defaultRewardPerSlot))), 0)
-      : (level === 1 ? Number(teamData?.matrixCounts?.["1"] || 0) * 1.00 : Number(teamData?.matrixIncome?.[String(level)] || 0));
+      : 0;
 
     return {
       level,
-      members: Number(teamData?.matrixCounts?.[String(level)] || list.length || 0),
+      members: list.length,
       income: Number(computedIncome.toFixed(2)),
       list,
     };

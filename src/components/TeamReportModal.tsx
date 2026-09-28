@@ -58,6 +58,9 @@ export const TeamReportModal: React.FC<TeamReportModalProps> = ({
         const levelArr = sourceLevels[String(lvl)];
         if (Array.isArray(levelArr)) {
           levelArr.forEach((member: any) => {
+            if (activeTab === 'matrix' && Number(member.totalInvestedUsdt || 0) <= 0) {
+              return;
+            }
             list.push({
               ...member,
               level: Number(member.level || lvl),
