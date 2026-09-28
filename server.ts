@@ -2291,8 +2291,8 @@ async function startServer() {
         if (lvlEarned === 0 && invested > 0 && level >= 1 && level <= 10) {
           lvlEarned = invested * tierPercentages[level - 1];
         }
-        if (matrixEarned === 0 && isMatrixContext && level >= 1 && level <= 10) {
-          matrixEarned = level === 1 ? baseMatrixPlacementRewardL1 : baseMatrixPlacementRewardUpline;
+        if (isMatrixContext && level >= 1 && level <= 10) {
+          matrixEarned = level === 1 ? Math.max(matrixEarned, baseMatrixPlacementRewardL1) : Math.max(matrixEarned, baseMatrixPlacementRewardUpline);
         }
 
         const totalEarned = (earningsBySourceUser.get(member.id) || 0) > 0
@@ -2435,8 +2435,9 @@ async function startServer() {
       for (let i = 1; i <= 10; i++) {
         const lvlStr = String(i);
         const expectedPerMember = i === 1 ? baseMatrixPlacementRewardL1 : baseMatrixPlacementRewardUpline;
-        if ((!matrixIncome[lvlStr] || matrixIncome[lvlStr] === 0) && matrixLevels[lvlStr].length > 0) {
-          matrixIncome[lvlStr] = Number(matrixLevels[lvlStr].reduce((acc, m) => acc + (m.matrixEarnedUsdt > 0 ? m.matrixEarnedUsdt : expectedPerMember), 0).toFixed(2));
+        if (matrixLevels[lvlStr].length > 0) {
+          const calculatedLvlIncome = matrixLevels[lvlStr].reduce((acc, m) => acc + (m.matrixEarnedUsdt > 0 ? m.matrixEarnedUsdt : expectedPerMember), 0);
+          matrixIncome[lvlStr] = Number(Math.max(matrixIncome[lvlStr] || 0, calculatedLvlIncome).toFixed(2));
         }
       }
 
