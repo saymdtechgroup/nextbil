@@ -850,10 +850,10 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                           ) : (
                             <div className="space-y-1.5">
                                 {level.list.map((member: any, mIdx: number) => {
+                                  const defaultExpected = level.level === 1 ? 1.00 : 0.10;
                                   const rewardAmt = Number(
                                     (member.matrixEarnedUsdt > 0 ? member.matrixEarnedUsdt : 0) ||
-                                    (level.members > 0 ? (level.income / level.members) : 0) ||
-                                    0.10
+                                    defaultExpected
                                   );
                                   return (
                                     <div
