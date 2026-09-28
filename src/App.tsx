@@ -775,10 +775,18 @@ export default function App() {
             });
           }
 
+          const hasRankAchievements = Array.isArray(data.rankAchievements) && data.rankAchievements.length > 0;
+
           if (Array.isArray(data.earnings)) {
             data.earnings.forEach((e: any) => {
               const comm = Number(e.commissionUsdt || 0);
               if (comm <= 0) return;
+
+              // If rank achievements table already provides detailed rank rewards, skip duplicate from generic earnings table
+              if (e.txType === 'rank_reward' && hasRankAchievements) {
+                return;
+              }
+
               let title = 'Commission Credit';
               let txType: Transaction['type'] = 'referral_bonus';
 
@@ -810,14 +818,25 @@ export default function App() {
             });
           }
 
-          if (Array.isArray(data.rankAchievements)) {
+          if (hasRankAchievements) {
+            const rankNames: Record<number, string> = {
+              1: 'Team Development Fund ($100)',
+              2: 'Charity Fund ($500)',
+              3: 'Travel Tour Fund ($1,000)',
+              4: 'Luxury Car Fund ($5,000)',
+              5: 'Dream Villa Fund ($10,000)',
+            };
+
             data.rankAchievements.forEach((r: any) => {
               const rewardAmt = Number(r.rewardUsdt || 0);
               if (rewardAmt <= 0) return;
+              const rankLvl = Number(r.rankLevel || 1);
+              const rankName = rankNames[rankLvl] || `Rank ${rankLvl}`;
+
               combinedHistory.push({
                 id: `rank-${r.id}`,
                 type: 'referral_bonus',
-                title: `Leadership Rank ${r.rankLevel} Achievement Reward`,
+                title: `Leadership Reward: Fund #${rankLvl} (${rankName})`,
                 amountUsd: rewardAmt,
                 timestamp: r.createdAt ? new Date(r.createdAt).toLocaleString() : 'Recent',
                 status: 'completed',
