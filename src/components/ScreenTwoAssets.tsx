@@ -207,7 +207,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
-  // 1. Calculate orders per phase
+  // 1. Calculate orders per phase from personal saleOrders
   const ordersP2 = saleOrders.filter((o) => Number(o.phaseNumber) === 2).reduce((s, o) => s + Number(o.amountTokens || 0), 0);
   const ordersP3 = saleOrders.filter((o) => Number(o.phaseNumber) === 3).reduce((s, o) => s + Number(o.amountTokens || 0), 0);
   const ordersP4 = saleOrders.filter((o) => Number(o.phaseNumber) === 4).reduce((s, o) => s + Number(o.amountTokens || 0), 0);
@@ -219,34 +219,40 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   const dbTotalTokens = Math.max(0, Number(dbAllocation?.totalPurchasedTokens || 0));
   const totalTokens = Math.max(propTotalTokens, dbTotalTokens, ordersTotalTokens);
 
-  // 3. Compute per-phase token quantities dynamically
-  const p2Tokens = ordersP2 > 0 
-    ? ordersP2 
+  // 3. Compute per-phase token quantities realistically:
+  // If user has created sale orders, use their exact orders (no ghost allocation in unchosen phases).
+  // If user has not created any orders yet, show their pre-sale distribution percentages.
+  const hasOrders = ordersTotalTokens > 0;
+
+  const p2Tokens = hasOrders
+    ? ordersP2
     : (dbAllocation.p2 > 0 
       ? dbAllocation.p2 
       : Number(allocation?.p2Tokens?.allocated ?? Math.round(totalTokens * ((allocation?.p2Percent || 20) / 100))));
 
-  const p3Tokens = ordersP3 > 0 
-    ? ordersP3 
+  const p3Tokens = hasOrders
+    ? ordersP3
     : (dbAllocation.p3 > 0 
       ? dbAllocation.p3 
       : Number(allocation?.p3Tokens?.allocated ?? Math.round(totalTokens * ((allocation?.p3Percent || 30) / 100))));
 
-  const p4Tokens = ordersP4 > 0 
-    ? ordersP4 
+  const p4Tokens = hasOrders
+    ? ordersP4
     : (dbAllocation.p4 > 0 
       ? dbAllocation.p4 
       : Number(allocation?.p4Tokens?.allocated ?? Math.round(totalTokens * ((allocation?.p4Percent || 20) / 100))));
 
-  const p5Tokens = ordersP5 > 0 
-    ? ordersP5 
+  const p5Tokens = hasOrders
+    ? ordersP5
     : (dbAllocation.p5 > 0 
       ? dbAllocation.p5 
       : Number(allocation?.p5Tokens?.allocated ?? Math.round(totalTokens * ((allocation?.p5Percent || 15) / 100))));
 
   const liveTokens = dbAllocation.liveHoldTokens > 0
     ? dbAllocation.liveHoldTokens
-    : Number(allocation?.liveTokens ?? Math.round(totalTokens * ((allocation?.dexPercent || 15) / 100)));
+    : (hasOrders
+      ? Math.max(0, totalTokens - ordersTotalTokens)
+      : Number(allocation?.liveTokens ?? Math.round(totalTokens * ((allocation?.dexPercent || 15) / 100))));
 
   // 4. Accurate Phase & DEX Projected Valuations ($1,500.00 Target DEX Price)
   const DEX_TARGET_PRICE = 1500.00;
@@ -633,7 +639,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-amber-300 font-rajdhani">
-              Total Projected Valuation
+              Total Projected Phase Sales Valuation
             </span>
             <div className="text-xl sm:text-2xl font-black font-mono-crypto text-white flex items-center gap-2 mt-0.5">
               <span>{showValues ? `$${totalAllocatedUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '••••••'}</span>
@@ -642,7 +648,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               </span>
             </div>
             <p className="text-[8px] sm:text-[9px] text-slate-300/80 font-mono-crypto mt-1">
-              Future cumulative sales projection across all 5 lock stages
+              Estimated total USDT revenue when your queued phase sell orders are fulfilled
             </p>
           </div>
 
@@ -824,7 +830,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                 <path d="M0,20 Q25,18 45,10 T80,5 T100,2 L100,25 L0,25 Z" />
                 <path d="M0,20 Q25,18 45,10 T80,5 T100,2" fill="none" strokeWidth="2" />
               </svg>
-              <span className="text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto">Based on your current allocation</span>
+              <span className="text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto">Net profit above initial purchase cost</span>
             </div>
           </div>
 
