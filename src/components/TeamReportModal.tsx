@@ -452,7 +452,7 @@ export const TeamReportModal: React.FC<TeamReportModalProps> = ({
                           <td className="py-3 px-3.5 text-right font-bold text-emerald-400">
                             {activeTab === 'matrix' ? (
                               <span>
-                                +${Number(member.matrixEarnedUsdt > 0 ? member.matrixEarnedUsdt : (member.commissionEarnedUsdt > 0 ? member.commissionEarnedUsdt : (member.level === 1 ? 1.00 : 0.10))).toFixed(2)} USD
+                                +${Number(member.level === 1 ? Math.max(1.00, Number(member.matrixEarnedUsdt || 0)) : (member.matrixEarnedUsdt > 0 ? member.matrixEarnedUsdt : 0.10)).toFixed(2)} USD
                               </span>
                             ) : (
                               <>
@@ -549,7 +549,7 @@ export const TeamReportModal: React.FC<TeamReportModalProps> = ({
                           </span>
                           <span className="font-bold text-emerald-400">
                             {activeTab === 'matrix' ? (
-                              `+$${Number(member.matrixEarnedUsdt > 0 ? member.matrixEarnedUsdt : (member.commissionEarnedUsdt > 0 ? member.commissionEarnedUsdt : (member.level === 1 ? 1.00 : 0.10))).toFixed(2)} USD`
+                              `+$${Number(member.level === 1 ? Math.max(1.00, Number(member.matrixEarnedUsdt || 0)) : (member.matrixEarnedUsdt > 0 ? member.matrixEarnedUsdt : 0.10)).toFixed(2)} USD`
                             ) : (
                               `+$${Number(
                                 (member.commissionEarnedUsdt || 0) > 0

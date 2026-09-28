@@ -177,13 +177,23 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
   // Matrix 10 Levels
   const matrixLevels = useMemo(() => Array.from({ length: 10 }, (_, i) => {
     const level = i + 1;
+    const list = Array.isArray(teamData?.matrixLevels?.[String(level)]) ? teamData.matrixLevels[String(level)] : [];
+    const defaultRewardPerSlot = level === 1 ? 1.00 : 0.10;
+    const computedIncome = list.length > 0
+      ? list.reduce((sum: number, m: any) => sum + Number((level === 1 ? Math.max(1.00, Number(m.matrixEarnedUsdt || 0)) : (m.matrixEarnedUsdt > 0 ? m.matrixEarnedUsdt : defaultRewardPerSlot))), 0)
+      : (level === 1 ? Number(teamData?.matrixCounts?.["1"] || 0) * 1.00 : Number(teamData?.matrixIncome?.[String(level)] || 0));
+
     return {
       level,
-      members: Number(teamData?.matrixCounts?.[String(level)] || 0),
-      income: Number(teamData?.matrixIncome?.[String(level)] || 0),
-      list: Array.isArray(teamData?.matrixLevels?.[String(level)]) ? teamData.matrixLevels[String(level)] : [],
+      members: Number(teamData?.matrixCounts?.[String(level)] || list.length || 0),
+      income: Number(computedIncome.toFixed(2)),
+      list,
     };
   }), [teamData]);
+
+  const totalCalculatedMatrixIncome = useMemo(() => {
+    return matrixLevels.reduce((sum, item) => sum + item.income, 0);
+  }, [matrixLevels]);
 
   const totalUnilevelMembers = unilevelLevels.reduce((sum, item) => sum + item.members, 0);
   const totalMatrixMembers = matrixLevels.reduce((sum, item) => sum + item.members, 0);
@@ -780,7 +790,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
               <div className="text-left sm:text-right">
                 <span className="text-[10px] text-cyan-300/80 font-mono-crypto block uppercase">Lifetime Matrix Income</span>
                 <span className="text-2xl font-black font-mono-crypto text-emerald-400">
-                  ${Number(teamData?.totalMatrixIncome || 0).toFixed(2)} USD
+                  ${Math.max(Number(teamData?.totalMatrixIncome || 0), totalCalculatedMatrixIncome).toFixed(2)} USD
                 </span>
               </div>
             </div>
@@ -850,10 +860,10 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                           ) : (
                             <div className="space-y-1.5">
                                 {level.list.map((member: any, mIdx: number) => {
-                                  const defaultExpected = level.level === 1 ? 1.00 : 0.10;
                                   const rewardAmt = Number(
-                                    (member.matrixEarnedUsdt > 0 ? member.matrixEarnedUsdt : 0) ||
-                                    defaultExpected
+                                    level.level === 1
+                                      ? Math.max(1.00, Number(member.matrixEarnedUsdt || 0))
+                                      : (member.matrixEarnedUsdt > 0 ? member.matrixEarnedUsdt : 0.10)
                                   );
                                   return (
                                     <div
