@@ -817,29 +817,28 @@ async function finalizeConfirmedPurchase(
 
         await db.update(users).set({ isMatrixActive: true, matrixLevel: 1 }).where(eq(users.id, user.id));
 
-        // 3. Matrix Placement Income Distribution Upward ($1.00 or admin configured)
+        // 3. Matrix Placement Income Distribution Upward ($1.00 for Direct Level 1, $0.10 for Levels 2-10)
         let matrixConfig: any = { placementIncomeUsd: 1, uplineSharePercent: 100, enabled: true };
         try {
           const matrixRow = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'matrixConfig') });
           if (matrixRow?.value) matrixConfig = { ...matrixConfig, ...JSON.parse(matrixRow.value) };
         } catch {}
         const matrixEnabled = matrixConfig.enabled !== false;
-        const baseMatrixIncome = Math.max(0.5, Number(matrixConfig.placementIncomeUsd || 1));
-        const matrixShare = Math.max(0, Number(matrixConfig.uplineSharePercent ?? 100)) / 100;
-        const mIncomeUsd = baseMatrixIncome * matrixShare;
+        const baseMatrixIncome = Math.max(1, Number(matrixConfig.placementIncomeUsd || 1));
         let currentMatrixParentId = placementParentId;
         let matrixLvl = 1;
-        while (matrixEnabled && currentMatrixParentId && matrixLvl <= 10 && mIncomeUsd > 0) {
+        while (matrixEnabled && currentMatrixParentId && matrixLvl <= 10) {
            const parentMatrixNode = await db.query.matrixNodes.findFirst({ where: eq(matrixNodes.id, currentMatrixParentId) });
            if (!parentMatrixNode) break;
            
            const uplineUser = await db.query.users.findFirst({ where: eq(users.id, parentMatrixNode.userId) });
            if (uplineUser) {
+              const mIncomeUsd = matrixLvl === 1 ? baseMatrixIncome : Number((baseMatrixIncome * 0.10).toFixed(2));
               await db.insert(levelEarnings).values({
                 beneficiaryId: uplineUser.id,
                 sourceUserId: user.id,
                 levelNumber: matrixLvl,
-                percentage: 0,
+                percentage: matrixLvl === 1 ? 100 : 10,
                 commissionUsdt: mIncomeUsd,
                 txType: 'matrix_join',
               });
@@ -2245,7 +2244,8 @@ async function startServer() {
         const configured = liveReferralLevels.find((l: any) => Number(l.level) === i + 1);
         return Math.max(0, Number(configured?.commissionPercent ?? defaultTierPercents[i])) / 100;
       });
-      const baseMatrixPlacementReward = Math.max(0.1, Number(liveMatrixConfig.placementIncomeUsd ?? 0.10));
+      const baseMatrixPlacementRewardL1 = Math.max(1, Number(liveMatrixConfig.placementIncomeUsd ?? 1.00));
+      const baseMatrixPlacementRewardUpline = Number((baseMatrixPlacementRewardL1 * 0.10).toFixed(2));
 
       type MemberRow = {
         userId: number;
@@ -2292,7 +2292,7 @@ async function startServer() {
           lvlEarned = invested * tierPercentages[level - 1];
         }
         if (matrixEarned === 0 && isMatrixContext && level >= 1 && level <= 10) {
-          matrixEarned = baseMatrixPlacementReward;
+          matrixEarned = level === 1 ? baseMatrixPlacementRewardL1 : baseMatrixPlacementRewardUpline;
         }
 
         const totalEarned = (earningsBySourceUser.get(member.id) || 0) > 0
@@ -2434,8 +2434,9 @@ async function startServer() {
 
       for (let i = 1; i <= 10; i++) {
         const lvlStr = String(i);
+        const expectedPerMember = i === 1 ? baseMatrixPlacementRewardL1 : baseMatrixPlacementRewardUpline;
         if ((!matrixIncome[lvlStr] || matrixIncome[lvlStr] === 0) && matrixLevels[lvlStr].length > 0) {
-          matrixIncome[lvlStr] = Number(matrixLevels[lvlStr].reduce((acc, m) => acc + (m.matrixEarnedUsdt || baseMatrixPlacementReward), 0).toFixed(2));
+          matrixIncome[lvlStr] = Number(matrixLevels[lvlStr].reduce((acc, m) => acc + (m.matrixEarnedUsdt > 0 ? m.matrixEarnedUsdt : expectedPerMember), 0).toFixed(2));
         }
       }
 
