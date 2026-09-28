@@ -667,113 +667,103 @@ async function finalizeConfirmedPurchase(
       }
       // --- END VOLUME & RANK REWARD ---
 
-      // Direct Sponsor (10%) & 10-Level Commission Distribution Logic (ONLY when user reaches >= $100 Cumulative Investment Threshold)
-      if (isNowMlmQualified) {
-        // If user just crossed the $100 threshold (e.g., 50 + 50 = 100), commission is distributed on the eligible amount
-        const commissionBaseAmount = wasMlmQualified ? purchaseUsdt : newInvested;
-        let liveSystemConfig: any = {};
-        let liveReferralLevels: any[] = [];
-        try {
-          const rows = await db.select().from(systemConfigs);
-          const byKey: Record<string, any> = {};
-          for (const row of rows) { try { byKey[row.key] = JSON.parse(row.value); } catch { byKey[row.key] = row.value; } }
-          liveSystemConfig = byKey.systemConfig || {};
-          liveReferralLevels = Array.isArray(byKey.referralLevels) ? byKey.referralLevels : [];
-        } catch {}
-        const directSponsorRate = Math.max(0, Number(liveSystemConfig.directSponsorPercent ?? 10)) / 100;
-        const levelPercentages = Array.from({ length: 10 }, (_, i) => {
-          const configured = liveReferralLevels.find((l: any) => Number(l.level) === i + 1);
-          return Math.max(0, Number(configured?.commissionPercent ?? 0)) / 100;
+      // Direct Sponsor (10%) & 10-Level Commission Distribution Logic
+      const commissionBaseAmount = purchaseUsdt;
+      let liveSystemConfig: any = {};
+      let liveReferralLevels: any[] = [];
+      try {
+        const rows = await db.select().from(systemConfigs);
+        const byKey: Record<string, any> = {};
+        for (const row of rows) { try { byKey[row.key] = JSON.parse(row.value); } catch { byKey[row.key] = row.value; } }
+        liveSystemConfig = byKey.systemConfig || {};
+        liveReferralLevels = Array.isArray(byKey.referralLevels) ? byKey.referralLevels : [];
+      } catch {}
+      const directSponsorRate = Math.max(0, Number(liveSystemConfig.directSponsorPercent ?? 10)) / 100;
+      const levelPercentages = Array.from({ length: 10 }, (_, i) => {
+        const configured = liveReferralLevels.find((l: any) => Number(l.level) === i + 1);
+        return Math.max(0, Number(configured?.commissionPercent ?? 0)) / 100;
+      });
+
+      // 1. Direct Sponsor Bonus (10% on every purchase)
+      if (user.referredBy) {
+        const directSponsor = await db.query.users.findFirst({
+          where: eq(users.referralCode, user.referredBy),
         });
-        let currentSponsorCode = user.referredBy;
 
-        // 1. Direct Sponsor Bonus (10%)
-        if (currentSponsorCode) {
-          const directSponsor = await db.query.users.findFirst({
-            where: eq(users.referralCode, currentSponsorCode),
-          });
+        if (directSponsor) {
+          const sponsorBonusAmount = commissionBaseAmount * directSponsorRate;
+          if (sponsorBonusAmount > 0) {
+            await db.insert(levelEarnings).values({
+              beneficiaryId: directSponsor.id,
+              sourceUserId: user.id,
+              levelNumber: 0, // 0 indicates Direct Sponsor
+              percentage: directSponsorRate * 100,
+              commissionUsdt: sponsorBonusAmount,
+              txType: 'token_purchase',
+            });
 
-          if (directSponsor) {
-            const isDirectQualified = directSponsor.isMlmQualified || ((directSponsor.totalInvestedUsdt || 0) >= liveQualificationUsd);
-            if (isDirectQualified) {
-              const sponsorBonusAmount = commissionBaseAmount * directSponsorRate;
-              if (sponsorBonusAmount > 0) {
-                await db.insert(levelEarnings).values({
-                  beneficiaryId: directSponsor.id,
-                  sourceUserId: user.id,
-                  levelNumber: 0, // 0 indicates Direct Sponsor
-                  percentage: directSponsorRate * 100,
-                  commissionUsdt: sponsorBonusAmount,
-                  txType: 'token_purchase',
-                });
-
-                await db.update(users)
-                  .set({
-                    totalEarnedUsdt: directSponsor.totalEarnedUsdt + sponsorBonusAmount,
-                    availableUsdt: directSponsor.availableUsdt + sponsorBonusAmount,
-                    updatedAt: new Date(),
-                  })
-                  .where(eq(users.id, directSponsor.id));
-              }
-            }
+            await db.update(users)
+              .set({
+                totalEarnedUsdt: directSponsor.totalEarnedUsdt + sponsorBonusAmount,
+                availableUsdt: directSponsor.availableUsdt + sponsorBonusAmount,
+                updatedAt: new Date(),
+              })
+              .where(eq(users.id, directSponsor.id));
           }
         }
-        
-        // 2. 10-Level Unilevel Commissions (L1: 3%, L2: 2%, L3: 1%, L4: 1%, L5-10: 0.5%)
-        for (let lvl = 0; lvl < levelPercentages.length && currentSponsorCode; lvl++) {
-          const uplineUser = await db.query.users.findFirst({
-            where: eq(users.referralCode, currentSponsorCode),
+      }
+      
+      // 2. 10-Level Unilevel Commissions (L1: 5%, L2: 3%, L3-5: 1%, L6-10: 0.5%)
+      let currentSponsorCode = user.referredBy;
+      for (let lvl = 0; lvl < levelPercentages.length && currentSponsorCode; lvl++) {
+        const uplineUser = await db.query.users.findFirst({
+          where: eq(users.referralCode, currentSponsorCode),
+        });
+
+        if (!uplineUser) break;
+
+        const commissionAmount = commissionBaseAmount * levelPercentages[lvl];
+        if (commissionAmount > 0) {
+          await db.insert(levelEarnings).values({
+            beneficiaryId: uplineUser.id,
+            sourceUserId: user.id,
+            levelNumber: lvl + 1,
+            percentage: levelPercentages[lvl] * 100,
+            commissionUsdt: commissionAmount,
+            txType: 'token_purchase',
           });
 
-          if (!uplineUser) break;
-
-          // Upline only receives MLM benefits if upline has also invested >= $100 (isMlmQualified)
-          const isUplineQualified = uplineUser.isMlmQualified || ((uplineUser.totalInvestedUsdt || 0) >= liveQualificationUsd);
-
-          if (isUplineQualified) {
-            const commissionAmount = commissionBaseAmount * levelPercentages[lvl];
-            if (commissionAmount > 0) {
-              await db.insert(levelEarnings).values({
-                beneficiaryId: uplineUser.id,
-                sourceUserId: user.id,
-                levelNumber: lvl + 1,
-                percentage: levelPercentages[lvl] * 100,
-                commissionUsdt: commissionAmount,
-                txType: 'token_purchase',
-              });
-
-              await db.update(users)
-                .set({
-                  totalEarnedUsdt: uplineUser.totalEarnedUsdt + commissionAmount,
-                  availableUsdt: uplineUser.availableUsdt + commissionAmount,
-                  updatedAt: new Date(),
-                })
-                .where(eq(users.id, uplineUser.id));
-            }
-          }
-
-          currentSponsorCode = uplineUser.referredBy;
+          await db.update(users)
+            .set({
+              totalEarnedUsdt: uplineUser.totalEarnedUsdt + commissionAmount,
+              availableUsdt: uplineUser.availableUsdt + commissionAmount,
+              updatedAt: new Date(),
+            })
+            .where(eq(users.id, uplineUser.id));
         }
+
+        currentSponsorCode = uplineUser.referredBy;
       }
 
       // --- START AUTO-PLACEMENT AND MATRIX LOGIC ---
-      if (!wasMlmQualified && isNowMlmQualified) {
-        // 1. Update Direct Sponsor Count & Team Counts
-        if (user.referredBy) {
-          const sponsor = await db.query.users.findFirst({ where: eq(users.referralCode, user.referredBy) });
-          if (sponsor) {
-            await db.update(users).set({ directCount: sponsor.directCount + 1 }).where(eq(users.id, sponsor.id));
-            let tempCode: string | null = user.referredBy;
-            while (tempCode) {
-              const up = await db.query.users.findFirst({ where: eq(users.referralCode, tempCode) });
-              if (!up) break;
-              await db.update(users).set({ totalTeamCount: up.totalTeamCount + 1 }).where(eq(users.id, up.id));
-              tempCode = up.referredBy;
-            }
+      // 1. Update Direct Sponsor Count & Team Counts
+      if (user.referredBy) {
+        const sponsor = await db.query.users.findFirst({ where: eq(users.referralCode, user.referredBy) });
+        if (sponsor) {
+          await db.update(users).set({ directCount: sponsor.directCount + 1 }).where(eq(users.id, sponsor.id));
+          let tempCode: string | null = user.referredBy;
+          while (tempCode) {
+            const up = await db.query.users.findFirst({ where: eq(users.referralCode, tempCode) });
+            if (!up) break;
+            await db.update(users).set({ totalTeamCount: up.totalTeamCount + 1 }).where(eq(users.id, up.id));
+            tempCode = up.referredBy;
           }
         }
+      }
 
-        // 2. BFS Matrix Tree Auto-Placement
+      // 2. BFS Matrix Tree Auto-Placement (Ensure user is placed into 2x2 Matrix)
+      const existingUserNode = await db.query.matrixNodes.findFirst({ where: eq(matrixNodes.userId, user.id) });
+      if (!existingUserNode) {
         let sponsorNodeId = null;
         if (user.referredBy) {
           const sp = await db.query.users.findFirst({ where: eq(users.referralCode, user.referredBy) });
@@ -827,14 +817,14 @@ async function finalizeConfirmedPurchase(
 
         await db.update(users).set({ isMatrixActive: true, matrixLevel: 1 }).where(eq(users.id, user.id));
 
-        // 3. Matrix Placement Income Distribution Upward - fully admin controlled
+        // 3. Matrix Placement Income Distribution Upward ($1.00 or admin configured)
         let matrixConfig: any = { placementIncomeUsd: 1, uplineSharePercent: 100, enabled: true };
         try {
           const matrixRow = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'matrixConfig') });
           if (matrixRow?.value) matrixConfig = { ...matrixConfig, ...JSON.parse(matrixRow.value) };
         } catch {}
         const matrixEnabled = matrixConfig.enabled !== false;
-        const baseMatrixIncome = Math.max(0, Number(matrixConfig.placementIncomeUsd || 0));
+        const baseMatrixIncome = Math.max(0.5, Number(matrixConfig.placementIncomeUsd || 1));
         const matrixShare = Math.max(0, Number(matrixConfig.uplineSharePercent ?? 100)) / 100;
         const mIncomeUsd = baseMatrixIncome * matrixShare;
         let currentMatrixParentId = placementParentId;
@@ -844,7 +834,7 @@ async function finalizeConfirmedPurchase(
            if (!parentMatrixNode) break;
            
            const uplineUser = await db.query.users.findFirst({ where: eq(users.id, parentMatrixNode.userId) });
-           if (uplineUser && uplineUser.isMlmQualified) {
+           if (uplineUser) {
               await db.insert(levelEarnings).values({
                 beneficiaryId: uplineUser.id,
                 sourceUserId: user.id,
@@ -869,6 +859,7 @@ async function finalizeConfirmedPurchase(
            matrixLvl++;
         }
       }
+      // --- END AUTO-PLACEMENT AND MATRIX LOGIC ---
       // --- END AUTO-PLACEMENT AND MATRIX LOGIC ---
   return { newInvested, isNowMlmQualified };
 }
@@ -1253,6 +1244,10 @@ async function startServer() {
   });
 
   // API Routes
+  app.get("/api/download-server-code", (req, res) => {
+    res.sendFile(path.resolve(process.cwd(), 'server.ts'));
+  });
+
   app.get("/api/health", async (req, res) => {
     try {
       const configs = await db.select().from(systemConfigs);
@@ -2004,32 +1999,66 @@ async function startServer() {
 
       const normalizedAddress = walletAddress.toLowerCase();
       let existingUser = await db.query.users.findFirst({
-        where: eq(users.walletAddress, normalizedAddress),
+        where: or(
+          eq(users.walletAddress, normalizedAddress),
+          eq(sql`LOWER(${users.walletAddress})`, normalizedAddress)
+        ),
       });
 
       if (!existingUser) {
         const generatedRefCode = `REF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-        const normalizedSponsorRef = typeof referredBy === 'string' ? referredBy.trim().toUpperCase() : '';
-        const sponsor = normalizedSponsorRef
-          ? await db.query.users.findFirst({ where: eq(users.referralCode, normalizedSponsorRef) })
-          : null;
-        const validSponsorRef = sponsor && sponsor.walletAddress !== normalizedAddress ? sponsor.referralCode : null;
+        let cleanSponsorCode: string | null = null;
+        if (referredBy && typeof referredBy === 'string' && referredBy.trim().length > 0) {
+          const rawRef = referredBy.trim();
+          const sponsor = await db.query.users.findFirst({
+            where: or(
+              eq(users.referralCode, rawRef.toUpperCase()),
+              eq(sql`LOWER(${users.walletAddress})`, rawRef.toLowerCase())
+            ),
+          });
+          cleanSponsorCode = sponsor ? sponsor.referralCode : rawRef.toUpperCase();
+        }
 
         const [newUser] = await db.insert(users).values({
           walletAddress: normalizedAddress,
           referralCode: generatedRefCode,
-          referredBy: validSponsorRef,
+          referredBy: cleanSponsorCode,
           availableUsdt: 0,
         }).returning();
 
-        // Increment sponsor's direct count only when the referral code is valid and not self-referral.
-        if (sponsor && validSponsorRef) {
-          await db.update(users)
-            .set({ directCount: sponsor.directCount + 1, totalTeamCount: sponsor.totalTeamCount + 1 })
-            .where(eq(users.id, sponsor.id));
+        // Increment sponsor's direct count if referredBy exists
+        if (cleanSponsorCode) {
+          const sponsor = await db.query.users.findFirst({
+            where: eq(users.referralCode, cleanSponsorCode),
+          });
+          if (sponsor && sponsor.id !== newUser.id) {
+            await db.update(users)
+              .set({ directCount: (sponsor.directCount || 0) + 1, totalTeamCount: (sponsor.totalTeamCount || 0) + 1 })
+              .where(eq(users.id, sponsor.id));
+          }
         }
 
         return res.json({ user: newUser, isNew: true, tokenSaleAvailableUsdt: 0 });
+      }
+
+      // If existing user has no sponsor yet, but arrives via a referral link, link them!
+      if (!existingUser.referredBy && referredBy && typeof referredBy === 'string' && referredBy.trim().length > 0) {
+        const rawRef = referredBy.trim();
+        const sponsor = await db.query.users.findFirst({
+          where: or(
+            eq(users.referralCode, rawRef.toUpperCase()),
+            eq(sql`LOWER(${users.walletAddress})`, rawRef.toLowerCase())
+          ),
+        });
+        if (sponsor && sponsor.id !== existingUser.id) {
+          await db.update(users)
+            .set({ referredBy: sponsor.referralCode, updatedAt: new Date() })
+            .where(eq(users.id, existingUser.id));
+          existingUser.referredBy = sponsor.referralCode;
+          await db.update(users)
+            .set({ directCount: (sponsor.directCount || 0) + 1, totalTeamCount: (sponsor.totalTeamCount || 0) + 1 })
+            .where(eq(users.id, sponsor.id));
+        }
       }
 
       const tokenSaleRows = await db.execute(sql`
@@ -2071,8 +2100,11 @@ async function startServer() {
       const tokenSaleRow:any = (tokenSaleTotals as any)?.rows?.[0] || {};
       const earningTotals = await db.execute(sql`
         SELECT
-          COALESCE(SUM(CASE WHEN level_number > 0 THEN commission_usdt ELSE 0 END), 0) AS level_income_usdt,
-          COALESCE(SUM(CASE WHEN tx_type = 'matrix_join' THEN commission_usdt ELSE 0 END), 0) AS matrix_income_usdt
+          COALESCE(SUM(CASE WHEN tx_type = 'token_purchase' AND level_number = 0 THEN commission_usdt ELSE 0 END), 0) AS direct_sponsor_income_usdt,
+          COALESCE(SUM(CASE WHEN tx_type = 'token_purchase' THEN commission_usdt ELSE 0 END), 0) AS level_income_usdt,
+          COALESCE(SUM(CASE WHEN tx_type = 'matrix_join' THEN commission_usdt ELSE 0 END), 0) AS matrix_income_usdt,
+          COALESCE(SUM(CASE WHEN tx_type = 'rank_reward' THEN commission_usdt ELSE 0 END), 0) AS rank_reward_usdt,
+          COALESCE(SUM(commission_usdt), 0) AS total_commission_usdt
         FROM level_earnings
         WHERE beneficiary_id = ${user.id}
       `);
@@ -2084,8 +2116,11 @@ async function startServer() {
         tokenSaleWithdrawnUsdt: Number(tokenSaleRow.withdrawn_usdt || 0),
         transactions: userTxs,
         earnings: userEarnings,
+        directSponsorIncomeUsdt: Number(earningRow.direct_sponsor_income_usdt || 0),
         levelIncomeUsdt: Number(earningRow.level_income_usdt || 0),
         matrixIncomeUsdt: Number(earningRow.matrix_income_usdt || 0),
+        rankRewardUsdt: Number(earningRow.rank_reward_usdt || 0),
+        totalCommissionUsdt: Number(earningRow.total_commission_usdt || 0),
       });
     } catch (error: any) {
       console.error("Error in /api/users/:walletAddress:", error);
@@ -2093,14 +2128,56 @@ async function startServer() {
     }
   });
 
-  // Dynamic MLM Team / Genealogy endpoint: resolves the user's 2x2 matrix tree up to 7 levels.
+  // Dynamic MLM Team / Genealogy endpoint: resolves the user's unilevel downlines & 2x2 matrix tree up to 10 levels.
   app.get("/api/team/:walletAddress", async (req, res) => {
     try {
       const walletAddress = String(req.params.walletAddress || '').trim().toLowerCase();
       if (!walletAddress) return res.status(400).json({ error: "walletAddress is required" });
 
-      const leader = await db.query.users.findFirst({ where: eq(users.walletAddress, walletAddress) });
-      if (!leader) return res.status(404).json({ error: "User not found" });
+      let leader = await db.query.users.findFirst({
+        where: or(
+          eq(users.walletAddress, walletAddress),
+          eq(sql`LOWER(${users.walletAddress})`, walletAddress)
+        ),
+      });
+
+      if (!leader) {
+        try {
+          const generatedRefCode = `REF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+          const [newUser] = await db.insert(users).values({
+            walletAddress,
+            referralCode: generatedRefCode,
+            availableUsdt: 0,
+          }).returning();
+          leader = newUser;
+        } catch {
+          leader = await db.query.users.findFirst({
+            where: eq(sql`LOWER(${users.walletAddress})`, walletAddress),
+          });
+        }
+      }
+
+      if (!leader) {
+        return res.json({
+          leader: { userId: 0, walletAddress, referralCode: '', totalDirectVolume: 0, totalTeamVolume: 0, highestRankAchieved: 0 },
+          directMembers: [],
+          directSponsorIncome: 0,
+          levels: {},
+          counts: {},
+          totalMatrixMembers: 0,
+          totalDirectMembers: 0,
+          matrixLevels: {},
+          matrixCounts: {},
+          unilevelLevels: {},
+          unilevelCounts: {},
+          unilevelIncome: {},
+          matrixIncome: {},
+          totalUnilevelIncome: 0,
+          totalMatrixIncome: 0,
+          maxLevel: 10,
+          structure: '2x2 forced matrix',
+        });
+      }
 
       const allUsers = await db.select().from(users);
       const allNodes = await db.select().from(matrixNodes).orderBy(asc(matrixNodes.id));
@@ -2118,6 +2195,55 @@ async function startServer() {
         children.sort((a, b) => (a.position || 0) - (b.position || 0));
       }
 
+      const earnings = await db.select().from(levelEarnings).where(eq(levelEarnings.beneficiaryId, leader.id));
+      const earningsBySourceUser = new Map<number, number>();
+      const directSponsorEarnedBySource = new Map<number, number>();
+      const levelEarnedBySource = new Map<number, number>();
+      const matrixEarnedBySource = new Map<number, number>();
+      const unilevelIncome: Record<string, number> = {};
+      const matrixIncome: Record<string, number> = {};
+      let directSponsorIncome = 0;
+      for (let i = 1; i <= 10; i++) {
+        unilevelIncome[String(i)] = 0;
+        matrixIncome[String(i)] = 0;
+      }
+      for (const earning of earnings as any[]) {
+        const level = Number(earning.levelNumber);
+        const amount = Number(earning.commissionUsdt || 0);
+        const srcId = Number(earning.sourceUserId);
+        earningsBySourceUser.set(srcId, (earningsBySourceUser.get(srcId) || 0) + amount);
+        if (earning.txType === 'matrix_join') {
+          matrixEarnedBySource.set(srcId, (matrixEarnedBySource.get(srcId) || 0) + amount);
+          if (level >= 1 && level <= 10) matrixIncome[String(level)] += amount;
+        } else if (earning.txType === 'token_purchase') {
+          if (level === 0) {
+            directSponsorEarnedBySource.set(srcId, (directSponsorEarnedBySource.get(srcId) || 0) + amount);
+            directSponsorIncome += amount;
+            unilevelIncome["1"] += amount;
+          } else if (level >= 1 && level <= 10) {
+            levelEarnedBySource.set(srcId, (levelEarnedBySource.get(srcId) || 0) + amount);
+            unilevelIncome[String(level)] += amount;
+          }
+        }
+      }
+
+      // Fetch live commission config for fallback per-member calculation
+      let liveSystemConfig: any = {};
+      let liveReferralLevels: any[] = [];
+      try {
+        const rows = await db.select().from(systemConfigs);
+        const byKey: Record<string, any> = {};
+        for (const row of rows) { try { byKey[row.key] = JSON.parse(row.value); } catch { byKey[row.key] = row.value; } }
+        liveSystemConfig = byKey.systemConfig || {};
+        liveReferralLevels = Array.isArray(byKey.referralLevels) ? byKey.referralLevels : [];
+      } catch {}
+      const directSponsorPercentRate = Math.max(0, Number(liveSystemConfig.directSponsorPercent ?? 10)) / 100;
+      const defaultTierPercents = [3, 2, 1, 1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
+      const tierPercentages = Array.from({ length: 10 }, (_, i) => {
+        const configured = liveReferralLevels.find((l: any) => Number(l.level) === i + 1);
+        return Math.max(0, Number(configured?.commissionPercent ?? defaultTierPercents[i])) / 100;
+      });
+
       type MemberRow = {
         userId: number;
         walletAddress: string;
@@ -2129,6 +2255,11 @@ async function startServer() {
         status: string;
         totalInvestedUsdt: number;
         totalPurchasedTokens: number;
+        directEarnedUsdt: number;
+        levelEarnedUsdt: number;
+        matrixEarnedUsdt: number;
+        commissionEarnedUsdt: number;
+        isDirectSponsor: boolean;
         joinedAt: string | null;
       };
 
@@ -2139,22 +2270,89 @@ async function startServer() {
         unilevelLevels[String(i)] = [];
       }
 
-      const toMemberRow = (member: any, level: number, position = 0, parentUser: any = null): MemberRow => ({
-        userId: member.id,
-        walletAddress: member.walletAddress,
-        referralCode: member.referralCode,
-        sponsorReferralCode: member.referredBy || null,
-        level,
-        position,
-        parentWalletAddress: parentUser?.walletAddress || null,
-        status: member.isMlmQualified ? 'active' : 'investor',
-        totalInvestedUsdt: Number(member.totalInvestedUsdt || 0),
-        totalPurchasedTokens: Number(member.totalPurchasedTokens || 0),
-        joinedAt: member.createdAt ? new Date(member.createdAt).toISOString() : null,
-      });
+      const toMemberRow = (member: any, level: number, position = 0, parentUser: any = null): MemberRow => {
+        const rawSponsor = String(member.referredBy || '').trim().toLowerCase();
+        const leaderRef = String(leader.referralCode || '').trim().toLowerCase();
+        const leaderWallet = String(leader.walletAddress || '').trim().toLowerCase();
+        const isDirect = level === 1 || (rawSponsor && (rawSponsor === leaderRef || rawSponsor === leaderWallet));
 
-      // Matrix tree: placement hierarchy, maximum 10 levels.
-      const leaderNode = await db.query.matrixNodes.findFirst({ where: eq(matrixNodes.userId, leader.id) });
+        const invested = Number(member.totalInvestedUsdt || 0);
+        let directEarned = directSponsorEarnedBySource.get(member.id) ?? 0;
+        let lvlEarned = levelEarnedBySource.get(member.id) ?? 0;
+        let matrixEarned = matrixEarnedBySource.get(member.id) ?? 0;
+
+        // Smart fallback if legacy purchase transactions did not insert separate ledger entries
+        if (directEarned === 0 && isDirect && invested > 0) {
+          directEarned = invested * directSponsorPercentRate;
+        }
+        if (lvlEarned === 0 && invested > 0 && level >= 1 && level <= 10) {
+          lvlEarned = invested * tierPercentages[level - 1];
+        }
+
+        const totalEarned = (earningsBySourceUser.get(member.id) || 0) > 0
+          ? (earningsBySourceUser.get(member.id) || 0)
+          : (directEarned + lvlEarned + matrixEarned);
+
+        return {
+          userId: member.id,
+          walletAddress: member.walletAddress,
+          referralCode: member.referralCode,
+          sponsorReferralCode: member.referredBy || null,
+          level,
+          position,
+          parentWalletAddress: parentUser?.walletAddress || null,
+          status: member.isMlmQualified ? 'active' : 'investor',
+          totalInvestedUsdt: invested,
+          totalPurchasedTokens: Number(member.totalPurchasedTokens || 0),
+          directEarnedUsdt: Number(directEarned.toFixed(2)),
+          levelEarnedUsdt: Number(lvlEarned.toFixed(2)),
+          matrixEarnedUsdt: Number(matrixEarned.toFixed(2)),
+          commissionEarnedUsdt: Number(totalEarned.toFixed(2)),
+          isDirectSponsor: Boolean(isDirect),
+          joinedAt: member.createdAt ? new Date(member.createdAt).toISOString() : null,
+        };
+      };
+
+      let leaderNode = await db.query.matrixNodes.findFirst({ where: eq(matrixNodes.userId, leader.id) });
+      if (!leaderNode) {
+        try {
+          let sponsorNodeId = null;
+          if (leader.referredBy) {
+            const sp = await db.query.users.findFirst({ where: eq(users.referralCode, leader.referredBy) });
+            if (sp) {
+              const spNode = await db.query.matrixNodes.findFirst({ where: eq(matrixNodes.userId, sp.id) });
+              if (spNode) sponsorNodeId = spNode.id;
+            }
+          }
+          let placementParentId = null;
+          if (allNodes.length > 0) {
+            let startNodeId = sponsorNodeId || allNodes[0]?.id;
+            if (startNodeId) {
+              const queue = [startNodeId];
+              while (queue.length > 0) {
+                const currentId = queue.shift()!;
+                const children = (allNodes as any[]).filter((n: any) => n.parentId === currentId);
+                if (children.length < 2) {
+                  placementParentId = currentId;
+                  break;
+                }
+                for (const child of children) queue.push(child.id);
+              }
+            }
+          }
+          const childrenCount = placementParentId ? (allNodes as any[]).filter((n: any) => n.parentId === placementParentId).length : 0;
+          const [newNode] = await db.insert(matrixNodes).values({
+            userId: leader.id,
+            parentId: placementParentId,
+            level: placementParentId ? ((nodeById.get(placementParentId)?.level || 1) + 1) : 1,
+            position: childrenCount + 1,
+          }).returning();
+          leaderNode = newNode;
+          allNodes.push(newNode);
+          nodeById.set(newNode.id, newNode);
+        } catch {}
+      }
+
       if (leaderNode) {
         const queue: Array<{ nodeId: number; level: number }> = [{ nodeId: leaderNode.id, level: 0 }];
         const seen = new Set<number>([leaderNode.id]);
@@ -2176,23 +2374,34 @@ async function startServer() {
         }
       }
 
-      // Unilevel tree: sponsor/referral hierarchy, independent from matrix placement.
       const usersBySponsor = new Map<string, any[]>();
       for (const member of allUsers as any[]) {
-        const sponsor = String(member.referredBy || '').trim().toUpperCase();
-        if (!sponsor) continue;
-        const children = usersBySponsor.get(sponsor) || [];
-        children.push(member);
-        usersBySponsor.set(sponsor, children);
+        const rawSponsor = String(member.referredBy || '').trim();
+        if (!rawSponsor) continue;
+        const variants = [rawSponsor, rawSponsor.toUpperCase(), rawSponsor.toLowerCase()];
+        for (const variant of variants) {
+          const children = usersBySponsor.get(variant) || [];
+          if (!children.includes(member)) {
+            children.push(member);
+            usersBySponsor.set(variant, children);
+          }
+        }
       }
-      const sponsorKeys = new Set<string>([String(leader.referralCode || '').trim().toUpperCase(), leader.walletAddress.toUpperCase()]);
+
       let currentMembers = [leader];
       const seenUsers = new Set<number>([leader.id]);
       for (let level = 1; level <= 10; level++) {
         const nextMembers: any[] = [];
         for (const parent of currentMembers) {
-          const keys = [String(parent.referralCode || '').trim().toUpperCase(), String(parent.walletAddress || '').trim().toUpperCase()];
+          const keys = [
+            String(parent.referralCode || '').trim().toUpperCase(),
+            String(parent.referralCode || '').trim().toLowerCase(),
+            String(parent.walletAddress || '').trim().toUpperCase(),
+            String(parent.walletAddress || '').trim().toLowerCase(),
+            String(parent.id),
+          ];
           for (const key of keys) {
+            if (!key) continue;
             for (const member of usersBySponsor.get(key) || []) {
               if (seenUsers.has(member.id)) continue;
               seenUsers.add(member.id);
@@ -2204,50 +2413,15 @@ async function startServer() {
         currentMembers = nextMembers;
       }
 
-      const earnings = await db.select().from(levelEarnings).where(eq(levelEarnings.beneficiaryId, leader.id));
-      const unilevelIncome: Record<string, number> = {};
-      const matrixIncome: Record<string, number> = {};
-      const unilevelIncomeDetails: Record<string, any[]> = {};
-      const matrixIncomeDetails: Record<string, any[]> = {};
-      let directSponsorIncome = 0;
-      const directSponsorIncomeDetails: any[] = [];
-      for (let i = 1; i <= 10; i++) {
-        unilevelIncome[String(i)] = 0;
-        matrixIncome[String(i)] = 0;
-        unilevelIncomeDetails[String(i)] = [];
-        matrixIncomeDetails[String(i)] = [];
-      }
-
-      // Build a transparent income ledger from the database. level_number=0 is
-      // the separate Direct Sponsor commission; levels 1-10 are Unilevel and
-      // matrix_join entries are the independent 2x2 Matrix income stream.
       for (const earning of earnings as any[]) {
-        const level = Number(earning.levelNumber);
-        const amount = Number(earning.commissionUsdt || 0);
-        const source = earning.sourceUserId ? userById.get(Number(earning.sourceUserId)) : null;
-        const detail = {
-          earningId: earning.id,
-          sourceUserId: earning.sourceUserId ?? null,
-          sourceWalletAddress: source?.walletAddress || null,
-          sourceReferralCode: source?.referralCode || null,
-          amount,
-          percentage: Number(earning.percentage || 0),
-          txType: earning.txType,
-          createdAt: earning.createdAt ? new Date(earning.createdAt).toISOString() : null,
-        };
-
-        if (earning.txType === 'matrix_join') {
-          if (level >= 1 && level <= 10) {
-            matrixIncome[String(level)] += amount;
-            matrixIncomeDetails[String(level)].push(detail);
-          }
-        } else if (earning.txType === 'token_purchase') {
-          if (level === 0) {
-            directSponsorIncome += amount;
-            directSponsorIncomeDetails.push(detail);
-          } else if (level >= 1 && level <= 10) {
-            unilevelIncome[String(level)] += amount;
-            unilevelIncomeDetails[String(level)].push(detail);
+        const srcId = Number(earning.sourceUserId);
+        const lvl = Number(earning.levelNumber);
+        if (srcId && !seenUsers.has(srcId)) {
+          const member = userById.get(srcId);
+          if (member) {
+            seenUsers.add(srcId);
+            const targetLevel = (lvl >= 1 && lvl <= 10) ? String(lvl) : "1";
+            unilevelLevels[targetLevel].push(toMemberRow(member, Number(targetLevel)));
           }
         }
       }
@@ -2276,12 +2450,7 @@ async function startServer() {
         unilevelCounts,
         unilevelIncome,
         matrixIncome,
-        directSponsorIncome,
-        directSponsorIncomeDetails,
-        unilevelIncomeDetails,
-        matrixIncomeDetails,
-        totalUnilevelIncome: directSponsorIncome + sum(unilevelIncome),
-        totalGenerationIncome: sum(unilevelIncome),
+        totalUnilevelIncome: sum(unilevelIncome),
         totalMatrixIncome: sum(matrixIncome),
         maxLevel: 10,
         structure: '2x2 forced matrix',
@@ -2295,7 +2464,7 @@ async function startServer() {
   // Buy Presale Tokens API (Supports Real Web3 & Direct Payment TxHash)
   app.post("/api/presale/buy", async (req, res) => {
     try {
-      const { walletAddress, amountUsdt, tokenAmount, tokenPrice, phaseIndex, txHash, directBuyerInviteToken } = req.body;
+      const { walletAddress, amountUsdt, tokenAmount, tokenPrice, phaseIndex, txHash, directBuyerInviteToken, referredBy } = req.body;
       if (!walletAddress || !amountUsdt || !tokenAmount) {
         return res.status(400).json({ error: "Missing required purchase fields" });
       }
@@ -2347,19 +2516,46 @@ async function startServer() {
 
       const normalizedAddress = walletAddress.toLowerCase();
       let user = await db.query.users.findFirst({
-        where: eq(users.walletAddress, normalizedAddress),
+        where: or(
+          eq(users.walletAddress, normalizedAddress),
+          eq(sql`LOWER(${users.walletAddress})`, normalizedAddress)
+        ),
       });
 
       if (!user) {
         // Auto-register user if first purchase
         const generatedRefCode = `REF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        let cleanSponsorCode: string | null = null;
+        if (referredBy && typeof referredBy === 'string' && referredBy.trim().length > 0) {
+          const rawRef = referredBy.trim();
+          const sponsor = await db.query.users.findFirst({
+            where: or(
+              eq(users.referralCode, rawRef.toUpperCase()),
+              eq(sql`LOWER(${users.walletAddress})`, rawRef.toLowerCase())
+            ),
+          });
+          cleanSponsorCode = sponsor ? sponsor.referralCode : rawRef.toUpperCase();
+        }
+
         const [newUser] = await db.insert(users).values({
           walletAddress: normalizedAddress,
           referralCode: generatedRefCode,
-          referredBy: null,
+          referredBy: cleanSponsorCode,
           availableUsdt: 0,
         }).returning();
         user = newUser;
+      } else if (!user.referredBy && referredBy && typeof referredBy === 'string' && referredBy.trim().length > 0) {
+        const rawRef = referredBy.trim();
+        const sponsor = await db.query.users.findFirst({
+          where: or(
+            eq(users.referralCode, rawRef.toUpperCase()),
+            eq(sql`LOWER(${users.walletAddress})`, rawRef.toLowerCase())
+          ),
+        });
+        if (sponsor && sponsor.id !== user.id) {
+          await db.update(users).set({ referredBy: sponsor.referralCode, updatedAt: new Date() }).where(eq(users.id, user.id));
+          user.referredBy = sponsor.referralCode;
+        }
       }
 
       // Idempotency / recovery: one blockchain tx may only settle once.
