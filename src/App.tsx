@@ -810,6 +810,40 @@ export default function App() {
             });
           }
 
+          if (Array.isArray(data.rankAchievements)) {
+            data.rankAchievements.forEach((r: any) => {
+              const rewardAmt = Number(r.rewardUsdt || 0);
+              if (rewardAmt <= 0) return;
+              combinedHistory.push({
+                id: `rank-${r.id}`,
+                type: 'referral_bonus',
+                title: `Leadership Rank ${r.rankLevel} Achievement Reward`,
+                amountUsd: rewardAmt,
+                timestamp: r.createdAt ? new Date(r.createdAt).toLocaleString() : 'Recent',
+                status: 'completed',
+                txHash: '',
+              });
+            });
+          }
+
+          if (Array.isArray(data.tokenSellLedgers)) {
+            data.tokenSellLedgers.forEach((l: any) => {
+              const gross = Number(l.grossUsdt || 0);
+              if (gross <= 0) return;
+              combinedHistory.push({
+                id: `sell-ledger-${l.id}`,
+                type: 'token_sell_settlement',
+                title: `${l.phaseName || `Phase ${l.phaseIndex}`} P2P Auto-Sell Settlement (${Number(l.tokensSold || 0).toLocaleString()} NXBC)`,
+                amountTokens: Number(l.tokensSold || 0),
+                amountUsd: gross,
+                timestamp: l.createdAt ? new Date(l.createdAt).toLocaleString() : 'Recent',
+                status: 'completed',
+                txHash: l.payoutTxHash || l.returnTxHash || '',
+                phase: l.phaseName || `Phase ${l.phaseIndex}`,
+              });
+            });
+          }
+
           // Sort by timestamp descending
           combinedHistory.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
           setTransactions(combinedHistory);
