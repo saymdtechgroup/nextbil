@@ -2230,12 +2230,14 @@ async function startServer() {
       // Fetch live commission config for fallback per-member calculation
       let liveSystemConfig: any = {};
       let liveReferralLevels: any[] = [];
+      let liveMatrixConfig: any = {};
       try {
         const rows = await db.select().from(systemConfigs);
         const byKey: Record<string, any> = {};
         for (const row of rows) { try { byKey[row.key] = JSON.parse(row.value); } catch { byKey[row.key] = row.value; } }
         liveSystemConfig = byKey.systemConfig || {};
         liveReferralLevels = Array.isArray(byKey.referralLevels) ? byKey.referralLevels : [];
+        liveMatrixConfig = byKey.matrixConfig || {};
       } catch {}
       const directSponsorPercentRate = Math.max(0, Number(liveSystemConfig.directSponsorPercent ?? 10)) / 100;
       const defaultTierPercents = [3, 2, 1, 1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
@@ -2243,6 +2245,7 @@ async function startServer() {
         const configured = liveReferralLevels.find((l: any) => Number(l.level) === i + 1);
         return Math.max(0, Number(configured?.commissionPercent ?? defaultTierPercents[i])) / 100;
       });
+      const baseMatrixPlacementReward = Math.max(0.1, Number(liveMatrixConfig.placementIncomeUsd ?? 0.10));
 
       type MemberRow = {
         userId: number;
@@ -2270,7 +2273,7 @@ async function startServer() {
         unilevelLevels[String(i)] = [];
       }
 
-      const toMemberRow = (member: any, level: number, position = 0, parentUser: any = null): MemberRow => {
+      const toMemberRow = (member: any, level: number, position = 0, parentUser: any = null, isMatrixContext = false): MemberRow => {
         const rawSponsor = String(member.referredBy || '').trim().toLowerCase();
         const leaderRef = String(leader.referralCode || '').trim().toLowerCase();
         const leaderWallet = String(leader.walletAddress || '').trim().toLowerCase();
@@ -2287,6 +2290,9 @@ async function startServer() {
         }
         if (lvlEarned === 0 && invested > 0 && level >= 1 && level <= 10) {
           lvlEarned = invested * tierPercentages[level - 1];
+        }
+        if (matrixEarned === 0 && isMatrixContext && level >= 1 && level <= 10) {
+          matrixEarned = baseMatrixPlacementReward;
         }
 
         const totalEarned = (earningsBySourceUser.get(member.id) || 0) > 0
@@ -2367,7 +2373,7 @@ async function startServer() {
             if (member) {
               const parentNode = child.parentId ? nodeById.get(child.parentId) : null;
               const parentUser = parentNode ? userById.get(parentNode.userId) : null;
-              matrixLevels[String(level)].push(toMemberRow(member, level, child.position, parentUser));
+              matrixLevels[String(level)].push(toMemberRow(member, level, child.position, parentUser, true));
             }
             queue.push({ nodeId: child.id, level });
           }
@@ -2423,6 +2429,13 @@ async function startServer() {
             const targetLevel = (lvl >= 1 && lvl <= 10) ? String(lvl) : "1";
             unilevelLevels[targetLevel].push(toMemberRow(member, Number(targetLevel)));
           }
+        }
+      }
+
+      for (let i = 1; i <= 10; i++) {
+        const lvlStr = String(i);
+        if ((!matrixIncome[lvlStr] || matrixIncome[lvlStr] === 0) && matrixLevels[lvlStr].length > 0) {
+          matrixIncome[lvlStr] = Number(matrixLevels[lvlStr].reduce((acc, m) => acc + (m.matrixEarnedUsdt || baseMatrixPlacementReward), 0).toFixed(2));
         }
       }
 
