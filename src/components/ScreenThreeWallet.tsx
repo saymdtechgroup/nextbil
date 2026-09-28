@@ -224,7 +224,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
     }
   }, [mlmBalanceUsd]);
 
-  const pastTransactions = (transactions || []).filter((t) => t && t.status === 'completed');
+  const pastTransactions = (transactions || []).filter((t) => t && (!t.status || t.status === 'completed' || t.status === 'success'));
 
   // Total Sold Tokens Across Phases
   const totalSoldTokens = (ledgerEntries || []).reduce((acc, curr) => acc + (Number(curr?.tokensSold) || 0), 0) ||
@@ -1077,64 +1077,87 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
         </div>
       )}
 
-      {/* Transaction History Section */}
+      {/* Settlement & Comprehensive Transaction History Section */}
       <section className="rounded-[20px] bg-[linear-gradient(135deg,#081426_0%,#07101c_65%,#0d1726_100%)] border border-amber-400/25 p-3 sm:p-3.5 space-y-2">
         <div className="flex items-center justify-between px-1">
-          <h3 className="text-[11px] font-bold text-slate-200 font-rajdhani uppercase tracking-wider">
-            Settlement & Transaction History
-          </h3>
-          <span className="text-[9px] font-mono-crypto text-amber-300">
+          <div className="flex items-center gap-1.5">
+            <Database className="w-3.5 h-3.5 text-amber-300" />
+            <h3 className="text-[11px] font-bold text-slate-200 font-rajdhani uppercase tracking-wider">
+              Settlement & Transaction History
+            </h3>
+          </div>
+          <span className="text-[9px] font-mono-crypto text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
             {pastTransactions.length} Verified Records
           </span>
         </div>
 
-        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
+        <div className="space-y-1.5 max-h-80 overflow-y-auto pr-0.5 scrollbar-thin scrollbar-thumb-amber-500/20">
           {(!pastTransactions || pastTransactions.length === 0) ? (
             <div className="p-4 rounded-xl bg-[#050b16]/75 border border-white/10 text-center text-xs text-slate-400 font-mono-crypto">
-              No transactions yet
+              No transaction or settlement history found
             </div>
           ) : (
             pastTransactions.map((tx, idx) => {
               if (!tx) return null;
               const amt = Number(tx.amountUsd) || 0;
+              const isDebit = tx.type === 'withdrawal';
+              const isPresale = tx.type === 'buy';
+              const isMatrix = tx.type === 'matrix_spillover';
+              const isSettlement = tx.type === 'token_sell_settlement';
+              const isLevel = tx.type === 'referral_bonus';
+
               return (
                 <div
                   key={tx.id || `tx-${idx}`}
-                  className="p-2.5 rounded-xl bg-[#050b16]/75 border border-white/10 hover:border-amber-400/30 transition-colors flex items-center justify-between text-[10px]"
+                  className="p-2.5 rounded-xl bg-[#050b16]/80 border border-white/10 hover:border-amber-400/30 transition-all flex items-center justify-between text-[10px]"
                 >
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <div
-                      className={`p-1.5 rounded-lg ${
-                        tx.type === 'withdrawal'
-                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
-                          : tx.type === 'buy'
-                          ? 'bg-amber-400/10 text-amber-400 border border-amber-400/30'
-                          : 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/30'
+                      className={`p-2 rounded-xl shrink-0 ${
+                        isDebit
+                          ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                          : isPresale
+                          ? 'bg-amber-400/15 text-amber-400 border border-amber-400/30'
+                          : isMatrix
+                          ? 'bg-cyan-400/15 text-cyan-400 border border-cyan-400/30'
+                          : isSettlement
+                          ? 'bg-purple-400/15 text-purple-400 border border-purple-400/30'
+                          : 'bg-emerald-400/15 text-emerald-400 border border-emerald-400/30'
                       }`}
                     >
-                      {tx.type === 'withdrawal' ? (
+                      {isDebit ? (
                         <ArrowDownToLine className="w-3.5 h-3.5" />
+                      ) : isPresale ? (
+                        <Coins className="w-3.5 h-3.5" />
+                      ) : isMatrix ? (
+                        <Layers className="w-3.5 h-3.5" />
+                      ) : isSettlement ? (
+                        <ArrowUpRight className="w-3.5 h-3.5" />
                       ) : (
                         <Zap className="w-3.5 h-3.5" />
                       )}
                     </div>
-                    <div>
-                      <span className="font-semibold text-slate-200 block">{tx.title || 'Transaction'}</span>
-                      <span className="text-[8px] font-mono-crypto text-slate-400">
-                        {tx.timestamp || 'Recent'} • {tx.txHash ? (tx.txHash.length > 12 ? `${tx.txHash.slice(0, 6)}...${tx.txHash.slice(-4)}` : tx.txHash) : 'On-Chain'}
+                    <div className="min-w-0">
+                      <span className="font-semibold text-slate-100 block truncate text-[11px]">
+                        {tx.title || 'Transaction Credit'}
+                      </span>
+                      <span className="text-[8px] font-mono-crypto text-slate-400 block truncate mt-0.5">
+                        {tx.timestamp || 'Recent'}
+                        {tx.phase ? ` • ${tx.phase}` : ''}
+                        {tx.txHash ? ` • ${tx.txHash.length > 12 ? `${tx.txHash.slice(0, 6)}...${tx.txHash.slice(-4)}` : tx.txHash}` : ' • Ledger Verified'}
                       </span>
                     </div>
                   </div>
 
-                  <div className="text-right">
+                  <div className="text-right shrink-0 pl-2.5">
                     <span
-                      className={`font-mono-crypto font-bold block ${
-                        tx.type === 'withdrawal' ? 'text-rose-400' : 'text-emerald-400'
+                      className={`font-mono-crypto font-bold block text-[11px] ${
+                        isDebit ? 'text-rose-400' : 'text-emerald-400'
                       }`}
                     >
-                      {tx.type === 'withdrawal' ? '-' : '+'}${amt.toFixed(2)}
+                      {isDebit ? '-' : '+'}${amt.toFixed(2)} USDT
                     </span>
-                    <span className="text-[8px] font-mono-crypto text-emerald-400 flex items-center gap-0.5 justify-end">
+                    <span className="text-[7.5px] font-mono-crypto text-emerald-400/90 flex items-center gap-0.5 justify-end mt-0.5">
                       <CheckCircle2 className="w-2.5 h-2.5" />
                       Confirmed
                     </span>

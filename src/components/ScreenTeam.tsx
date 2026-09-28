@@ -689,40 +689,53 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                                       </span>
                                     </div>
                                     {level.level === 1 ? (
-                                      <>
-                                        <div className="bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                          <span className="text-[8px] text-amber-400/90 block uppercase font-bold">Sponsor (10%)</span>
-                                          <span className="font-bold text-amber-300">
-                                            +${(Number(member.directEarnedUsdt) > 0 ? Number(member.directEarnedUsdt) : ((Number(member.totalInvestedUsdt || 0)) * 0.10)).toFixed(2)}
-                                          </span>
-                                        </div>
-                                        <div className="bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
-                                          <span className="text-[8px] text-cyan-400/90 block uppercase font-bold">Gen 1 ({level.commissionPercent}%)</span>
-                                          <span className="font-bold text-cyan-300">
-                                            +${(Number(member.levelEarnedUsdt) > 0 ? Number(member.levelEarnedUsdt) : ((Number(member.totalInvestedUsdt || 0)) * (level.commissionPercent / 100))).toFixed(2)}
-                                          </span>
-                                        </div>
-                                        <div className="bg-emerald-500/15 px-2.5 py-1 rounded-lg border border-emerald-400/30">
-                                          <span className="text-[8px] text-emerald-400 block uppercase font-black">Earned</span>
-                                          <span className="font-black text-emerald-300 text-xs">
-                                            +${(
-                                              (Number(member.commissionEarnedUsdt) > 0 ? Number(member.commissionEarnedUsdt) : 0) ||
-                                              (((Number(member.totalInvestedUsdt || 0)) * 0.10) + ((Number(member.totalInvestedUsdt || 0)) * (level.commissionPercent / 100)))
-                                            ).toFixed(2)} USDT
-                                          </span>
-                                        </div>
-                                      </>
+                                      (() => {
+                                        const sponsorAmt = Number(member.directEarnedUsdt) > 0
+                                          ? Number(member.directEarnedUsdt)
+                                          : (Number(member.totalInvestedUsdt || 0) * 0.10);
+                                        const gen1Amt = Number(member.levelEarnedUsdt) > 0
+                                          ? Number(member.levelEarnedUsdt)
+                                          : (Number(member.totalInvestedUsdt || 0) * (level.commissionPercent / 100));
+                                        const totalEarned = sponsorAmt + gen1Amt;
+                                        return (
+                                          <>
+                                            <div className="bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                              <span className="text-[8px] text-amber-400/90 block uppercase font-bold">Sponsor (10%)</span>
+                                              <span className="font-bold text-amber-300">
+                                                +${sponsorAmt.toFixed(2)}
+                                              </span>
+                                            </div>
+                                            <div className="bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                                              <span className="text-[8px] text-cyan-400/90 block uppercase font-bold">Gen 1 ({level.commissionPercent}%)</span>
+                                              <span className="font-bold text-cyan-300">
+                                                +${gen1Amt.toFixed(2)}
+                                              </span>
+                                            </div>
+                                            <div className="bg-emerald-500/15 px-2.5 py-1 rounded-lg border border-emerald-400/30">
+                                              <span className="text-[8px] text-emerald-400 block uppercase font-black">Earned</span>
+                                              <span className="font-black text-emerald-300 text-xs">
+                                                +${totalEarned.toFixed(2)} USDT
+                                              </span>
+                                            </div>
+                                          </>
+                                        );
+                                      })()
                                     ) : (
-                                      <div className="bg-emerald-500/15 px-2.5 py-1 rounded-lg border border-emerald-400/30">
-                                        <span className="text-[8px] text-emerald-400 block uppercase font-black">Earned ({level.commissionPercent}%)</span>
-                                        <span className="font-black text-emerald-300 text-xs">
-                                          +${(
-                                            (Number(member.levelEarnedUsdt) > 0 ? Number(member.levelEarnedUsdt) : 0) ||
-                                            (Number(member.commissionEarnedUsdt) > 0 ? Number(member.commissionEarnedUsdt) : 0) ||
-                                            ((Number(member.totalInvestedUsdt || 0)) * (level.commissionPercent / 100))
-                                          ).toFixed(2)} USDT
-                                        </span>
-                                      </div>
+                                      (() => {
+                                        const levelAmt = Number(member.levelEarnedUsdt) > 0
+                                          ? Number(member.levelEarnedUsdt)
+                                          : Number(member.commissionEarnedUsdt) > 0
+                                          ? Number(member.commissionEarnedUsdt)
+                                          : (Number(member.totalInvestedUsdt || 0) * (level.commissionPercent / 100));
+                                        return (
+                                          <div className="bg-emerald-500/15 px-2.5 py-1 rounded-lg border border-emerald-400/30">
+                                            <span className="text-[8px] text-emerald-400 block uppercase font-black">Earned ({level.commissionPercent}%)</span>
+                                            <span className="font-black text-emerald-300 text-xs">
+                                              +${levelAmt.toFixed(2)} USDT
+                                            </span>
+                                          </div>
+                                        );
+                                      })()
                                     )}
                                   </div>
                                 </div>
