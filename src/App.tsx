@@ -15,6 +15,9 @@ import {
   Crown,
   Settings,
   Wallet,
+  Users,
+  ArrowDownToLine,
+  UserCheck,
 } from 'lucide-react';
 import {
   AllocationState,
@@ -1644,27 +1647,42 @@ export default function App() {
       {/* Main Foreground Container */}
       <div className="relative z-10 w-full max-w-7xl mx-auto px-1 sm:px-4 py-2 sm:py-6 flex flex-col min-h-screen">
         
-        {/* Top Header Bar */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 mb-3 sm:mb-4 border-b border-purple-500/20 bg-[#0e0720]/80 backdrop-blur-md px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl border">
-          <div className="flex items-center justify-between w-full">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-black tracking-wider text-slate-100 font-cinzel">
-                  {systemConfig.tokenSymbol}<span className="text-amber-400"> COIN</span>
-                </h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 border border-amber-400/50 text-amber-300 font-mono-crypto">
-                  PRESALE PLATFORM
-                </span>
+        {/* Top Header Bar - Premium Cyberpunk & Golden Theme */}
+        <header className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-amber-500/35 bg-gradient-to-r from-[#120729]/95 via-[#1a0b38]/95 to-[#0e0422]/95 backdrop-blur-xl shadow-[0_8px_32px_rgba(245,158,11,0.15)] p-3.5 sm:p-5 mb-3 sm:mb-4">
+          {/* Subtle Ambient Neon Flares */}
+          <div className="absolute -top-12 -right-12 w-36 h-36 bg-amber-500/15 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -bottom-12 -left-12 w-36 h-36 bg-fuchsia-600/15 rounded-full blur-2xl pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="w-full">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-300 p-0.5 shadow-[0_0_12px_rgba(245,158,11,0.5)] flex items-center justify-center">
+                    <Coins className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                  </div>
+                  <h1 className="text-lg sm:text-xl font-black tracking-wider bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-500 bg-clip-text text-transparent font-cinzel drop-shadow-[0_2px_10px_rgba(245,158,11,0.3)]">
+                    {systemConfig.tokenSymbol} COIN
+                  </h1>
+                </div>
+
+                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 border border-amber-400/50 text-amber-300 font-mono-crypto tracking-wider uppercase shadow-[0_0_10px_rgba(245,158,11,0.2)]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                  <span>PRESALE PLATFORM</span>
+                </div>
+
                 {systemConfig.presalePaused && (
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-600 text-white animate-pulse">
+                  <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-600/90 border border-rose-400 text-white animate-pulse shadow-[0_0_10px_rgba(225,29,72,0.5)]">
                     PAUSED
                   </span>
                 )}
               </div>
+
               {(activeSingleScreen === 'home' || viewMode === 'trio') && (
-                <p className="text-xs text-purple-200/90 mt-1.5 max-w-2xl leading-relaxed">
-                  NXBC is a next-generation utility coin designed for secure, high-yield P2P trading. By participating in this exclusive presale, early adopters secure their allocation at the lowest entry prices. This provides massive growth potential, automated instant payouts via our FIFO smart contract, and guaranteed liquidity before the official Decentralized Exchange (DEX) launch.
-                </p>
+                <div className="mt-2.5 pt-2.5 border-t border-amber-500/20">
+                  <p className="text-xs sm:text-[13px] text-purple-100/90 leading-relaxed font-sans max-w-4xl">
+                    <strong className="text-amber-300 font-bold">{systemConfig.tokenSymbol}</strong> is a next-generation utility coin designed for secure, high-yield P2P trading. By participating in this exclusive presale, early adopters secure their allocation at the <span className="text-amber-300 font-semibold underline decoration-amber-500/40">lowest entry prices</span>. This provides massive growth potential, automated instant payouts via our <span className="text-emerald-400 font-semibold underline decoration-emerald-500/40">FIFO smart contract</span>, and guaranteed liquidity before the official <span className="text-cyan-300 font-semibold underline decoration-cyan-500/40">Decentralized Exchange (DEX) launch</span>.
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -1675,30 +1693,38 @@ export default function App() {
           /* PURE FULL-WIDTH MOBILE SCREEN APPLICATION INTERFACE */
           <div className="flex-1 flex flex-col w-full max-w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto bg-gradient-to-b from-[#110726] via-[#090317] to-[#0d051e] rounded-2xl sm:rounded-[32px] border border-amber-500/25 shadow-[0_15px_60px_rgba(0,0,0,0.8)] overflow-hidden relative my-0 sm:my-2">
             
-            {/* Native Mobile App Header Bar Removed as per user request */}
-
-
-            {/* Quick Screen Switcher Tabs */}
-            <div className="px-3 pt-2.5 pb-1 flex items-center gap-1 overflow-x-auto no-scrollbar bg-[#090317]/80 border-b border-purple-500/10 select-none">
+            {/* Quick Screen Switcher Tabs - Futuristic Stylized Navigation Bar */}
+            <div className="px-2.5 sm:px-3 pt-2.5 pb-2 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar bg-gradient-to-r from-[#090317] via-[#14062a] to-[#090317] border-b border-amber-500/20 select-none">
               {[
-                { id: 'home', label: 'Home (Acquisition)' },
-                { id: 'assets', label: 'Assets (6-Box Grid)' },
-                { id: 'team', label: '10-Level Team' },
-                { id: 'withdraw', label: 'Withdraw' },
-                { id: 'mine', label: 'Account' },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveSingleScreen(tab.id as ActiveScreen)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-rajdhani font-bold whitespace-nowrap transition-all ${
-                    activeSingleScreen === tab.id
-                      ? 'bg-gradient-to-r from-amber-500/30 to-fuchsia-600/30 text-amber-300 border border-amber-400/40 shadow-sm'
-                      : 'text-purple-300/60 hover:text-purple-200'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+                { id: 'home', label: 'Home (Acquisition)', icon: Flame },
+                { id: 'assets', label: 'Assets (6-Box Grid)', icon: LayoutGrid },
+                { id: 'team', label: '10-Level Team', icon: Users },
+                { id: 'withdraw', label: 'Withdraw', icon: ArrowDownToLine },
+                { id: 'mine', label: 'Account', icon: UserCheck },
+              ].map((tab) => {
+                const IconComponent = tab.icon;
+                const isActive = activeSingleScreen === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveSingleScreen(tab.id as ActiveScreen)}
+                    className={`group relative px-3 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-[13px] font-rajdhani font-bold whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 ${
+                      isActive
+                        ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 border border-amber-200/80 shadow-[0_0_16px_rgba(245,158,11,0.45)] scale-[1.02]'
+                        : 'bg-[#180933]/60 hover:bg-[#250d4f]/80 text-purple-200/80 hover:text-amber-200 border border-purple-500/20 hover:border-amber-400/40 shadow-sm'
+                    }`}
+                  >
+                    <IconComponent
+                      className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 transition-transform duration-200 ${
+                        isActive
+                          ? 'text-slate-950 stroke-[2.5] scale-110'
+                          : 'text-amber-400/70 group-hover:text-amber-300 group-hover:scale-110'
+                      }`}
+                    />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Mobile Screen Body Content */}
