@@ -6,32 +6,36 @@ import { GoldCoinGraphic } from './GoldCoinGraphic';
 interface ScreenMineProps {
   walletAddress: string;
   walletConnected: boolean;
+  referralCode?: string;
   onToggleWallet: () => void;
   onOpenAdmin?: () => void;
   onResetAllData?: () => void;
   totalInvestedUsd?: number;
   minMlmQualifyUsd?: number;
-  referralCode?: string;
 }
 
 export const ScreenMine: React.FC<ScreenMineProps> = ({
   walletAddress,
   walletConnected,
+  referralCode,
   onToggleWallet,
   onOpenAdmin,
   onResetAllData,
   totalInvestedUsd = 0,
   minMlmQualifyUsd = 100,
-  referralCode = '',
 }) => {
   const isMlmQualified = totalInvestedUsd >= minMlmQualifyUsd;
   const [copied, setCopied] = useState(false);
   const [contractCopied, setContractCopied] = useState(false);
   const NXBC_CONTRACT = '0x94D064AFDB04E3489C313054260929588b38dF85';
 
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://nxbc.tech';
+  const effectiveRefCode = referralCode || (walletAddress ? walletAddress.substring(2, 8).toUpperCase() : '');
+  const referralLink = walletConnected && walletAddress ? `${baseUrl}/?ref=${effectiveRefCode}` : `${baseUrl}/`;
+
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(`https://nxbc.tech/ref/${referralCode || 'guest'}`);
+      await navigator.clipboard.writeText(referralLink);
     } catch {}
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -129,13 +133,14 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
         <div className="p-2 sm:p-2.5 rounded-[16px] bg-[#050b16]/80 border border-white/10 flex items-center gap-2">
           <div className="flex-1 overflow-hidden">
             <p className="text-xs font-mono-crypto text-slate-300 truncate">
-              https://nxbc.tech/ref/{referralCode || 'guest'}
+              {walletConnected && walletAddress ? referralLink : `${baseUrl}/?ref=CONNECT_WALLET`}
             </p>
           </div>
           <button
             type="button"
             onClick={handleCopy}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 text-xs font-bold font-mono-crypto shadow-sm active:scale-95 transition-all shrink-0"
+            disabled={!walletConnected || !walletAddress}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 text-xs font-bold font-mono-crypto shadow-sm active:scale-95 transition-all shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copied ? 'Copied' : 'Copy'}</span>
