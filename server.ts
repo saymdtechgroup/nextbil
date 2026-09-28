@@ -2285,14 +2285,20 @@ async function startServer() {
         let matrixEarned = matrixEarnedBySource.get(member.id) ?? 0;
 
         // Smart fallback if legacy purchase transactions did not insert separate ledger entries
-        if (directEarned === 0 && isDirect && invested > 0) {
-          directEarned = invested * directSponsorPercentRate;
-        }
-        if (lvlEarned === 0 && invested > 0 && level >= 1 && level <= 10) {
-          lvlEarned = invested * tierPercentages[level - 1];
-        }
-        if (isMatrixContext && level >= 1 && level <= 10) {
-          matrixEarned = level === 1 ? Math.max(matrixEarned, baseMatrixPlacementRewardL1) : Math.max(matrixEarned, baseMatrixPlacementRewardUpline);
+        if (invested <= 0) {
+          directEarned = 0;
+          lvlEarned = 0;
+          matrixEarned = 0;
+        } else {
+          if (directEarned === 0 && isDirect && invested > 0) {
+            directEarned = invested * directSponsorPercentRate;
+          }
+          if (lvlEarned === 0 && invested > 0 && level >= 1 && level <= 10) {
+            lvlEarned = invested * tierPercentages[level - 1];
+          }
+          if (isMatrixContext && level >= 1 && level <= 10) {
+            matrixEarned = level === 1 ? Math.max(matrixEarned, baseMatrixPlacementRewardL1) : Math.max(matrixEarned, baseMatrixPlacementRewardUpline);
+          }
         }
 
         const totalEarned = (earningsBySourceUser.get(member.id) || 0) > 0
@@ -2370,7 +2376,7 @@ async function startServer() {
             seen.add(child.id);
             const level = current.level + 1;
             const member = userById.get(child.userId);
-            if (member) {
+            if (member && Number(member.totalInvestedUsdt || 0) > 0) {
               const parentNode = child.parentId ? nodeById.get(child.parentId) : null;
               const parentUser = parentNode ? userById.get(parentNode.userId) : null;
               matrixLevels[String(level)].push(toMemberRow(member, level, child.position, parentUser, true));
