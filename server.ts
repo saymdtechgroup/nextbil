@@ -2120,9 +2120,11 @@ async function startServer() {
         return res.status(404).json({ error: "User not found" });
       }
 
-      // Fetch user's recent transactions & earnings
-      const userTxs = await db.select().from(transactions).where(eq(transactions.userId, user.id)).orderBy(desc(transactions.createdAt)).limit(100);
-      const userEarnings = await db.select().from(levelEarnings).where(eq(levelEarnings.beneficiaryId, user.id)).orderBy(desc(levelEarnings.createdAt)).limit(100);
+      // Fetch user's recent transactions, earnings, rank achievements, and token sell settlements
+      const userTxs = await db.select().from(transactions).where(eq(transactions.userId, user.id)).orderBy(desc(transactions.createdAt)).limit(500);
+      const userEarnings = await db.select().from(levelEarnings).where(eq(levelEarnings.beneficiaryId, user.id)).orderBy(desc(levelEarnings.createdAt)).limit(500);
+      const userRankAchievements = await db.select().from(rankAchievements).where(eq(rankAchievements.userId, user.id)).orderBy(desc(rankAchievements.createdAt)).limit(100);
+      const userSellLedgers = await db.select().from(tokenSellLedgers).where(eq(tokenSellLedgers.userId, user.id)).orderBy(desc(tokenSellLedgers.createdAt)).limit(100);
       const tokenSaleTotals = await db.execute(sql`
         SELECT
           COALESCE(SUM(GREATEST(0, gross_usdt - withdrawn_usdt)), 0) AS available_usdt,
@@ -2202,6 +2204,8 @@ async function startServer() {
         tokenSaleWithdrawnUsdt: Number(tokenSaleRow.withdrawn_usdt || 0),
         transactions: userTxs,
         earnings: userEarnings,
+        rankAchievements: userRankAchievements,
+        tokenSellLedgers: userSellLedgers,
         directSponsorIncomeUsdt: directIncome,
         levelIncomeUsdt: levelIncome,
         matrixIncomeUsdt: liveMatrixIncome,
