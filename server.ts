@@ -2144,17 +2144,69 @@ async function startServer() {
       `);
       const earningRow: any = (earningTotals as any)?.rows?.[0] || {};
 
+      // Fetch live matrix earnings from tree if not fully captured in ledger
+      let liveMatrixIncome = Number(earningRow.matrix_income_usdt || 0);
+      try {
+        const leaderNode = await db.query.matrixNodes.findFirst({ where: eq(matrixNodes.userId, user.id) });
+        if (leaderNode) {
+          const allNodes = await db.select().from(matrixNodes);
+          const allUsers = await db.select().from(users);
+          const userMap = new Map(allUsers.map((u: any) => [u.id, u]));
+          const childrenMap = new Map<number, any[]>();
+          for (const n of allNodes) {
+            if (n.parentId != null) {
+              const list = childrenMap.get(n.parentId) || [];
+              list.push(n);
+              childrenMap.set(n.parentId, list);
+            }
+          }
+          let calculatedMatrixTotal = 0;
+          const queue: Array<{ nodeId: number; level: number }> = [{ nodeId: leaderNode.id, level: 0 }];
+          const seen = new Set<number>([leaderNode.id]);
+          while (queue.length > 0) {
+            const curr = queue.shift()!;
+            if (curr.level >= 10) continue;
+            for (const child of childrenMap.get(curr.nodeId) || []) {
+              if (seen.has(child.id)) continue;
+              seen.add(child.id);
+              const lvl = curr.level + 1;
+              const childUser = userMap.get(child.userId);
+              if (childUser && Number(childUser.totalInvestedUsdt || 0) > 0) {
+                calculatedMatrixTotal += (lvl === 1 ? 1.00 : 0.10);
+              }
+              queue.push({ nodeId: child.id, level: lvl });
+            }
+          }
+          liveMatrixIncome = Math.max(liveMatrixIncome, Number(calculatedMatrixTotal.toFixed(2)));
+        }
+      } catch {}
+
+      const directIncome = Number(earningRow.direct_sponsor_income_usdt || 0);
+      const levelIncome = Number(earningRow.level_income_usdt || 0);
+      const rankIncome = Number(earningRow.rank_reward_usdt || 0);
+      const totalEarnedCalculated = Number((levelIncome + liveMatrixIncome + rankIncome).toFixed(2));
+      const totalWithdrawn = Number(user.totalWithdrawnUsdt || 0);
+      const realAvailableUsdt = Math.max(0, Number((totalEarnedCalculated - totalWithdrawn).toFixed(2)));
+
+      if (Math.abs((user.availableUsdt || 0) - realAvailableUsdt) > 0.01) {
+        try {
+          await db.update(users).set({ availableUsdt: realAvailableUsdt, totalEarnedUsdt: totalEarnedCalculated, updatedAt: new Date() }).where(eq(users.id, user.id));
+          user.availableUsdt = realAvailableUsdt;
+          user.totalEarnedUsdt = totalEarnedCalculated;
+        } catch {}
+      }
+
       res.json({
         user,
         tokenSaleAvailableUsdt: Number(tokenSaleRow.available_usdt || 0),
         tokenSaleWithdrawnUsdt: Number(tokenSaleRow.withdrawn_usdt || 0),
         transactions: userTxs,
         earnings: userEarnings,
-        directSponsorIncomeUsdt: Number(earningRow.direct_sponsor_income_usdt || 0),
-        levelIncomeUsdt: Number(earningRow.level_income_usdt || 0),
-        matrixIncomeUsdt: Number(earningRow.matrix_income_usdt || 0),
-        rankRewardUsdt: Number(earningRow.rank_reward_usdt || 0),
-        totalCommissionUsdt: Number(earningRow.total_commission_usdt || 0),
+        directSponsorIncomeUsdt: directIncome,
+        levelIncomeUsdt: levelIncome,
+        matrixIncomeUsdt: liveMatrixIncome,
+        rankRewardUsdt: rankIncome,
+        totalCommissionUsdt: totalEarnedCalculated,
       });
     } catch (error: any) {
       console.error("Error in /api/users/:walletAddress:", error);
@@ -2461,6 +2513,7 @@ async function startServer() {
       }
 
       for (const earning of earnings as any[]) {
+        if (earning.txType !== 'token_purchase') continue;
         const srcId = Number(earning.sourceUserId);
         const lvl = Number(earning.levelNumber);
         if (srcId && !seenUsers.has(srcId)) {
