@@ -39,6 +39,7 @@ interface ScreenThreeWalletProps {
   allocation?: AllocationState;
   levelIncomeUsd?: number;
   matrixIncomeUsd?: number;
+  rankRewardIncomeUsd?: number;
   transactions: Transaction[];
   onWithdraw: (amountUsd: number, walletType: 'token_sell' | 'mlm', txHash?: string) => void;
   onToggleWallet: () => void;
@@ -57,6 +58,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
   allocation,
   levelIncomeUsd = 0,
   matrixIncomeUsd = 0,
+  rankRewardIncomeUsd = 0,
   transactions,
   onWithdraw,
   onToggleWallet,
@@ -888,12 +890,17 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
               </div>
             </div>
             <div className="text-right space-y-0.5">
-              <span className="text-[8px] text-slate-400 font-mono-crypto block">
-                Level: <strong className="text-amber-300">${levelIncomeUsd.toFixed(2)}</strong>
+              <span className="text-[8.5px] text-slate-400 font-mono-crypto block">
+                Unilevel: <strong className="text-amber-300 font-bold">${levelIncomeUsd.toFixed(2)}</strong>
               </span>
-              <span className="text-[8px] text-slate-400 font-mono-crypto block">
-                Matrix: <strong className="text-emerald-400">${matrixIncomeUsd.toFixed(2)}</strong>
+              <span className="text-[8.5px] text-slate-400 font-mono-crypto block">
+                Matrix: <strong className="text-emerald-400 font-bold">${matrixIncomeUsd.toFixed(2)}</strong>
               </span>
+              {rankRewardIncomeUsd > 0 && (
+                <span className="text-[8.5px] text-slate-400 font-mono-crypto block">
+                  Reward: <strong className="text-purple-300 font-bold">${rankRewardIncomeUsd.toFixed(2)}</strong>
+                </span>
+              )}
             </div>
           </div>
 
