@@ -54,15 +54,34 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   const [simTarget, setSimTarget] = useState<'p2' | 'p3' | 'p4' | 'p5' | 'live'>('p3');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [liveSellerShare, setLiveSellerShare] = useState<number>(sellQueueSharePercent ?? 20);
+  const [teamStats, setTeamStats] = useState<{ directCount: number; totalTeamCount: number }>({
+    directCount: 0,
+    totalTeamCount: 0,
+  });
+  const [dbAllocation, setDbAllocation] = useState<{
+    totalPurchasedTokens: number;
+    liveHoldTokens: number;
+    p2: number;
+    p3: number;
+    p4: number;
+    p5: number;
+  }>({
+    totalPurchasedTokens: 0,
+    liveHoldTokens: 0,
+    p2: 0,
+    p3: 0,
+    p4: 0,
+    p5: 0,
+  });
   const [saleOrders, setSaleOrders] = useState<Array<{
     id: number; phaseNumber: number; amountTokens: number; soldTokens: number;
     remainingTokens: number; tokenPrice: number; expectedUsdt: number;
-    realizedUsdt: number; remainingUsdt: number; status: string; fifoNumber?: number; phasePosition?: number; ordersAhead?: number; currentRunningFifoNumber?: number | null; positionsAhead?: number; createdAt?: string;
+    realizedUsdt: number; remainingUsdt: number; status: string; fifoNumber?: number; currentRunningFifoNumber?: number | null; positionsAhead?: number; createdAt?: string;
   }>>([]);
   const [globalFifo, setGlobalFifo] = useState<Array<{
     phaseNumber: number; totalOrders: number; totalQueuedTokens: number;
     orders: Array<{ id: number; userId: number; walletAddress: string; amountTokens: number;
-      remainingTokens: number; tokenPrice: number; status: string; position: number; fifoNumber: number;
+      remainingTokens: number; tokenPrice: number; status: string; position: number;
       aheadTokens: number; expectedRemainingUsdt: number; createdAt?: string; }>;
   }>>([]);
   const [fifoLoading, setFifoLoading] = useState(true);
@@ -88,11 +107,53 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   };
 
   const fetchOrders = async () => {
-    if (!walletAddress) { setSaleOrders([]); return; }
+    if (!walletAddress) { 
+      setSaleOrders([]);
+      setTeamStats({ directCount: 0, totalTeamCount: 0 });
+      return; 
+    }
     try {
+      // 1. Fetch sale orders
       const r = await fetch(`/api/presale/sale-orders/${walletAddress}`, { cache: 'no-store' });
       const data = await r.json().catch(() => ({}));
       if (r.ok && data.success) setSaleOrders(Array.isArray(data.orders) ? data.orders : []);
+
+      // 2. Fetch live team stats for accurate directs and total team structure
+      try {
+        const teamRes = await fetch(`/api/team/${walletAddress}`, { cache: 'no-store' });
+        if (teamRes.ok) {
+          const teamData = await teamRes.json();
+          const directs = Number(teamData.totalDirectMembers ?? teamData.leader?.directCount ?? (Array.isArray(teamData.directMembers) ? teamData.directMembers.length : 0));
+          let totalTeam = Number(teamData.totalUnilevelMembers ?? teamData.leader?.totalTeamCount ?? 0);
+          if (totalTeam === 0 && teamData.unilevelCounts) {
+            totalTeam = Object.values(teamData.unilevelCounts).reduce<number>((a, b) => a + Number(b || 0), 0);
+          }
+          if (totalTeam === 0 && directs > 0) totalTeam = directs;
+          setTeamStats({ directCount: directs, totalTeamCount: totalTeam });
+        }
+      } catch (err) {
+        console.warn('Failed to fetch team count for assets:', err);
+      }
+
+      // 3. Fetch user allocation & purchased tokens from DB
+      try {
+        const allocRes = await fetch(`/api/presale/allocation/${walletAddress}`, { cache: 'no-store' });
+        if (allocRes.ok) {
+          const allocData = await allocRes.json();
+          if (allocData.success) {
+            setDbAllocation({
+              totalPurchasedTokens: Number(allocData.totalPurchasedTokens || 0),
+              liveHoldTokens: Number(allocData.liveHoldTokens || allocData.allocations?.[6]?.allocated || 0),
+              p2: Number(allocData.allocations?.[2]?.allocated || 0),
+              p3: Number(allocData.allocations?.[3]?.allocated || 0),
+              p4: Number(allocData.allocations?.[4]?.allocated || 0),
+              p5: Number(allocData.allocations?.[5]?.allocated || 0),
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch allocation from DB:', err);
+      }
     } catch (e) {
       console.error('Failed to load personal phase sale orders:', e);
     }
@@ -146,25 +207,54 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
-  // Compute token amounts for each vector
-  const totalTokens = Math.max(0, Number(allocation.totalTokensPurchased || 0));
+  // 1. Calculate orders per phase
+  const ordersP2 = saleOrders.filter((o) => Number(o.phaseNumber) === 2).reduce((s, o) => s + Number(o.amountTokens || 0), 0);
+  const ordersP3 = saleOrders.filter((o) => Number(o.phaseNumber) === 3).reduce((s, o) => s + Number(o.amountTokens || 0), 0);
+  const ordersP4 = saleOrders.filter((o) => Number(o.phaseNumber) === 4).reduce((s, o) => s + Number(o.amountTokens || 0), 0);
+  const ordersP5 = saleOrders.filter((o) => Number(o.phaseNumber) === 5).reduce((s, o) => s + Number(o.amountTokens || 0), 0);
+  const ordersTotalTokens = ordersP2 + ordersP3 + ordersP4 + ordersP5;
 
-  // The persisted per-phase token amounts are authoritative. Percentages are only
-  // a fallback for older accounts that do not yet have token-level allocation data.
-  const p2Tokens = Number(allocation.p2Tokens?.allocated ?? Math.round(totalTokens * ((allocation.p2Percent || 0) / 100)));
-  const p3Tokens = Number(allocation.p3Tokens?.allocated ?? Math.round(totalTokens * ((allocation.p3Percent || 0) / 100)));
-  const p4Tokens = Number(allocation.p4Tokens?.allocated ?? Math.round(totalTokens * ((allocation.p4Percent || 0) / 100)));
-  const p5Tokens = Number(allocation.p5Tokens?.allocated ?? Math.round(totalTokens * ((allocation.p5Percent || 0) / 100)));
-  const liveTokens = Number(allocation.liveTokens ?? Math.round(totalTokens * ((allocation.dexPercent || 0) / 100)));
+  // 2. Compute authoritative total token amount
+  const propTotalTokens = Math.max(0, Number(allocation?.totalTokensPurchased || 0));
+  const dbTotalTokens = Math.max(0, Number(dbAllocation?.totalPurchasedTokens || 0));
+  const totalTokens = Math.max(propTotalTokens, dbTotalTokens, ordersTotalTokens);
 
-  // Projected values are based on the actual allocated token quantities, not
-  // percentages. This prevents the Assets page from showing $0 when allocation
-  // token records exist but percentage fields are stale/legacy.
+  // 3. Compute per-phase token quantities dynamically
+  const p2Tokens = ordersP2 > 0 
+    ? ordersP2 
+    : (dbAllocation.p2 > 0 
+      ? dbAllocation.p2 
+      : Number(allocation?.p2Tokens?.allocated ?? Math.round(totalTokens * ((allocation?.p2Percent || 20) / 100))));
+
+  const p3Tokens = ordersP3 > 0 
+    ? ordersP3 
+    : (dbAllocation.p3 > 0 
+      ? dbAllocation.p3 
+      : Number(allocation?.p3Tokens?.allocated ?? Math.round(totalTokens * ((allocation?.p3Percent || 30) / 100))));
+
+  const p4Tokens = ordersP4 > 0 
+    ? ordersP4 
+    : (dbAllocation.p4 > 0 
+      ? dbAllocation.p4 
+      : Number(allocation?.p4Tokens?.allocated ?? Math.round(totalTokens * ((allocation?.p4Percent || 20) / 100))));
+
+  const p5Tokens = ordersP5 > 0 
+    ? ordersP5 
+    : (dbAllocation.p5 > 0 
+      ? dbAllocation.p5 
+      : Number(allocation?.p5Tokens?.allocated ?? Math.round(totalTokens * ((allocation?.p5Percent || 15) / 100))));
+
+  const liveTokens = dbAllocation.liveHoldTokens > 0
+    ? dbAllocation.liveHoldTokens
+    : Number(allocation?.liveTokens ?? Math.round(totalTokens * ((allocation?.dexPercent || 15) / 100)));
+
+  // 4. Accurate Phase & DEX Projected Valuations ($1,500.00 Target DEX Price)
+  const DEX_TARGET_PRICE = 1500.00;
   const p2Val = p2Tokens * 0.10;
   const p3Val = p3Tokens * 1.00;
   const p4Val = p4Tokens * 10.00;
   const p5Val = p5Tokens * 100.00;
-  const liveVal = 0;
+  const liveVal = liveTokens * DEX_TARGET_PRICE;
 
   const totalAllocatedUsd = p2Val + p3Val + p4Val + p5Val + liveVal;
   const initialCostUsd = totalTokens * 0.01;
@@ -176,10 +266,10 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
     p3: { rate: 1.00, label: 'Phase 3 ($1.00)', multiplier: '100x' },
     p4: { rate: 10.00, label: 'Phase 4 ($10.00)', multiplier: '1,000x' },
     p5: { rate: 100.00, label: 'Phase 5 ($100.00)', multiplier: '10,000x' },
-    live: { rate: 0, label: 'DEX / LIVE (Market Price)', multiplier: 'TBA' },
+    live: { rate: 1500.00, label: 'DEX / LIVE ($1,500.00)', multiplier: '150,000x' },
   };
 
-  const simCurrent = simRates[simTarget];
+  const simCurrent = simRates[simTarget] || simRates.p3;
   const simValuation = totalTokens * simCurrent.rate;
   const simGain = Math.max(0, simValuation - initialCostUsd);
   const simRoiPercent = initialCostUsd > 0 ? ((simValuation - initialCostUsd) / initialCostUsd) * 100 : 0;
@@ -313,19 +403,19 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
             </div>
 
             <div className="h-3 rounded-full bg-black/60 border border-white/10 overflow-hidden flex p-[1px]">
-              <div style={{ width: `${allocation.p2Percent || 0}%` }} title={`Phase 2: ${allocation.p2Percent || 0}%`} className="h-full bg-amber-400 transition-all" />
-              <div style={{ width: `${allocation.p3Percent || 0}%` }} title={`Phase 3: ${allocation.p3Percent || 0}%`} className="h-full bg-yellow-300 transition-all" />
-              <div style={{ width: `${allocation.p4Percent || 0}%` }} title={`Phase 4: ${allocation.p4Percent || 0}%`} className="h-full bg-cyan-400 transition-all" />
-              <div style={{ width: `${allocation.p5Percent || 0}%` }} title={`Phase 5: ${allocation.p5Percent || 0}%`} className="h-full bg-purple-400 transition-all" />
-              <div style={{ width: `${allocation.dexPercent || 0}%` }} title={`DEX / LIVE: ${allocation.dexPercent || 0}%`} className="h-full bg-emerald-400 transition-all" />
+              <div style={{ width: `${allocation.p2Percent ?? 20}%` }} title={`Phase 2: ${allocation.p2Percent ?? 20}%`} className="h-full bg-amber-400 transition-all" />
+              <div style={{ width: `${allocation.p3Percent ?? 30}%` }} title={`Phase 3: ${allocation.p3Percent ?? 30}%`} className="h-full bg-yellow-300 transition-all" />
+              <div style={{ width: `${allocation.p4Percent ?? 20}%` }} title={`Phase 4: ${allocation.p4Percent ?? 20}%`} className="h-full bg-cyan-400 transition-all" />
+              <div style={{ width: `${allocation.p5Percent ?? 15}%` }} title={`Phase 5: ${allocation.p5Percent ?? 15}%`} className="h-full bg-purple-400 transition-all" />
+              <div style={{ width: `${allocation.dexPercent ?? 15}%` }} title={`DEX / LIVE: ${allocation.dexPercent ?? 15}%`} className="h-full bg-emerald-400 transition-all" />
             </div>
 
             <div className="mt-1.5 grid grid-cols-5 gap-1 text-[7px] sm:text-[8px] font-mono-crypto text-center">
-              <div className="text-amber-300">P2 {allocation.p2Percent || 0}%</div>
-              <div className="text-yellow-300">P3 {allocation.p3Percent}%</div>
-              <div className="text-cyan-300">P4 {allocation.p4Percent}%</div>
-              <div className="text-purple-300">P5 {allocation.p5Percent}%</div>
-              <div className="text-emerald-300">DEX / LIVE {allocation.dexPercent}%</div>
+              <div className="text-amber-300">P2 {allocation.p2Percent ?? 20}%</div>
+              <div className="text-yellow-300">P3 {allocation.p3Percent ?? 30}%</div>
+              <div className="text-cyan-300">P4 {allocation.p4Percent ?? 20}%</div>
+              <div className="text-purple-300">P5 {allocation.p5Percent ?? 15}%</div>
+              <div className="text-emerald-300">DEX / LIVE {allocation.dexPercent ?? 15}%</div>
             </div>
           </div>
 
@@ -450,16 +540,11 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               const remaining = orders.length > 0 ? orderRemaining : allocated;
               const realized = Math.max(0, orders.reduce((sum, o) => sum + Number(o.realizedUsdt || 0), 0));
               const pending = Math.max(0, remaining * item.rate);
-              const phasePositions = orders
-                .map((o) => Number(o.phasePosition || 0))
-                .filter((n) => n > 0)
-                .sort((a, b) => a - b);
               const fifoNumbers = orders
                 .map((o) => Number(o.fifoNumber || 0))
                 .filter((n) => n > 0)
                 .sort((a, b) => a - b);
-              const positionText = phasePositions.length ? phasePositions.map((n) => `#${n}`).join(', ') : '—';
-              const fifoText = fifoNumbers.length ? fifoNumbers.map((n) => `#${n}`).join(', ') : '—';
+              const fifoText = fifoNumbers.length ? fifoNumbers.map((n) => `#${n}`).join(', ') : '0';
               const status = allocated <= 0
                 ? 'NO ALLOCATION'
                 : remaining <= 0 && sold > 0
@@ -481,7 +566,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                       {item.label}
                     </span>
                     <span className={`text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full ${badgeBg} ${text} font-bold`}>
-                      QUEUE {positionText}
+                      FIFO {fifoText}
                     </span>
                   </div>
 
@@ -492,11 +577,6 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                     <span className={`text-[8.5px] sm:text-[9.5px] font-mono-crypto ${text} font-semibold`}>
                       @ ${item.rate.toFixed(2)} Rate
                     </span>
-                    {fifoNumbers.length > 0 && (
-                      <span className="text-[7px] sm:text-[7.5px] font-mono-crypto text-slate-400 font-semibold block mt-0.5">
-                        Global FIFO {fifoText}
-                      </span>
-                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-x-2 gap-y-1 border-t border-white/10 pt-1.5 mt-1 text-[7.5px] sm:text-[8px] font-mono-crypto">
@@ -514,26 +594,34 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
             })}
 
             {/* DEX / LIVE — never part of FIFO */}
-            <div className="rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 border border-emerald-400/30 shadow-[0_0_15px_rgba(16,185,129,0.06)]">
-              <div className="flex items-center justify-between gap-1">
-                <span className="text-[10px] sm:text-[11px] font-black text-emerald-300 font-rajdhani uppercase tracking-wider block">
-                  DEX / LIVE
-                </span>
-                <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-emerald-400/15 text-emerald-300 font-bold border border-emerald-400/30">
-                  NO FIFO
-                </span>
+            <div className="rounded-[16px] bg-[#050b16]/80 text-left p-2.5 sm:p-3 border border-emerald-400/30 shadow-[0_0_15px_rgba(16,185,129,0.06)] flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[10px] sm:text-[11px] font-black text-emerald-300 font-rajdhani uppercase tracking-wider block">
+                    DEX / LIVE
+                  </span>
+                  <span className="text-[7.5px] font-mono-crypto px-1.5 py-0.5 rounded-full bg-emerald-400/15 text-emerald-300 font-bold border border-emerald-400/30">
+                    NO FIFO
+                  </span>
+                </div>
+                <div className="my-1 sm:my-1.5">
+                  <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block truncate">
+                    {showValues ? `${liveTokens.toLocaleString()} NXBC` : '••••'}
+                  </span>
+                  <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-emerald-300 font-semibold block truncate">
+                    @ $1,500.00 DEX Target Rate
+                  </span>
+                </div>
               </div>
-              <div className="my-1 sm:my-1.5">
-                <span className="text-xs sm:text-sm font-black font-mono-crypto text-white block truncate">
-                  {showValues ? `${liveTokens.toLocaleString()} NXBC` : '••••'}
-                </span>
-                <span className="text-[8.5px] sm:text-[9.5px] font-mono-crypto text-emerald-300 font-semibold block truncate">
-                  @ DEX / LIVE MARKET PRICE
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-1 border-t border-white/10 pt-1.5 mt-1 text-[7.5px] sm:text-[8px] font-mono-crypto">
-                <span className="text-slate-400">FIFO: <b className="text-emerald-300">—</b></span>
-                <span className="text-slate-400 text-right">Status: <b className="text-emerald-300">RESERVE</b></span>
+              <div>
+                <div className="grid grid-cols-2 gap-1 border-t border-white/10 pt-1.5 mt-1 text-[7.5px] sm:text-[8px] font-mono-crypto">
+                  <span className="text-slate-400">FIFO: <b className="text-emerald-300">—</b></span>
+                  <span className="text-slate-400 text-right">Status: <b className="text-emerald-300">RESERVE</b></span>
+                </div>
+                <div className="flex items-center justify-between border-t border-white/10 pt-1 mt-1 text-[7.5px] sm:text-[8px] font-mono-crypto">
+                  <span className="text-slate-400">Est. Target: <b className="text-emerald-300">${showValues ? liveVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '••'}</b></span>
+                  <span className="text-cyan-300 font-bold">DEX Launch</span>
+                </div>
               </div>
             </div>
           </div>
@@ -621,7 +709,6 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                     </span>
                     <span className="text-[8px] sm:text-[9px] text-slate-300 font-mono-crypto">
                       {totalOrders} orders • {totalQueuedTokens.toLocaleString()} NXBC queued
-                      {orders.length > 0 && ` • Running Global FIFO #${orders[0].fifoNumber}`}
                     </span>
                   </div>
 
@@ -642,7 +729,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                           }`}
                         >
                           <div className="flex items-center justify-between gap-2 text-[8px] sm:text-[9px] font-mono-crypto">
-                            <span className="text-white font-bold">Global FIFO #{o.fifoNumber} · Queue #{o.position} · {o.walletAddress}</span>
+                            <span className="text-white font-bold">#{o.position} {o.walletAddress}</span>
                             <span className="text-amber-300 font-bold">{o.remainingTokens.toLocaleString()} NXBC</span>
                           </div>
                           <div className="flex items-center justify-between mt-1 text-[7.5px] sm:text-[8px] font-mono-crypto text-slate-300">
@@ -679,15 +766,15 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                     <div key={o.id} className="rounded-[12px] border border-white/10 bg-[#071426]/60 p-2.5 text-[8px] font-mono-crypto space-y-2">
                       <div className="flex justify-between items-center">
                         <div>
-                          <span className="text-amber-300 font-bold">Phase {o.phaseNumber}</span> · Queue #{o.phasePosition || '—'} · Global FIFO #{o.fifoNumber || o.id}
+                          <span className="text-amber-300 font-bold">Phase {o.phaseNumber}</span> · FIFO #{o.fifoNumber || o.id}
                         </div>
                         <span className="text-emerald-300 font-bold">{o.status.toUpperCase()}</span>
                       </div>
                       <div className="grid grid-cols-2 gap-1 text-slate-300">
                         <span>Allocation: <b className="text-white">{o.amountTokens.toLocaleString()}</b></span>
                         <span>Remaining: <b className="text-amber-300">{o.remainingTokens.toLocaleString()}</b></span>
-                        <span>Global Running: <b className="text-cyan-300">#{o.currentRunningFifoNumber || '—'}</b></span>
-                        <span>Ahead: <b className="text-cyan-300">{o.ordersAhead ?? o.positionsAhead ?? 0} orders</b></span>
+                        <span>Running: <b className="text-cyan-300">#{o.currentRunningFifoNumber || '—'}</b></span>
+                        <span>Ahead: <b className="text-cyan-300">{o.positionsAhead ?? 0} orders</b></span>
                         <span>Price: <b className="text-emerald-300">${o.tokenPrice.toFixed(2)}</b></span>
                       </div>
                       {canInvite && (
@@ -752,7 +839,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                 <Users className="w-3.5 h-3.5" />
               </div>
               <div className="text-sm sm:text-base font-black font-mono-crypto text-white">
-                0 Directs / 0 Team
+                {teamStats.directCount} Directs / {teamStats.totalTeamCount} Team
               </div>
             </div>
 
