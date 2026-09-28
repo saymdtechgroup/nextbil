@@ -188,6 +188,7 @@ export default function App() {
     }
     return 0;
   });
+  const [rankRewardIncomeUsd, setRankRewardIncomeUsd] = useState<number>(0);
   const [totalInvestedUsd, setTotalInvestedUsd] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('nxbc_total_invested');
@@ -272,6 +273,21 @@ export default function App() {
       window.removeEventListener('popstate', checkAdminUrl);
       clearInterval(interval);
     };
+  }, []);
+
+  // Capture referral/sponsor code from URL (e.g. ?ref=REF123456 or ?ref=0x...)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const refParam = urlParams.get('ref') || urlParams.get('r') || urlParams.get('referral');
+        if (refParam && refParam.trim()) {
+          const cleanRef = refParam.trim().toUpperCase();
+          localStorage.setItem('nxbc_sponsor_ref', cleanRef);
+          console.log('[REFERRAL] Captured sponsor code from invite link:', cleanRef);
+        }
+      } catch {}
+    }
   }, []);
 
   // Public live presale state. Phase price/supply/sold/remaining/status are
@@ -391,22 +407,6 @@ export default function App() {
     };
     window.addEventListener('storage', handleStorageEvent);
     return () => window.removeEventListener('storage', handleStorageEvent);
-  }, []);
-
-  // Capture referral links before wallet registration. Supports both /ref/CODE and ?ref=CODE.
-  // Never overwrite an already-captured sponsor in this browser. The backend also treats sponsor attribution as first-write-only.
-  useEffect(() => {
-    try {
-      const url = new URL(window.location.href);
-      const pathMatch = url.pathname.match(/^\/ref\/([^/]+)\/?$/i);
-      const queryRef = url.searchParams.get('ref');
-      const ref = (pathMatch?.[1] || queryRef || '').trim();
-      if (!ref) return;
-      if (!/^[A-Za-z0-9_-]{3,64}$/.test(ref)) return;
-      if (!localStorage.getItem('nxbc_sponsor_ref')) {
-        localStorage.setItem('nxbc_sponsor_ref', ref.toUpperCase());
-      }
-    } catch {}
   }, []);
 
   // Sync user with PostgreSQL backend when wallet connects
@@ -712,6 +712,7 @@ export default function App() {
           setClaimableBalanceUsd(Number(data.user.availableUsdt || 0));
           setLevelIncomeUsd(Number(data.levelIncomeUsdt || 0));
           setMatrixIncomeUsd(Number(data.matrixIncomeUsdt || 0));
+          setRankRewardIncomeUsd(Number(data.rankRewardUsdt || 0));
           setUserEarnings((prev) => ({
             ...prev,
             availableUsdt: Number(data.user.availableUsdt || 0),
@@ -916,6 +917,7 @@ export default function App() {
         phaseIndex: currentP.phaseNumber,
         txHash,
         directBuyerInviteToken: directBuyerInviteToken || undefined,
+        referredBy: (typeof window !== 'undefined' ? localStorage.getItem('nxbc_sponsor_ref') : null) || undefined,
       }),
     });
 
@@ -1750,6 +1752,8 @@ export default function App() {
                   totalInvestedUsd={totalInvestedUsd}
                   minMlmQualifyUsd={systemConfig.minMlmQualifyUsd || 100}
                   onOpenBuyModal={() => setBuyModalOpen(true)}
+                  walletAddress={walletAddress}
+                  referralCode={userRefCode}
                 />
               )}
 
@@ -1762,6 +1766,7 @@ export default function App() {
                   allocation={allocation}
                   levelIncomeUsd={levelIncomeUsd}
                   matrixIncomeUsd={matrixIncomeUsd}
+                  rankRewardIncomeUsd={rankRewardIncomeUsd}
                   withdrawalFeePercent={systemConfig.withdrawalFeePercent}
                   transactions={transactions}
                   onWithdraw={handleWithdraw}
@@ -1780,7 +1785,6 @@ export default function App() {
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
                   totalInvestedUsd={totalInvestedUsd}
                   minMlmQualifyUsd={systemConfig.minMlmQualifyUsd || 100}
-                  referralCode={userRefCode}
                   onResetAllData={handleResetAllData}
                   onOpenAdmin={() => setShowSecretAdminPage(true)}
                 />
@@ -1822,7 +1826,7 @@ export default function App() {
                 screenTitle="Screen 1: Coin Acquisition"
                 badgeText="Plan Sell-Through"
                 badgeColor="gold"
-                url="nxbc.tech"
+                url="nxbc.network"
                 isHero={false}
               >
                 <ScreenOneAcquisition
@@ -1862,7 +1866,7 @@ export default function App() {
                 screenTitle="Screen 2: Assets & 6-Box Grid"
                 badgeText="6 Phase Vectors"
                 badgeColor="magenta"
-                url="nxbc.tech/assets"
+                url="nxbc.network/assets"
                 isHero={true}
               >
                 <ScreenTwoAssets
@@ -1892,7 +1896,7 @@ export default function App() {
                 screenTitle="Screen 3: Instant Withdrawal"
                 badgeText="Hot Multi-Sig"
                 badgeColor="purple"
-                url="nxbc.tech/wallet"
+                url="nxbc.network/wallet"
                 isHero={false}
               >
                 <ScreenThreeWallet
