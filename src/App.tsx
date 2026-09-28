@@ -741,19 +741,80 @@ export default function App() {
           // Optionally calculate matrix specific income from earnings if needed, 
           // For now we map totalEarned to a mix or keep them separate.
           
-          if (data.transactions) {
-            const mappedTxs = data.transactions.map((t: any) => ({
-              id: `tx-${t.id}`,
-              type: t.type === 'buy_presale' ? 'buy' : 'income',
-              title: t.type === 'buy_presale' ? `Purchase (${t.tokenAmount} NXBC)` : 'Income',
-              amountTokens: t.tokenAmount,
-              amountUsd: t.amountUsdt,
-              timestamp: new Date(t.createdAt).toLocaleString(),
-              status: t.status,
-              txHash: t.txHash || '',
-              phase: `Phase ${t.phaseIndex}`
-            }));
-            setTransactions(mappedTxs);
+          const combinedHistory: Transaction[] = [];
+
+          if (Array.isArray(data.transactions)) {
+            data.transactions.forEach((t: any) => {
+              let title = 'Transaction';
+              let txType: Transaction['type'] = 'buy';
+              if (t.type === 'buy_presale') {
+                title = `Presale Purchase (${Number(t.tokenAmount || 0).toLocaleString()} NXBC)`;
+                txType = 'buy';
+              } else if (t.type === 'withdrawal') {
+                title = `USDT Withdrawal Payout`;
+                txType = 'withdrawal';
+              } else if (t.type === 'token_sell_settlement' || t.type === 'p2p_sell') {
+                title = `Phase Auto-Sell Settlement`;
+                txType = 'token_sell_settlement';
+              } else {
+                title = t.type ? String(t.type).replace(/_/g, ' ').toUpperCase() : 'Activity';
+                txType = 'income';
+              }
+
+              combinedHistory.push({
+                id: `tx-${t.id}`,
+                type: txType,
+                title,
+                amountTokens: Number(t.tokenAmount || 0),
+                amountUsd: Number(t.amountUsdt || 0),
+                timestamp: t.createdAt ? new Date(t.createdAt).toLocaleString() : 'Recent',
+                status: t.status || 'completed',
+                txHash: t.txHash || '',
+                phase: t.phaseIndex ? `Phase ${t.phaseIndex}` : undefined,
+              });
+            });
+          }
+
+          if (Array.isArray(data.earnings)) {
+            data.earnings.forEach((e: any) => {
+              const comm = Number(e.commissionUsdt || 0);
+              if (comm <= 0) return;
+              let title = 'Commission Credit';
+              let txType: Transaction['type'] = 'referral_bonus';
+
+              if (e.txType === 'token_purchase') {
+                if (Number(e.levelNumber) === 0) {
+                  title = `Direct Sponsor Bonus (10%)`;
+                  txType = 'referral_bonus';
+                } else {
+                  title = `Generation ${e.levelNumber} Level Income (${e.percentage}%)`;
+                  txType = 'referral_bonus';
+                }
+              } else if (e.txType === 'matrix_join') {
+                title = `2x2 Matrix Placement Income (Level ${e.levelNumber})`;
+                txType = 'matrix_spillover';
+              } else if (e.txType === 'rank_reward') {
+                title = `Leadership Rank Achievement Reward`;
+                txType = 'referral_bonus';
+              }
+
+              combinedHistory.push({
+                id: `earn-${e.id}`,
+                type: txType,
+                title,
+                amountUsd: comm,
+                timestamp: e.createdAt ? new Date(e.createdAt).toLocaleString() : 'Recent',
+                status: 'completed',
+                txHash: '',
+              });
+            });
+          }
+
+          // Sort by timestamp descending
+          combinedHistory.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          setTransactions(combinedHistory);
+          if (typeof window !== 'undefined') {
+            try { localStorage.setItem('nxbc_transactions', JSON.stringify(combinedHistory)); } catch {}
           }
         }
       } catch (err) {
