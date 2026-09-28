@@ -668,81 +668,115 @@ async function finalizeConfirmedPurchase(
       // --- END VOLUME & RANK REWARD ---
 
       // Direct Sponsor (10%) & 10-Level Commission Distribution Logic
-      const commissionBaseAmount = purchaseUsdt;
-      let liveSystemConfig: any = {};
-      let liveReferralLevels: any[] = [];
-      try {
-        const rows = await db.select().from(systemConfigs);
-        const byKey: Record<string, any> = {};
-        for (const row of rows) { try { byKey[row.key] = JSON.parse(row.value); } catch { byKey[row.key] = row.value; } }
-        liveSystemConfig = byKey.systemConfig || {};
-        liveReferralLevels = Array.isArray(byKey.referralLevels) ? byKey.referralLevels : [];
-      } catch {}
-      const directSponsorRate = Math.max(0, Number(liveSystemConfig.directSponsorPercent ?? 10)) / 100;
-      const levelPercentages = Array.from({ length: 10 }, (_, i) => {
-        const configured = liveReferralLevels.find((l: any) => Number(l.level) === i + 1);
-        return Math.max(0, Number(configured?.commissionPercent ?? 0)) / 100;
-      });
-
-      // 1. Direct Sponsor Bonus (10% on every purchase)
-      if (user.referredBy) {
-        const directSponsor = await db.query.users.findFirst({
-          where: eq(users.referralCode, user.referredBy),
+      // STRICT QUALIFICATION RULE:
+      // Buyer (User B) must have cumulative investment >= $100 (isNowMlmQualified) to trigger MLM & Matrix commissions.
+      // Sponsor / Upline (User A) must also have cumulative investment >= $100 to receive commissions (Dynamic Compression / Pass-up).
+      if (isNowMlmQualified) {
+        const commissionBaseAmount = wasMlmQualified ? purchaseUsdt : newInvested;
+        let liveSystemConfig: any = {};
+        let liveReferralLevels: any[] = [];
+        try {
+          const rows = await db.select().from(systemConfigs);
+          const byKey: Record<string, any> = {};
+          for (const row of rows) { try { byKey[row.key] = JSON.parse(row.value); } catch { byKey[row.key] = row.value; } }
+          liveSystemConfig = byKey.systemConfig || {};
+          liveReferralLevels = Array.isArray(byKey.referralLevels) ? byKey.referralLevels : [];
+        } catch {}
+        const directSponsorRate = Math.max(0, Number(liveSystemConfig.directSponsorPercent ?? 10)) / 100;
+        const levelPercentages = Array.from({ length: 10 }, (_, i) => {
+          const configured = liveReferralLevels.find((l: any) => Number(l.level) === i + 1);
+          return Math.max(0, Number(configured?.commissionPercent ?? 0)) / 100;
         });
 
-        if (directSponsor) {
-          const sponsorBonusAmount = commissionBaseAmount * directSponsorRate;
-          if (sponsorBonusAmount > 0) {
+        // 1. Direct Sponsor Bonus (10% on every purchase) with Pass-up / Dynamic Compression
+        if (user.referredBy) {
+          let sponsorSearchCode: string | null = user.referredBy;
+          let qualifiedSponsor: any = null;
+
+          while (sponsorSearchCode) {
+            const spCandidate = await db.query.users.findFirst({
+              where: eq(users.referralCode, sponsorSearchCode),
+            });
+            if (!spCandidate) break;
+
+            const isCandidateQualified = Boolean(spCandidate.isMlmQualified) || (Number(spCandidate.totalInvestedUsdt || 0) >= liveQualificationUsd);
+            if (isCandidateQualified) {
+              qualifiedSponsor = spCandidate;
+              break;
+            }
+            // If direct sponsor has < $100, pass up to the next upline
+            sponsorSearchCode = spCandidate.referredBy;
+          }
+
+          if (qualifiedSponsor) {
+            const sponsorBonusAmount = commissionBaseAmount * directSponsorRate;
+            if (sponsorBonusAmount > 0) {
+              await db.insert(levelEarnings).values({
+                beneficiaryId: qualifiedSponsor.id,
+                sourceUserId: user.id,
+                levelNumber: 0, // 0 indicates Direct Sponsor
+                percentage: directSponsorRate * 100,
+                commissionUsdt: sponsorBonusAmount,
+                txType: 'token_purchase',
+              });
+
+              await db.update(users)
+                .set({
+                  totalEarnedUsdt: qualifiedSponsor.totalEarnedUsdt + sponsorBonusAmount,
+                  availableUsdt: qualifiedSponsor.availableUsdt + sponsorBonusAmount,
+                  updatedAt: new Date(),
+                })
+                .where(eq(users.id, qualifiedSponsor.id));
+            }
+          }
+        }
+        
+        // 2. 10-Level Unilevel Commissions with Qualified Dynamic Compression
+        let currentSponsorCode = user.referredBy;
+        for (let lvl = 0; lvl < levelPercentages.length && currentSponsorCode; lvl++) {
+          let qualifiedUpline: any = null;
+
+          while (currentSponsorCode) {
+            const uplineCandidate = await db.query.users.findFirst({
+              where: eq(users.referralCode, currentSponsorCode),
+            });
+            if (!uplineCandidate) {
+              currentSponsorCode = null;
+              break;
+            }
+
+            const isQualified = Boolean(uplineCandidate.isMlmQualified) || (Number(uplineCandidate.totalInvestedUsdt || 0) >= liveQualificationUsd);
+            currentSponsorCode = uplineCandidate.referredBy; // advance pointer for next iteration
+
+            if (isQualified) {
+              qualifiedUpline = uplineCandidate;
+              break;
+            }
+            // If upline candidate is not qualified (< $100), compress and check the next one above
+          }
+
+          if (!qualifiedUpline) break;
+
+          const commissionAmount = commissionBaseAmount * levelPercentages[lvl];
+          if (commissionAmount > 0) {
             await db.insert(levelEarnings).values({
-              beneficiaryId: directSponsor.id,
+              beneficiaryId: qualifiedUpline.id,
               sourceUserId: user.id,
-              levelNumber: 0, // 0 indicates Direct Sponsor
-              percentage: directSponsorRate * 100,
-              commissionUsdt: sponsorBonusAmount,
+              levelNumber: lvl + 1,
+              percentage: levelPercentages[lvl] * 100,
+              commissionUsdt: commissionAmount,
               txType: 'token_purchase',
             });
 
             await db.update(users)
               .set({
-                totalEarnedUsdt: directSponsor.totalEarnedUsdt + sponsorBonusAmount,
-                availableUsdt: directSponsor.availableUsdt + sponsorBonusAmount,
+                totalEarnedUsdt: qualifiedUpline.totalEarnedUsdt + commissionAmount,
+                availableUsdt: qualifiedUpline.availableUsdt + commissionAmount,
                 updatedAt: new Date(),
               })
-              .where(eq(users.id, directSponsor.id));
+              .where(eq(users.id, qualifiedUpline.id));
           }
         }
-      }
-      
-      // 2. 10-Level Unilevel Commissions (L1: 5%, L2: 3%, L3-5: 1%, L6-10: 0.5%)
-      let currentSponsorCode = user.referredBy;
-      for (let lvl = 0; lvl < levelPercentages.length && currentSponsorCode; lvl++) {
-        const uplineUser = await db.query.users.findFirst({
-          where: eq(users.referralCode, currentSponsorCode),
-        });
-
-        if (!uplineUser) break;
-
-        const commissionAmount = commissionBaseAmount * levelPercentages[lvl];
-        if (commissionAmount > 0) {
-          await db.insert(levelEarnings).values({
-            beneficiaryId: uplineUser.id,
-            sourceUserId: user.id,
-            levelNumber: lvl + 1,
-            percentage: levelPercentages[lvl] * 100,
-            commissionUsdt: commissionAmount,
-            txType: 'token_purchase',
-          });
-
-          await db.update(users)
-            .set({
-              totalEarnedUsdt: uplineUser.totalEarnedUsdt + commissionAmount,
-              availableUsdt: uplineUser.availableUsdt + commissionAmount,
-              updatedAt: new Date(),
-            })
-            .where(eq(users.id, uplineUser.id));
-        }
-
-        currentSponsorCode = uplineUser.referredBy;
       }
 
       // --- START AUTO-PLACEMENT AND MATRIX LOGIC ---
@@ -761,9 +795,9 @@ async function finalizeConfirmedPurchase(
         }
       }
 
-      // 2. BFS Matrix Tree Auto-Placement (Ensure user is placed into 2x2 Matrix)
+      // 2. BFS Matrix Tree Auto-Placement (Only qualified >= $100 users are placed into 2x2 Matrix)
       const existingUserNode = await db.query.matrixNodes.findFirst({ where: eq(matrixNodes.userId, user.id) });
-      if (!existingUserNode) {
+      if (!existingUserNode && isNowMlmQualified) {
         let sponsorNodeId = null;
         if (user.referredBy) {
           const sp = await db.query.users.findFirst({ where: eq(users.referralCode, user.referredBy) });
@@ -817,7 +851,7 @@ async function finalizeConfirmedPurchase(
 
         await db.update(users).set({ isMatrixActive: true, matrixLevel: 1 }).where(eq(users.id, user.id));
 
-        // 3. Matrix Placement Income Distribution Upward ($1.00 for Direct Level 1, $0.10 for Levels 2-10)
+        // 3. Matrix Placement Income Distribution Upward to QUALIFIED Uplines (>= $100)
         let matrixConfig: any = { placementIncomeUsd: 1, uplineSharePercent: 100, enabled: true };
         try {
           const matrixRow = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'matrixConfig') });
@@ -832,7 +866,8 @@ async function finalizeConfirmedPurchase(
            if (!parentMatrixNode) break;
            
            const uplineUser = await db.query.users.findFirst({ where: eq(users.id, parentMatrixNode.userId) });
-           if (uplineUser) {
+           const isUplineQualified = uplineUser && (Boolean(uplineUser.isMlmQualified) || Number(uplineUser.totalInvestedUsdt || 0) >= liveQualificationUsd);
+           if (uplineUser && isUplineQualified) {
               const mIncomeUsd = matrixLvl === 1 ? baseMatrixIncome : Number((baseMatrixIncome * 0.10).toFixed(2));
               await db.insert(levelEarnings).values({
                 beneficiaryId: uplineUser.id,
