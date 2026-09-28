@@ -849,61 +849,75 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                             </div>
                           ) : (
                             <div className="space-y-1.5">
-                              {level.list.map((member: any, mIdx: number) => (
-                                <div
-                                  key={`mat-node-${member.userId || mIdx}`}
-                                  className="p-2.5 rounded-xl bg-[#081426] border border-cyan-500/10 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono-crypto hover:border-cyan-400/30 transition-colors"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <span className="px-1.5 py-0.5 rounded bg-cyan-900/60 text-cyan-300 font-bold border border-cyan-700/60">
-                                      Slot #{member.position || (mIdx + 1)}
-                                    </span>
-                                    <span className="font-bold text-slate-200">
-                                      {String(member.walletAddress || '').slice(0, 8)}...{String(member.walletAddress || '').slice(-6)}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        void navigator.clipboard.writeText(member.walletAddress || '');
-                                        setCopiedAddress(member.walletAddress || '');
-                                        setTimeout(() => setCopiedAddress(''), 2000);
-                                      }}
-                                      className="p-1 text-cyan-400 hover:text-white transition-colors"
-                                      title="Copy wallet address"
+                                {level.list.map((member: any, mIdx: number) => {
+                                  const rewardAmt = Number(
+                                    (member.matrixEarnedUsdt > 0 ? member.matrixEarnedUsdt : 0) ||
+                                    (level.members > 0 ? (level.income / level.members) : 0) ||
+                                    0.10
+                                  );
+                                  return (
+                                    <div
+                                      key={`mat-node-${member.userId || mIdx}`}
+                                      className="p-2.5 rounded-xl bg-[#081426] border border-cyan-500/15 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono-crypto hover:border-cyan-400/40 transition-colors shadow-sm"
                                     >
-                                      {copiedAddress === member.walletAddress ? (
-                                        <Check className="w-3 h-3 text-emerald-400" />
-                                      ) : (
-                                        <Copy className="w-3 h-3" />
-                                      )}
-                                    </button>
-                                  </div>
-
-                                  <div className="flex items-center gap-4 text-right">
-                                    {member.parentWalletAddress && (
-                                      <div>
-                                        <span className="text-[8px] text-cyan-400/70 block uppercase">Placed Under</span>
-                                        <span className="text-cyan-300">
-                                          {String(member.parentWalletAddress).slice(0, 6)}...{String(member.parentWalletAddress).slice(-4)}
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="px-1.5 py-0.5 rounded bg-cyan-900/80 text-cyan-300 font-bold border border-cyan-700/80">
+                                          Slot #{member.position || (mIdx + 1)}
+                                        </span>
+                                        <span className="font-bold text-slate-200">
+                                          {String(member.walletAddress || '').slice(0, 8)}...{String(member.walletAddress || '').slice(-6)}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            void navigator.clipboard.writeText(member.walletAddress || '');
+                                            setCopiedAddress(member.walletAddress || '');
+                                            setTimeout(() => setCopiedAddress(''), 2000);
+                                          }}
+                                          className="p-1 text-cyan-400 hover:text-white transition-colors"
+                                          title="Copy wallet address"
+                                        >
+                                          {copiedAddress === member.walletAddress ? (
+                                            <Check className="w-3 h-3 text-emerald-400" />
+                                          ) : (
+                                            <Copy className="w-3 h-3" />
+                                          )}
+                                        </button>
+                                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
+                                          member.isDirectSponsor
+                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-400/30'
+                                            : 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/30'
+                                        }`}>
+                                          {member.isDirectSponsor ? 'Direct Referral' : 'Auto Spillover'}
                                         </span>
                                       </div>
-                                    )}
-                                    <div>
-                                      <span className="text-[8px] text-cyan-400/70 block uppercase">Package</span>
-                                      <span className="font-bold text-amber-300">
-                                        ${Number(member.totalInvestedUsdt || 0).toLocaleString()} USD
-                                      </span>
+
+                                      <div className="flex items-center gap-3 sm:gap-4 text-right flex-wrap sm:flex-nowrap">
+                                        {member.parentWalletAddress && (
+                                          <div className="bg-cyan-950/70 px-2 py-0.5 rounded border border-cyan-500/20">
+                                            <span className="text-[8px] text-cyan-400/80 block uppercase font-bold">Placed Under</span>
+                                            <span className="text-cyan-300 font-mono-crypto">
+                                              {String(member.parentWalletAddress).slice(0, 6)}...{String(member.parentWalletAddress).slice(-4)}
+                                            </span>
+                                          </div>
+                                        )}
+                                        <div>
+                                          <span className="text-[8px] text-cyan-400/70 block uppercase">Package</span>
+                                          <span className="font-bold text-amber-300">
+                                            ${Number(member.totalInvestedUsdt || 0).toLocaleString()} USD
+                                          </span>
+                                        </div>
+                                        <div className="bg-emerald-500/15 px-2.5 py-1 rounded-lg border border-emerald-400/30">
+                                          <span className="text-[8px] text-emerald-400 block uppercase font-black">Placement Reward</span>
+                                          <span className="font-black text-emerald-300 text-xs">
+                                            +${rewardAmt.toFixed(2)} USDT
+                                          </span>
+                                        </div>
+                                      </div>
                                     </div>
-                                    <div>
-                                      <span className="text-[8px] text-cyan-400/70 block uppercase">Matrix Reward</span>
-                                      <span className="font-bold text-emerald-400">
-                                        +${Number(member.commissionEarnedUsdt || 1.0).toFixed(2)} USD
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
+                                  );
+                                })}
                             </div>
                           )}
                         </div>

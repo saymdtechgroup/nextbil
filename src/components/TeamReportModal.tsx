@@ -450,15 +450,23 @@ export const TeamReportModal: React.FC<TeamReportModalProps> = ({
                             ${Number(member.totalInvestedUsdt || 0).toLocaleString()} USD
                           </td>
                           <td className="py-3 px-3.5 text-right font-bold text-emerald-400">
-                            +${Number(
-                              (member.commissionEarnedUsdt || 0) > 0
-                                ? member.commissionEarnedUsdt
-                                : ((member.directEarnedUsdt || 0) + (member.levelEarnedUsdt || 0) + (member.matrixEarnedUsdt || 0))
-                            ).toFixed(2)} USD
-                            {Number(member.directEarnedUsdt || 0) > 0 && (
-                              <span className="block text-[8px] text-amber-400/90 font-normal">
-                                Sponsor (10%): +${Number(member.directEarnedUsdt).toFixed(2)}
+                            {activeTab === 'matrix' ? (
+                              <span>
+                                +${Number(member.matrixEarnedUsdt > 0 ? member.matrixEarnedUsdt : (member.commissionEarnedUsdt > 0 ? member.commissionEarnedUsdt : 0.10)).toFixed(2)} USD
                               </span>
+                            ) : (
+                              <>
+                                +${Number(
+                                  (member.commissionEarnedUsdt || 0) > 0
+                                    ? member.commissionEarnedUsdt
+                                    : ((member.directEarnedUsdt || 0) + (member.levelEarnedUsdt || 0) + (member.matrixEarnedUsdt || 0))
+                                ).toFixed(2)} USD
+                                {Number(member.directEarnedUsdt || 0) > 0 && (
+                                  <span className="block text-[8px] text-amber-400/90 font-normal">
+                                    Sponsor (10%): +${Number(member.directEarnedUsdt).toFixed(2)}
+                                  </span>
+                                )}
+                              </>
                             )}
                           </td>
                           <td className="py-3 px-3.5 text-center">
@@ -536,15 +544,21 @@ export const TeamReportModal: React.FC<TeamReportModalProps> = ({
                           </span>
                         </div>
                         <div className="text-right">
-                          <span className="text-cyan-400/70 block text-[9px] uppercase">Your Commission</span>
-                          <span className="font-bold text-emerald-400">
-                            +${Number(
-                              (member.commissionEarnedUsdt || 0) > 0
-                                ? member.commissionEarnedUsdt
-                                : ((member.directEarnedUsdt || 0) + (member.levelEarnedUsdt || 0) + (member.matrixEarnedUsdt || 0))
-                            ).toFixed(2)} USD
+                          <span className="text-cyan-400/70 block text-[9px] uppercase">
+                            {activeTab === 'matrix' ? 'Placement Reward' : 'Your Commission'}
                           </span>
-                          {Number(member.directEarnedUsdt || 0) > 0 && (
+                          <span className="font-bold text-emerald-400">
+                            {activeTab === 'matrix' ? (
+                              `+$${Number(member.matrixEarnedUsdt > 0 ? member.matrixEarnedUsdt : (member.commissionEarnedUsdt > 0 ? member.commissionEarnedUsdt : 0.10)).toFixed(2)} USD`
+                            ) : (
+                              `+$${Number(
+                                (member.commissionEarnedUsdt || 0) > 0
+                                  ? member.commissionEarnedUsdt
+                                  : ((member.directEarnedUsdt || 0) + (member.levelEarnedUsdt || 0) + (member.matrixEarnedUsdt || 0))
+                              ).toFixed(2)} USD`
+                            )}
+                          </span>
+                          {activeTab !== 'matrix' && Number(member.directEarnedUsdt || 0) > 0 && (
                             <span className="block text-[8px] text-amber-400/90 font-normal">
                               Sponsor: +${Number(member.directEarnedUsdt).toFixed(2)}
                             </span>
