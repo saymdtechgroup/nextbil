@@ -35,7 +35,7 @@ export interface AllocationState {
 
 export interface Transaction {
   id: string;
-  type: 'buy' | 'allocation_lock' | 'withdrawal' | 'referral_bonus' | 'matrix_spillover' | 'token_sell_settlement' | 'token_transfer';
+  type: 'buy' | 'allocation_lock' | 'withdrawal' | 'referral_bonus' | 'matrix_spillover' | 'token_sell_settlement' | 'token_transfer' | 'income';
   walletType?: 'token_sell' | 'mlm' | 'main';
   title: string;
   amountTokens?: number;
