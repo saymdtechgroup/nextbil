@@ -755,10 +755,13 @@ export const BuyTokenModal: React.FC<Props> = ({
               >
                 <div className="flex justify-between items-center gap-3">
                   <div>
-                    <div className="text-xs font-black text-white flex items-center gap-1.5">
+                    <div className="text-xs font-black text-white flex items-center gap-1.5 flex-wrap">
                       <TrendingUp size={15} className="text-purple-400" />
                       DEX / LIVE Wallet Hold
-                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold">
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/40">
+                        $1,500.00
+                      </span>
+                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300/80 border border-purple-500/20 font-bold">
                         No FIFO Queue
                       </span>
                     </div>
@@ -768,6 +771,11 @@ export const BuyTokenModal: React.FC<Props> = ({
                     <div className="text-xs text-purple-300 font-mono font-black mt-1">
                       Receive: {fmt(parts.dex)} NXBC
                     </div>
+                    {parts.dex > 0 && (
+                      <div className="text-[9px] text-emerald-400 font-semibold mt-0.5">
+                        Est. Return: ${fmt(parts.dex * 1500)} USD
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-col items-end gap-1.5">
