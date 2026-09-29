@@ -61,6 +61,7 @@ type AdminSection =
   | 'overview'
   | 'phases'
   | 'sponsor'
+  | 'offer'
   | 'levels'
   | 'matrix'
   | 'ranks'
@@ -110,8 +111,22 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
   const [localSystem, setLocalSystem] = useState<AdminSystemConfig>(systemConfig);
   
   const [localMatrix, setLocalMatrix] = useState<MatrixConfig>(matrixConfig);
-  
-  
+
+  const [localOffer, setLocalOffer] = useState<{
+    active: boolean;
+    title: string;
+    subtitle: string;
+    targetDirectVolume: number;
+    rewardUsdt: number;
+    badgeText: string;
+  }>({
+    active: true,
+    title: "DAILY DIRECT SALE CHALLENGE",
+    subtitle: "Achieve $500.00 USD in Direct Sales today to unlock an instant $50.00 USDT Cash Bonus!",
+    targetDirectVolume: 500,
+    rewardUsdt: 50,
+    badgeText: "DAILY DIRECT CHALLENGE",
+  });
 
 
 
@@ -136,6 +151,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
         if (Array.isArray(data.rankRewards) && data.rankRewards.length) setLocalRanks(data.rankRewards);
         if (data.systemConfig && typeof data.systemConfig === 'object') setLocalSystem((prev) => ({ ...prev, ...data.systemConfig }));
         if (data.matrixConfig && typeof data.matrixConfig === 'object') setLocalMatrix(data.matrixConfig);
+        if (data.specialOffer && typeof data.specialOffer === 'object') setLocalOffer((prev) => ({ ...prev, ...data.specialOffer }));
       } catch (err) {
         console.error('[ADMIN] Failed to load live configuration:', err);
       }
@@ -377,6 +393,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
           rankRewards: localRanks,
           systemConfig: localSystem,
           matrixConfig: localMatrix,
+          specialOffer: localOffer,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -633,6 +650,18 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
           >
             <Sparkles className="w-4 h-4 text-amber-400" />
             <span>3. Direct Sponsor Income</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSection('offer')}
+            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-bold font-rajdhani uppercase tracking-wider transition-all w-full text-left whitespace-nowrap ${
+              activeSection === 'offer'
+                ? 'bg-gradient-to-r from-amber-500/20 to-amber-900/50 text-amber-300 border border-amber-400 shadow-md'
+                : 'text-purple-300 hover:text-slate-100 hover:bg-purple-950/40'
+            }`}
+          >
+            <Zap className="w-4 h-4 text-amber-400" />
+            <span>🔥 Daily Direct Challenge</span>
           </button>
 
           <button
@@ -1100,6 +1129,150 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                       The direct sponsor bonus is instantly credited to the user's claimable wallet balance and is available for immediate withdrawal.
                     </li>
                   </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* 🔥 DAILY DIRECT SALE CHALLENGE / OFFER WALL CONTROLS                      */}
+          {/* ========================================================================= */}
+          {activeSection === 'offer' && (
+            <div className="space-y-4">
+              <div className="pb-3 border-b border-purple-500/20 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-black text-amber-300 font-cinzel uppercase flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    🔥 Daily Direct Sale Challenge Controls
+                  </h3>
+                  <p className="text-[10px] text-purple-300 font-mono-crypto">
+                    Dynamically manage the active offer wall card, direct volume target, cash bonus reward, and status
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setLocalOffer({ ...localOffer, active: !localOffer.active })}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold font-rajdhani uppercase tracking-wider flex items-center gap-2 border transition-all cursor-pointer ${
+                    localOffer.active
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50'
+                      : 'bg-rose-500/20 text-rose-300 border-rose-400/50'
+                  }`}
+                >
+                  {localOffer.active ? (
+                    <>
+                      <ToggleRight className="w-5 h-5 text-emerald-400" />
+                      <span>CHALLENGE OFFER ACTIVE</span>
+                    </>
+                  ) : (
+                    <>
+                      <ToggleLeft className="w-5 h-5 text-rose-400" />
+                      <span>OFFER PAUSED / HIDDEN</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="p-5 rounded-3xl bg-[#120626] border-2 border-amber-500/30 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Challenge Title */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs uppercase text-amber-300 font-rajdhani font-bold block">
+                      Challenge Main Title
+                    </label>
+                    <input
+                      type="text"
+                      value={localOffer.title}
+                      onChange={(e) => setLocalOffer({ ...localOffer, title: e.target.value })}
+                      placeholder="e.g. DAILY DIRECT SALE CHALLENGE"
+                      className="w-full bg-[#06020c] border border-amber-500/50 focus:border-amber-400 rounded-xl py-2.5 px-3 text-xs font-bold font-mono-crypto text-white focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Badge Text */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs uppercase text-amber-300 font-rajdhani font-bold block">
+                      Badge Label Text
+                    </label>
+                    <input
+                      type="text"
+                      value={localOffer.badgeText || 'DAILY DIRECT CHALLENGE'}
+                      onChange={(e) => setLocalOffer({ ...localOffer, badgeText: e.target.value })}
+                      placeholder="e.g. DAILY DIRECT CHALLENGE"
+                      className="w-full bg-[#06020c] border border-amber-500/50 focus:border-amber-400 rounded-xl py-2.5 px-3 text-xs font-bold font-mono-crypto text-amber-300 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Target Direct Sales Volume */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs uppercase text-amber-300 font-rajdhani font-bold block">
+                      Target Direct Volume Requirement ($ USD)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-sm text-amber-400 font-bold">$</span>
+                      <input
+                        type="number"
+                        min="10"
+                        step="50"
+                        value={localOffer.targetDirectVolume}
+                        onChange={(e) => setLocalOffer({ ...localOffer, targetDirectVolume: parseFloat(e.target.value) || 0 })}
+                        className="w-full bg-[#06020c] border border-amber-500/50 focus:border-amber-400 rounded-xl py-2.5 pl-7 pr-3 text-sm font-black font-mono-crypto text-amber-300 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Reward USDT */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs uppercase text-emerald-400 font-rajdhani font-bold block">
+                      Instant Cash Reward Amount (+ $ USDT)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-sm text-emerald-400 font-bold">$</span>
+                      <input
+                        type="number"
+                        min="1"
+                        step="10"
+                        value={localOffer.rewardUsdt}
+                        onChange={(e) => setLocalOffer({ ...localOffer, rewardUsdt: parseFloat(e.target.value) || 0 })}
+                        className="w-full bg-[#06020c] border border-emerald-500/50 focus:border-emerald-400 rounded-xl py-2.5 pl-7 pr-3 text-sm font-black font-mono-crypto text-emerald-300 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Subtitle / Description */}
+                <div className="space-y-1.5">
+                  <label className="text-xs uppercase text-purple-300 font-rajdhani font-bold block">
+                    Challenge Subtitle / Instructions Description
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={localOffer.subtitle}
+                    onChange={(e) => setLocalOffer({ ...localOffer, subtitle: e.target.value })}
+                    placeholder="e.g. Achieve $500.00 USD in Direct Sales today to unlock an instant $50.00 USDT Cash Bonus!"
+                    className="w-full bg-[#06020c] border border-purple-500/40 focus:border-amber-400 rounded-xl p-3 text-xs font-mono-crypto text-slate-200 focus:outline-none"
+                  />
+                </div>
+
+                {/* Live Preview Box */}
+                <div className="p-4 rounded-2xl bg-[#070212] border border-amber-500/30 space-y-2">
+                  <h4 className="text-xs font-bold text-amber-300 uppercase font-rajdhani flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    Live Dashboard Display Preview
+                  </h4>
+                  <div className="p-3 rounded-xl bg-[#0a1526] border border-amber-400/40 font-mono-crypto text-xs space-y-1.5">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-amber-300 font-bold">{localOffer.badgeText || 'DAILY DIRECT CHALLENGE'}</span>
+                      <span className="text-emerald-300 font-black">+${(localOffer.rewardUsdt || 0).toFixed(2)} USDT</span>
+                    </div>
+                    <div className="text-white font-bold text-sm">{localOffer.title}</div>
+                    <p className="text-[10px] text-slate-300">{localOffer.subtitle}</p>
+                    <div className="text-[10px] text-amber-300">
+                      Requirement: Achieve ${(localOffer.targetDirectVolume || 0).toFixed(2)} USD in Direct Sales
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

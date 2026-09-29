@@ -19,6 +19,9 @@ import {
   RefreshCw,
   Activity,
   CheckCircle2,
+  Flame,
+  Trophy,
+  Copy,
 } from 'lucide-react';
 import { AllocationState, PhaseConfig, QueueEntry, UserEarnings } from '../types/crypto';
 import { GoldCoinGraphic } from './GoldCoinGraphic';
@@ -58,6 +61,43 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
     directCount: 0,
     totalTeamCount: 0,
   });
+  const [specialOffer, setSpecialOffer] = useState<{
+    id?: string;
+    active: boolean;
+    title: string;
+    subtitle: string;
+    targetDirectVolume: number;
+    rewardUsdt: number;
+    badgeText: string;
+  }>({
+    id: "offer_daily_500",
+    active: true,
+    title: "🔥 DAILY DIRECT SALE CHALLENGE",
+    subtitle: "Achieve $500 in Direct Sales & Claim $50 Instant USDT Cash Bonus!",
+    targetDirectVolume: 500,
+    rewardUsdt: 50,
+    badgeText: "LIMITED TIME ADMIN OFFER",
+  });
+  const [userDirectVol, setUserDirectVol] = useState<number>(0);
+  const [linkCopied, setLinkCopied] = useState<boolean>(false);
+
+  // Always fetch active special offer challenge on mount regardless of wallet connection
+  useEffect(() => {
+    const loadOffer = async () => {
+      try {
+        const res = await fetch('/api/public/special-offer', { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.offer) {
+            setSpecialOffer(data.offer);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load special offer on mount:', e);
+      }
+    };
+    loadOffer();
+  }, []);
   const [dbAllocation, setDbAllocation] = useState<{
     totalPurchasedTokens: number;
     liveHoldTokens: number;
@@ -118,7 +158,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
       const data = await r.json().catch(() => ({}));
       if (r.ok && data.success) setSaleOrders(Array.isArray(data.orders) ? data.orders : []);
 
-      // 2. Fetch live team stats for accurate directs and total team structure
+      // 2. Fetch live team stats & direct volume
       try {
         const teamRes = await fetch(`/api/team/${walletAddress}`, { cache: 'no-store' });
         if (teamRes.ok) {
@@ -130,9 +170,23 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
           }
           if (totalTeam === 0 && directs > 0) totalTeam = directs;
           setTeamStats({ directCount: directs, totalTeamCount: totalTeam });
+          setUserDirectVol(Number(teamData.leader?.totalDirectVolume || 0));
         }
       } catch (err) {
         console.warn('Failed to fetch team count for assets:', err);
+      }
+
+      // Fetch active special offer challenge
+      try {
+        const offerRes = await fetch('/api/public/special-offer', { cache: 'no-store' });
+        if (offerRes.ok) {
+          const offerData = await offerRes.json();
+          if (offerData.success && offerData.offer) {
+            setSpecialOffer(offerData.offer);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch special offer:', err);
       }
 
       // 3. Fetch user allocation & purchased tokens from DB
@@ -264,7 +318,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
 
   const totalAllocatedUsd = p2Val + p3Val + p4Val + p5Val + liveVal;
   const initialCostUsd = totalTokens * 0.01;
-  const projectedReturnUsd = Math.max(0, totalAllocatedUsd - initialCostUsd);
+  const projectedReturnUsd = totalAllocatedUsd;
 
   // Simulator rates & projected holding value
   const simRates: Record<string, { rate: number; label: string; multiplier: string }> = {
@@ -634,31 +688,106 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
         </div>
       </section>
 
-      {/* 4. TOTAL ALLOCATED VALUE BANNER */}
-      <section className="relative overflow-hidden rounded-[22px] border border-amber-400/35 bg-gradient-to-r from-[#081426] via-[#0d1c33] to-[#161007] p-3.5 sm:p-4 shadow-[0_0_28px_rgba(245,158,11,0.12)]">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-amber-300 font-rajdhani">
-              Total Projected Phase Sales Valuation
-            </span>
-            <div className="text-xl sm:text-2xl font-black font-mono-crypto text-white flex items-center gap-2 mt-0.5">
-              <span>{showValues ? `$${totalAllocatedUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '••••••'}</span>
-              <span className="text-[10px] sm:text-[11px] text-emerald-300 font-bold font-mono-crypto">
-                USD Est.
+      {/* 4. 🔥 DAILY DIRECT SALE CHALLENGE & OFFER WALL */}
+      {specialOffer && specialOffer.active && (
+        <section className="relative overflow-hidden rounded-[24px] border-2 border-amber-400/50 bg-[radial-gradient(circle_at_15%_15%,rgba(245,158,11,0.22),transparent_50%),linear-gradient(135deg,#091526_0%,#07101e_60%,#180e04_100%)] p-4 sm:p-5 shadow-[0_0_35px_rgba(245,158,11,0.2)]">
+          {/* Header Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-white/10">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <div className="w-10 h-10 shrink-0 rounded-2xl bg-gradient-to-br from-amber-400 via-yellow-400 to-amber-600 p-[1.5px] shadow-[0_0_20px_rgba(245,158,11,0.4)]">
+                <div className="w-full h-full bg-[#081220] rounded-[14px] flex items-center justify-center">
+                  <Flame className="w-5 h-5 text-amber-300 fill-amber-400 animate-pulse" />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-slate-950 font-rajdhani bg-gradient-to-r from-amber-400 to-yellow-300 px-2 py-0.5 rounded-full shadow-sm font-bold">
+                    {specialOffer.badgeText || "DAILY DIRECT CHALLENGE"}
+                  </span>
+                  <span className="text-[8px] text-emerald-300 font-mono-crypto font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-ping" /> AUTO-CREDIT ACTIVE
+                  </span>
+                </div>
+                <h2 className="text-sm sm:text-base font-black font-rajdhani uppercase tracking-wider text-white mt-1">
+                  {specialOffer.title}
+                </h2>
+              </div>
+            </div>
+
+            <div className="shrink-0 text-left sm:text-right bg-[#050b16]/70 sm:bg-transparent p-2 sm:p-0 rounded-xl border border-white/10 sm:border-0">
+              <span className="text-[8px] sm:text-[8.5px] text-slate-400 font-mono-crypto uppercase block">
+                INSTANT CASH REWARD
+              </span>
+              <span className="text-base sm:text-lg font-black font-mono-crypto text-emerald-300 gold-gradient-text">
+                +${specialOffer.rewardUsdt.toFixed(2)} USDT
               </span>
             </div>
-            <p className="text-[8px] sm:text-[9px] text-slate-300/80 font-mono-crypto mt-1">
-              Estimated total USDT revenue when your queued phase sell orders are fulfilled
-            </p>
           </div>
 
-          <div className="w-11 h-11 shrink-0 rounded-[14px] bg-gradient-to-br from-amber-400 via-yellow-300 to-amber-500 p-[1.5px] shadow-[0_0_18px_rgba(245,158,11,0.3)] flex items-center justify-center">
-            <div className="w-full h-full bg-[#071426] rounded-[13px] flex items-center justify-center text-amber-300">
-              <ArrowUpRight className="w-5 h-5" strokeWidth={2.5} />
+          <p className="text-[9px] sm:text-[10px] text-slate-300 font-mono-crypto my-3 leading-relaxed">
+            {specialOffer.subtitle}
+          </p>
+
+          {/* Interactive Progress Box */}
+          <div className="rounded-2xl bg-[#040813]/90 border border-amber-400/30 p-3 sm:p-3.5 space-y-2.5 shadow-inner">
+            <div className="flex items-center justify-between text-[9.5px] sm:text-[10.5px] font-mono-crypto">
+              <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                <span>Your Direct Sales Volume:</span>
+              </span>
+              <span className="text-amber-300 font-black text-xs">
+                ${userDirectVol.toFixed(2)} / ${specialOffer.targetDirectVolume.toFixed(2)} USD
+              </span>
+            </div>
+
+            {/* Glowing Custom Bar */}
+            <div className="w-full h-3.5 rounded-full bg-slate-950 border border-white/10 overflow-hidden relative p-0.5">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-500 via-yellow-300 to-emerald-400 transition-all duration-700 shadow-[0_0_15px_rgba(245,158,11,0.6)]"
+                style={{
+                  width: `${Math.min(100, (userDirectVol / Math.max(1, specialOffer.targetDirectVolume)) * 100)}%`,
+                }}
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-1 text-[8.5px] sm:text-[9px] font-mono-crypto pt-0.5">
+              <span className="text-slate-400">
+                Target Progress: <strong className="text-white">{Math.min(100, Math.round((userDirectVol / Math.max(1, specialOffer.targetDirectVolume)) * 100))}%</strong>
+              </span>
+
+              {userDirectVol >= specialOffer.targetDirectVolume ? (
+                <span className="text-emerald-300 font-bold flex items-center gap-1 bg-emerald-400/15 px-2.5 py-1 rounded-lg border border-emerald-400/40">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> TARGET ACHIEVED & $50 CREDITED TO WALLET!
+                </span>
+              ) : (
+                <span className="text-amber-300 font-bold bg-amber-400/10 px-2.5 py-1 rounded-lg border border-amber-400/30">
+                  ⚡ Need ${(specialOffer.targetDirectVolume - userDirectVol).toFixed(2)} more sales to unlock $50 USDT!
+                </span>
+              )}
             </div>
           </div>
-        </div>
-      </section>
+
+          {/* Quick Share Link Call-to-Action */}
+          <div className="mt-3 pt-2.5 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[8.5px] font-mono-crypto">
+            <span className="text-slate-300">
+              💡 Share your referral link with new buyers to achieve this target today!
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                const link = walletAddress ? `${window.location.origin}/?ref=${walletAddress}` : window.location.href;
+                navigator.clipboard?.writeText(link);
+                setLinkCopied(true);
+                setTimeout(() => setLinkCopied(false), 2000);
+              }}
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-[9px] font-mono-crypto uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer shrink-0"
+            >
+              <Copy className="w-3 h-3" />
+              <span>{linkCopied ? "Link Copied!" : "Copy Referral Link"}</span>
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* 5. GLOBAL FIFO EXECUTION QUEUE & TELEMETRY HUD */}
       <section className="relative overflow-hidden rounded-[22px] border border-cyan-400/25 bg-[radial-gradient(circle_at_20%_20%,rgba(6,182,212,0.06),transparent_30%),linear-gradient(135deg,#071426_0%,#06101c_65%,#050b16_100%)] shadow-[0_0_24px_rgba(6,182,212,0.06)]">
@@ -802,6 +931,72 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
         </div>
       </section>
 
+      {/* 🔥 ADMIN SPECIAL OFFER / DIRECT SALE CHALLENGE WALL */}
+      {specialOffer && specialOffer.active && (
+        <section className="relative overflow-hidden rounded-[22px] border border-amber-400/40 bg-[radial-gradient(circle_at_10%_20%,rgba(245,158,11,0.15),transparent_40%),linear-gradient(135deg,#0e1a2e_0%,#091221_60%,#1a0f05_100%)] p-3.5 sm:p-4 shadow-[0_0_30px_rgba(245,158,11,0.15)]">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-300 flex items-center justify-center text-slate-950 font-black shadow-[0_0_15px_rgba(245,158,11,0.4)]">
+                <Flame className="w-5 h-5 fill-slate-950 animate-bounce" />
+              </div>
+              <div>
+                <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-amber-300 font-rajdhani bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/30">
+                  {specialOffer.badgeText || "DIRECT SALE CHALLENGE"}
+                </span>
+                <h3 className="text-xs sm:text-sm font-black font-rajdhani uppercase tracking-wider text-white mt-0.5">
+                  {specialOffer.title}
+                </h3>
+              </div>
+            </div>
+            <div className="shrink-0 text-right">
+              <span className="text-[8px] text-slate-400 font-mono-crypto block">CASH REWARD</span>
+              <span className="text-sm sm:text-base font-black font-mono-crypto text-emerald-300">
+                +${specialOffer.rewardUsdt.toFixed(2)} USDT
+              </span>
+            </div>
+          </div>
+
+          <p className="text-[8.5px] sm:text-[9.5px] text-slate-300 font-mono-crypto mb-3">
+            {specialOffer.subtitle}
+          </p>
+
+          {/* Progress Bar & Target Tracker */}
+          <div className="rounded-xl bg-[#050b16]/80 border border-amber-400/20 p-2.5 sm:p-3 space-y-2">
+            <div className="flex items-center justify-between text-[9px] sm:text-[10px] font-mono-crypto">
+              <span className="text-slate-300 font-bold">Your Direct Sales Volume:</span>
+              <span className="text-amber-300 font-black">
+                ${userDirectVol.toFixed(2)} / ${specialOffer.targetDirectVolume.toFixed(2)} USD
+              </span>
+            </div>
+
+            {/* Custom Progress Bar */}
+            <div className="w-full h-3 rounded-full bg-slate-900 border border-white/10 overflow-hidden relative p-0.5">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-emerald-400 transition-all duration-500 shadow-[0_0_12px_rgba(245,158,11,0.5)]"
+                style={{
+                  width: `${Math.min(100, (userDirectVol / Math.max(1, specialOffer.targetDirectVolume)) * 100)}%`,
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-[8px] sm:text-[8.5px] font-mono-crypto pt-0.5">
+              <span className="text-slate-400">
+                Progress: <strong className="text-white">{Math.min(100, Math.round((userDirectVol / Math.max(1, specialOffer.targetDirectVolume)) * 100))}%</strong>
+              </span>
+              {userDirectVol >= specialOffer.targetDirectVolume ? (
+                <span className="text-emerald-300 font-bold flex items-center gap-1 bg-emerald-400/10 px-2 py-0.5 rounded-md border border-emerald-400/30">
+                  <CheckCircle2 className="w-3 h-3" /> TARGET COMPLETED & REWARD CREDITED!
+                </span>
+              ) : (
+                <span className="text-amber-300 font-bold">
+                  Need ${(specialOffer.targetDirectVolume - userDirectVol).toFixed(2)} more sales to unlock bonus!
+                </span>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* 6. COMMUNITY & YIELD ANALYTICS */}
       <section className="relative overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(135deg,#081426_0%,#07101c_65%,#050b16_100%)] p-3.5 sm:p-4">
         <div className="flex items-center justify-between mb-2.5">
@@ -830,7 +1025,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                 <path d="M0,20 Q25,18 45,10 T80,5 T100,2 L100,25 L0,25 Z" />
                 <path d="M0,20 Q25,18 45,10 T80,5 T100,2" fill="none" strokeWidth="2" />
               </svg>
-              <span className="text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto">Net profit above initial purchase cost</span>
+              <span className="text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto">Total gross USDT return from phase sales</span>
             </div>
           </div>
 
