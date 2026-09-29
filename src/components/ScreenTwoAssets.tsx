@@ -872,7 +872,8 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                       <table className="w-full text-[8.5px] font-mono-crypto text-left border-collapse">
                         <thead>
                           <tr className="border-b border-white/10 text-slate-400 uppercase text-[7.5px]">
-                            <th className="py-1 px-2"># Pos</th>
+                            <th className="py-1 px-2">Global #</th>
+                            <th className="py-1 px-2">FIFO #</th>
                             <th className="py-1 px-2">Wallet Address</th>
                             <th className="py-1 px-2">Queued Tokens</th>
                             <th className="py-1 px-2">Price</th>
@@ -886,13 +887,14 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                             return (
                               <tr key={o.id} className={isMine ? 'bg-amber-400/10 font-bold text-amber-300' : 'hover:bg-white/5 text-slate-200'}>
                                 <td className="py-1.5 px-2 font-bold text-cyan-300">#{o.position}</td>
+                                <td className="py-1.5 px-2 font-bold text-amber-300">FIFO #{o.fifoNumber || o.id}</td>
                                 <td className="py-1.5 px-2 font-bold">{o.walletAddress} {isMine && <span className="text-amber-400 text-[7px]">(YOU)</span>}</td>
                                 <td className="py-1.5 px-2 text-amber-300 font-bold">{o.remainingTokens.toLocaleString()} NXBC</td>
                                 <td className="py-1.5 px-2 text-emerald-300">${o.tokenPrice.toFixed(2)}</td>
                                 <td className="py-1.5 px-2 text-slate-300">{o.aheadTokens.toLocaleString()} NXBC</td>
                                 <td className="py-1.5 px-2">
                                   <span className="px-1.5 py-0.5 rounded text-[7px] bg-emerald-400/15 text-emerald-300 border border-emerald-400/30 uppercase font-bold">
-                                    RUNNING #{o.fifoNumber || o.position}
+                                    RUNNING #{o.position}
                                   </span>
                                 </td>
                               </tr>
@@ -906,7 +908,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
               })}
             </div>
           ) : (
-            /* Card Grid View showing top 5 orders per phase */
+            /* Card Grid View showing top 2 orders per phase */
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {[2, 3, 4, 5].map((phaseNumber) => {
                 const phase = globalFifo.find((p) => Number(p.phaseNumber) === phaseNumber);
@@ -929,22 +931,24 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                       <div className="rounded-[12px] px-2.5 py-2 border border-white/10 bg-[#071426]/50 text-center text-[8px] text-slate-500 font-mono-crypto">
                         No active FIFO orders
                       </div>
-                    ) : orders.slice(0, 5).map((o) => {
+                    ) : orders.slice(0, 2).map((o) => {
                       const isMine = !!walletAddress && o.walletAddress.toLowerCase() === `${walletAddress.slice(0, 6).toLowerCase()}...${walletAddress.slice(-4).toLowerCase()}`;
                       return (
                         <div
                           key={o.id}
-                          className={`rounded-[12px] px-2.5 py-1.5 border transition-all ${
+                          className={`rounded-[12px] px-2.5 py-2 border transition-all ${
                             isMine
                               ? 'border-amber-400/40 bg-amber-400/10'
                               : 'border-white/10 bg-[#071426]/70'
                           }`}
                         >
                           <div className="flex items-center justify-between gap-2 text-[8px] sm:text-[9px] font-mono-crypto">
-                            <span className="text-white font-bold">#{o.position} {o.walletAddress} {isMine && <span className="text-amber-300 text-[7px]">(YOU)</span>}</span>
+                            <span className="text-white font-bold">
+                              <span className="text-cyan-300">#{o.position}</span> <span className="text-amber-300">(FIFO #{o.fifoNumber || o.id})</span> {o.walletAddress} {isMine && <span className="text-amber-300 text-[7px]">(YOU)</span>}
+                            </span>
                             <span className="text-amber-300 font-bold">{o.remainingTokens.toLocaleString()} NXBC</span>
                           </div>
-                          <div className="flex items-center justify-between mt-0.5 text-[7.5px] sm:text-[8px] font-mono-crypto text-slate-300">
+                          <div className="flex items-center justify-between mt-1 text-[7.5px] sm:text-[8px] font-mono-crypto text-slate-300">
                             <span>Ahead: <strong className="text-cyan-300">{o.aheadTokens.toLocaleString()} NXBC</strong></span>
                             <span className="text-emerald-300 font-bold">@ ${o.tokenPrice.toFixed(2)}</span>
                           </div>
@@ -953,9 +957,9 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                     })}
                   </div>
 
-                  {totalOrders > 5 && (
+                  {totalOrders > 2 && (
                     <div className="mt-1.5 text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto text-center">
-                      +{totalOrders - 5} more order(s) waiting in FIFO sequence
+                      +{totalOrders - 2} more order(s) waiting in FIFO sequence
                     </div>
                   )}
                 </div>
