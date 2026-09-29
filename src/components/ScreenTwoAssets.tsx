@@ -81,6 +81,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
   const [userDirectVol, setUserDirectVol] = useState<number>(0);
   const [userRefCode, setUserRefCode] = useState<string>('');
   const [linkCopied, setLinkCopied] = useState<boolean>(false);
+  const [showAllFifo, setShowAllFifo] = useState<boolean>(false);
 
   // Always fetch active special offer challenge on mount regardless of wallet connection
   useEffect(() => {
@@ -797,7 +798,7 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
       {/* 5. GLOBAL FIFO EXECUTION QUEUE & TELEMETRY HUD */}
       <section className="relative overflow-hidden rounded-[22px] border border-cyan-400/25 bg-[radial-gradient(circle_at_20%_20%,rgba(6,182,212,0.06),transparent_30%),linear-gradient(135deg,#071426_0%,#06101c_65%,#050b16_100%)] shadow-[0_0_24px_rgba(6,182,212,0.06)]">
         <div className="relative p-3.5 sm:p-4">
-          <div className="flex items-center justify-between gap-2 mb-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-cyan-300" />
               <div>
@@ -809,8 +810,23 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                 </p>
               </div>
             </div>
-            <div className="px-2 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/30 text-emerald-300 text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" /> Live • 5s Sync
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAllFifo(!showAllFifo)}
+                className={`px-2.5 py-1 rounded-lg text-[8px] sm:text-[9px] font-mono-crypto font-bold border transition-all cursor-pointer ${
+                  showAllFifo
+                    ? 'bg-cyan-400/20 text-cyan-200 border-cyan-300/50'
+                    : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                }`}
+              >
+                {showAllFifo ? '⚡ Card View' : '📊 Full Queue Table'}
+              </button>
+
+              <div className="px-2 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/30 text-emerald-300 text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" /> Live • 5s Sync
+              </div>
             </div>
           </div>
 
@@ -834,8 +850,64 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
 
           {fifoLoading ? (
             <div className="py-4 text-center text-[10px] text-slate-400 font-mono-crypto">Loading global queue...</div>
+          ) : showAllFifo ? (
+            /* Full Queue Master Table */
+            <div className="space-y-3">
+              {[2, 3, 4, 5].map((phaseNumber) => {
+                const phase = globalFifo.find((p) => Number(p.phaseNumber) === phaseNumber);
+                const orders = phase?.orders || [];
+                if (orders.length === 0) return null;
+                return (
+                  <div key={`full_p_${phaseNumber}`} className="rounded-[16px] border border-cyan-500/30 bg-[#040a16]/90 p-3 space-y-2">
+                    <div className="flex justify-between items-center text-xs font-mono-crypto">
+                      <span className="font-black text-cyan-300 font-rajdhani uppercase">
+                        PHASE {phaseNumber} — ALL QUEUED ORDERS ({orders.length})
+                      </span>
+                      <span className="text-[9px] text-amber-300 font-bold">
+                        Total Queued: {orders.reduce((sum, o) => sum + o.remainingTokens, 0).toLocaleString()} NXBC
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto max-h-52 overflow-y-auto">
+                      <table className="w-full text-[8.5px] font-mono-crypto text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/10 text-slate-400 uppercase text-[7.5px]">
+                            <th className="py-1 px-2"># Pos</th>
+                            <th className="py-1 px-2">Wallet Address</th>
+                            <th className="py-1 px-2">Queued Tokens</th>
+                            <th className="py-1 px-2">Price</th>
+                            <th className="py-1 px-2">Ahead Tokens</th>
+                            <th className="py-1 px-2">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {orders.map((o) => {
+                            const isMine = !!walletAddress && o.walletAddress.toLowerCase() === `${walletAddress.slice(0, 6).toLowerCase()}...${walletAddress.slice(-4).toLowerCase()}`;
+                            return (
+                              <tr key={o.id} className={isMine ? 'bg-amber-400/10 font-bold text-amber-300' : 'hover:bg-white/5 text-slate-200'}>
+                                <td className="py-1.5 px-2 font-bold text-cyan-300">#{o.position}</td>
+                                <td className="py-1.5 px-2 font-bold">{o.walletAddress} {isMine && <span className="text-amber-400 text-[7px]">(YOU)</span>}</td>
+                                <td className="py-1.5 px-2 text-amber-300 font-bold">{o.remainingTokens.toLocaleString()} NXBC</td>
+                                <td className="py-1.5 px-2 text-emerald-300">${o.tokenPrice.toFixed(2)}</td>
+                                <td className="py-1.5 px-2 text-slate-300">{o.aheadTokens.toLocaleString()} NXBC</td>
+                                <td className="py-1.5 px-2">
+                                  <span className="px-1.5 py-0.5 rounded text-[7px] bg-emerald-400/15 text-emerald-300 border border-emerald-400/30 uppercase font-bold">
+                                    RUNNING #{o.fifoNumber || o.position}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
+            /* Card Grid View showing top 5 orders per phase */
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {[2, 3, 4, 5].map((phaseNumber) => {
                 const phase = globalFifo.find((p) => Number(p.phaseNumber) === phaseNumber);
                 const orders = phase?.orders || [];
@@ -843,36 +915,36 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                 const totalQueuedTokens = Number(phase?.totalQueuedTokens || 0);
                 return (
                 <div key={phaseNumber} className="rounded-[15px] border border-white/10 bg-[#050b16]/75 p-2.5">
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-2 pb-1 border-b border-white/10">
                     <span className="text-[10px] sm:text-[11px] font-black text-cyan-300 font-rajdhani uppercase tracking-wider">
                       PHASE {phaseNumber}
                     </span>
                     <span className="text-[8px] sm:text-[9px] text-slate-300 font-mono-crypto">
-                      {totalOrders} orders • {totalQueuedTokens.toLocaleString()} NXBC queued
+                      {totalOrders} orders • {totalQueuedTokens.toLocaleString()} NXBC
                     </span>
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
                     {orders.length === 0 ? (
                       <div className="rounded-[12px] px-2.5 py-2 border border-white/10 bg-[#071426]/50 text-center text-[8px] text-slate-500 font-mono-crypto">
                         No active FIFO orders
                       </div>
-                    ) : orders.slice(0, 1).map((o) => {
+                    ) : orders.slice(0, 5).map((o) => {
                       const isMine = !!walletAddress && o.walletAddress.toLowerCase() === `${walletAddress.slice(0, 6).toLowerCase()}...${walletAddress.slice(-4).toLowerCase()}`;
                       return (
                         <div
                           key={o.id}
-                          className={`rounded-[12px] px-2.5 py-2 border ${
+                          className={`rounded-[12px] px-2.5 py-1.5 border transition-all ${
                             isMine
                               ? 'border-amber-400/40 bg-amber-400/10'
                               : 'border-white/10 bg-[#071426]/70'
                           }`}
                         >
                           <div className="flex items-center justify-between gap-2 text-[8px] sm:text-[9px] font-mono-crypto">
-                            <span className="text-white font-bold">#{o.position} {o.walletAddress}</span>
+                            <span className="text-white font-bold">#{o.position} {o.walletAddress} {isMine && <span className="text-amber-300 text-[7px]">(YOU)</span>}</span>
                             <span className="text-amber-300 font-bold">{o.remainingTokens.toLocaleString()} NXBC</span>
                           </div>
-                          <div className="flex items-center justify-between mt-1 text-[7.5px] sm:text-[8px] font-mono-crypto text-slate-300">
+                          <div className="flex items-center justify-between mt-0.5 text-[7.5px] sm:text-[8px] font-mono-crypto text-slate-300">
                             <span>Ahead: <strong className="text-cyan-300">{o.aheadTokens.toLocaleString()} NXBC</strong></span>
                             <span className="text-emerald-300 font-bold">@ ${o.tokenPrice.toFixed(2)}</span>
                           </div>
@@ -881,9 +953,9 @@ export const ScreenTwoAssets: React.FC<ScreenTwoAssetsProps> = ({
                     })}
                   </div>
 
-                  {totalOrders > 1 && (
+                  {totalOrders > 5 && (
                     <div className="mt-1.5 text-[7.5px] sm:text-[8px] text-slate-400 font-mono-crypto text-center">
-                      +{totalOrders - 1} more order(s) waiting in FIFO sequence
+                      +{totalOrders - 5} more order(s) waiting in FIFO sequence
                     </div>
                   )}
                 </div>
