@@ -210,7 +210,10 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
   const remainingToQualify = Math.max(0, minMlmQualifyUsd - totalInvestedUsd);
 
   const copyRef = () => {
-    void navigator.clipboard.writeText(`https://nxbc.network?ref=${referralCode}`);
+    const base = typeof window !== 'undefined' ? window.location.origin : 'https://nxbc.tech';
+    const activeRef = referralCode || (walletAddress ? walletAddress.substring(2, 8).toUpperCase() : '');
+    const link = activeRef ? `${base}/?ref=${activeRef}` : `${base}/`;
+    void navigator.clipboard.writeText(link);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   };
@@ -547,7 +550,7 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
             </div>
 
             {/* Direct Sponsor Commission Highlight */}
-            <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-cyan-900/40 to-[#100524] border border-amber-400/40 flex items-center justify-between">
+            <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-cyan-900/40 to-[#100524] border border-amber-400/40">
               <div>
                 <span className="text-[10px] uppercase text-cyan-300 font-semibold font-rajdhani flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-400" />
@@ -559,13 +562,10 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                 <div className="text-sm font-bold text-emerald-400 font-mono-crypto mt-0.5">
                   Lifetime Earned: ${(Number(teamData?.directSponsorIncome || 0) || Number(levelIncomeUsd || 0)).toFixed(2)} USD
                 </div>
-                <span className="text-[10px] text-cyan-300/80 font-mono-crypto">
+                <span className="text-[10px] text-cyan-300/80 font-mono-crypto block mt-1">
                   Instant reward credited on every token purchase made by your directly invited members
                 </span>
               </div>
-              <span className="text-[10px] font-mono-crypto px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-400/40 font-bold shrink-0">
-                Level 0 (Direct)
-              </span>
             </div>
 
             {/* 10-Generation Unilevel Breakdown Table */}
