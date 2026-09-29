@@ -640,8 +640,57 @@ async function finalizeConfirmedPurchase(
              }
           }
           
-          let newTotalEarned = (upUser.totalEarnedUsdt || 0) + rankBonusToPay;
-          let newAvailable = (upUser.availableUsdt || 0) + rankBonusToPay;
+          // Check for Admin Special Offer Challenge
+          let offerBonusToPay = 0;
+          let activeOfferId = 'default_offer';
+          try {
+            const offerConf = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'specialOffer') });
+            if (offerConf && offerConf.value) {
+              const offer = JSON.parse(offerConf.value);
+              const isOfferActive = offer.active !== false;
+              const targetVol = Number(offer.targetDirectVolume || 500);
+              const offerReward = Number(offer.rewardUsdt || 50);
+              activeOfferId = offer.id || 'default_offer';
+
+              if (isOfferActive && updatedDirectVol >= targetVol && offerReward > 0) {
+                // Check if user has already received this offer reward
+                const existingReward = await db.query.levelEarnings.findFirst({
+                  where: and(
+                    eq(levelEarnings.beneficiaryId, upUser.id),
+                    eq(levelEarnings.txType, `offer_reward_${activeOfferId}`)
+                  )
+                });
+
+                if (!existingReward) {
+                  offerBonusToPay = offerReward;
+                  await db.insert(levelEarnings).values({
+                    beneficiaryId: upUser.id,
+                    sourceUserId: user.id,
+                    levelNumber: 0,
+                    percentage: 0,
+                    commissionUsdt: offerReward,
+                    txType: `offer_reward_${activeOfferId}`,
+                  });
+
+                  await db.insert(transactions).values({
+                    userId: upUser.id,
+                    type: 'offer_bonus',
+                    amountUsdt: offerReward,
+                    tokenAmount: 0,
+                    tokenPrice: 0,
+                    status: 'completed'
+                  });
+
+                  console.log(`[OFFER BONUS] Awarded $${offerReward} USDT Special Offer Bonus to user ${upUser.id}!`);
+                }
+              }
+            }
+          } catch (offerErr) {
+            console.error("Error evaluating special offer challenge:", offerErr);
+          }
+
+          let newTotalEarned = (upUser.totalEarnedUsdt || 0) + rankBonusToPay + offerBonusToPay;
+          let newAvailable = (upUser.availableUsdt || 0) + rankBonusToPay + offerBonusToPay;
           
           await db.update(users).set({
             totalDirectVolume: updatedDirectVol,
@@ -1295,6 +1344,32 @@ async function startServer() {
       });
     } catch (err: any) {
       res.json({ status: "ok", database: "waiting_or_connecting", error: err?.message });
+    }
+  });
+
+  // Public Endpoint: Get Active Special Offer Challenge
+  app.get("/api/public/special-offer", async (req, res) => {
+    try {
+      const offerConf = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'specialOffer') });
+      let offerData = {
+        id: "offer_daily_500",
+        active: true,
+        title: "🔥 DAILY DIRECT SALE CHALLENGE",
+        subtitle: "Achieve $500 Direct Sales Today & Get $50 Instant USDT Cash Bonus!",
+        targetDirectVolume: 500,
+        rewardUsdt: 50,
+        badgeText: "LIMITED TIME PROMO",
+        expiresAt: "2026-10-15T23:59:59Z"
+      };
+      if (offerConf && offerConf.value) {
+        try {
+          const parsed = JSON.parse(offerConf.value);
+          offerData = { ...offerData, ...parsed };
+        } catch {}
+      }
+      res.json({ success: true, offer: offerData });
+    } catch (err: any) {
+      res.json({ success: false, error: err.message });
     }
   });
 
@@ -3628,9 +3703,33 @@ async function startServer() {
         rankRewards: dbConfigs.rankRewards || null,
         systemConfig: dbConfigs.systemConfig || null,
         matrixConfig: dbConfigs.matrixConfig || null,
+        specialOffer: dbConfigs.specialOffer || null,
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Dedicated Admin Special Offer / Daily Direct Challenge Update
+  app.post("/api/admin/special-offer", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const offer = req.body;
+      if (!offer || typeof offer !== 'object') {
+        return res.status(400).json({ error: 'Invalid offer payload' });
+      }
+      const existing = await db.query.systemConfigs.findFirst({
+        where: eq(systemConfigs.key, 'specialOffer'),
+      });
+      const strValue = JSON.stringify(offer);
+      if (existing) {
+        await db.update(systemConfigs).set({ value: strValue, updatedAt: new Date() }).where(eq(systemConfigs.key, 'specialOffer'));
+      } else {
+        await db.insert(systemConfigs).values({ key: 'specialOffer', value: strValue, description: 'Admin Daily Direct Sale Challenge Offer' });
+      }
+      return res.json({ success: true, message: 'Daily Direct Sale Challenge Offer updated successfully!', offer });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Failed to update special offer' });
     }
   });
 
@@ -3638,7 +3737,7 @@ async function startServer() {
   app.post("/api/admin/configs", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const { phases, referralLevels, rankRewards, systemConfig, matrixConfig } = req.body;
+      const { phases, referralLevels, rankRewards, systemConfig, matrixConfig, specialOffer } = req.body;
 
       if (systemConfig && Object.prototype.hasOwnProperty.call(systemConfig, 'sellQueueSharePercent')) {
         const sellerShare = Number(systemConfig.sellQueueSharePercent);
@@ -3657,10 +3756,7 @@ async function startServer() {
         inMemoryWithdrawalFeePercent = fee;
       }
 
-      // Save to database. The admin "Coins Sold" field is a manual/initial
-      // sold baseline. Verified blockchain purchases are stored in transactions
-      // and are added separately, so saving admin settings can never erase or
-      // overwrite real user purchase history.
+      // Save to database.
       const phasesForSave = Array.isArray(phases)
         ? phases.map((p: any) => ({
             ...p,
@@ -3674,6 +3770,7 @@ async function startServer() {
         { key: "rankRewards", value: rankRewards ? JSON.stringify(rankRewards) : null, desc: "Leadership Rank Rewards" },
         { key: "systemConfig", value: systemConfig ? JSON.stringify(systemConfig) : null, desc: "System Parameters, Social Links and Financial Rules" },
         { key: "matrixConfig", value: matrixConfig ? JSON.stringify(matrixConfig) : null, desc: "2x2 Matrix System Config" },
+        { key: "specialOffer", value: specialOffer ? JSON.stringify(specialOffer) : null, desc: "Daily Direct Sale Challenge Offer Config" },
       ];
 
       for (const item of itemsToSave) {
