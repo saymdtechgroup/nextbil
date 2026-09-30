@@ -26,7 +26,9 @@ import {
   Database,
   ArrowRight,
   RefreshCw,
+  FileSpreadsheet,
 } from 'lucide-react';
+import { AdminWalletReport } from './AdminWalletReport';
 import {
   PhaseConfig,
   ReferralLevel,
@@ -52,7 +54,7 @@ interface AdminPanelModalProps {
   onOpenSecretPage?: () => void;
 }
 
-type AdminTab = 'phases' | 'incomes' | 'ranks' | 'system';
+type AdminTab = 'phases' | 'incomes' | 'ranks' | 'system' | 'report';
 
 export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   isOpen,
@@ -325,6 +327,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           >
             <Settings className="w-3.5 h-3.5 text-purple-400" />
             <span>4. Coin & Security Controls</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('report')}
+            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-t-xl text-xs font-bold font-rajdhani uppercase tracking-wider transition-all shrink-0 ${
+              activeTab === 'report'
+                ? 'bg-gradient-to-r from-emerald-500/20 to-teal-900/50 text-emerald-300 border-t-2 border-x border-emerald-400 shadow-md ring-1 ring-emerald-400/30'
+                : 'text-purple-300/70 hover:text-slate-100 hover:bg-purple-950/30'
+            }`}
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            <span>5. Wallet Balances Report</span>
           </button>
         </div>
 
@@ -1272,6 +1286,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 </button>
               </div>
             </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 5: USER WALLET BALANCES REPORT                                       */}
+          {/* ========================================================================= */}
+          {activeTab === 'report' && (
+            <AdminWalletReport />
           )}
         </div>
 

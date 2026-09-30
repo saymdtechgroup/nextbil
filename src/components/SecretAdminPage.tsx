@@ -29,7 +29,9 @@ import {
   RefreshCw,
   Plus,
   Trash2,
+  FileSpreadsheet,
 } from 'lucide-react';
+import { AdminWalletReport } from './AdminWalletReport';
 import {
   PhaseConfig,
   ReferralLevel,
@@ -740,12 +742,12 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
             onClick={() => setActiveSection('users')}
             className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-bold font-rajdhani uppercase tracking-wider transition-all w-full text-left whitespace-nowrap ${
               activeSection === 'users'
-                ? 'bg-gradient-to-r from-rose-500/20 to-purple-900/50 text-rose-300 border border-rose-400 shadow-md'
+                ? 'bg-gradient-to-r from-emerald-500/20 to-teal-900/50 text-emerald-300 border border-emerald-400 shadow-md'
                 : 'text-purple-300 hover:text-slate-100 hover:bg-purple-950/40'
             }`}
           >
-            <Users className="w-4 h-4 text-rose-400" />
-            <span>10. User Management</span>
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            <span>10. Wallet Balance Report</span>
           </button>
         </aside>
 
@@ -2263,6 +2265,13 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                 </div>
               </div>
             </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* 10. USER WEB3 WALLET BALANCE AUDIT REPORT                                  */}
+          {/* ========================================================================= */}
+          {activeSection === 'users' && (
+            <AdminWalletReport />
           )}
 
         </main>
