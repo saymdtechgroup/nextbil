@@ -1025,7 +1025,14 @@ export const ScreenTeam: React.FC<ScreenTeamProps> = ({
                             )}
                           </div>
                           <span className="text-[10px] text-amber-300 font-mono-crypto font-bold">
-                            {rank.rewardTitle}
+                            {(() => {
+                              const bonusFormatted = `$${Number(rank.oneTimeBonusUsd || 0).toLocaleString()}`;
+                              if (!rank.rewardTitle) return `${bonusFormatted} ${rank.name}`;
+                              if (/\$\d[\d,.]*/.test(rank.rewardTitle)) {
+                                return rank.rewardTitle.replace(/\$\d[\d,.]*/g, bonusFormatted);
+                              }
+                              return `${bonusFormatted} ${rank.rewardTitle}`;
+                            })()}
                           </span>
                         </div>
                       </div>

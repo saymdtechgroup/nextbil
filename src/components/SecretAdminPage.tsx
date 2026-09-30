@@ -1542,7 +1542,21 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                      {/* Reward Subtitle / Custom Label */}
+                      <div className="col-span-2 sm:col-span-1">
+                        <label className="text-[9px] uppercase text-amber-300 font-bold block mb-1">
+                          Reward Subtitle / Label
+                        </label>
+                        <input
+                          type="text"
+                          value={rank.rewardTitle || ''}
+                          onChange={(e) => handleRankChange(idx, 'rewardTitle', e.target.value)}
+                          placeholder="e.g. Travel Tour Fund"
+                          className="w-full bg-[#050b16] border border-cyan-500/40 rounded-xl py-1.5 px-2 text-xs font-mono-crypto text-cyan-300 font-bold focus:border-amber-400 focus:outline-none"
+                        />
+                      </div>
+
                       <div>
                         <label className="text-[9px] uppercase text-amber-300 font-bold block mb-1">
                           Direct Business ($ USD)
@@ -1579,7 +1593,16 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                           type="number"
                           step="50"
                           value={rank.oneTimeBonusUsd}
-                          onChange={(e) => handleRankChange(idx, 'oneTimeBonusUsd', parseInt(e.target.value) || 0)}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 0;
+                            const updated = [...localRanks];
+                            const currentTitle = updated[idx].rewardTitle || '';
+                            const newTitle = currentTitle
+                              ? currentTitle.replace(/\$\d[\d,.]*/g, `$${val.toLocaleString()}`)
+                              : `$${val.toLocaleString()} USD Fund`;
+                            updated[idx] = { ...updated[idx], oneTimeBonusUsd: val, rewardTitle: newTitle };
+                            setLocalRanks(updated);
+                          }}
                           className="w-full bg-[#050b16] border border-emerald-500/40 rounded-xl py-1.5 px-2 text-xs font-mono-crypto text-emerald-300 font-bold focus:outline-none"
                         />
                       </div>

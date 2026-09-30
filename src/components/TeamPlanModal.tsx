@@ -234,7 +234,14 @@ export const TeamPlanModal: React.FC<TeamPlanModalProps> = ({
                         </span>
                       </div>
                       <span className="text-[10px] font-mono-crypto font-bold text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/30">
-                        {rank.rewardTitle || `$${rank.oneTimeBonusUsd} USD`}
+                        {(() => {
+                          const bonusFormatted = `$${Number(rank.oneTimeBonusUsd || 0).toLocaleString()}`;
+                          if (!rank.rewardTitle) return `${bonusFormatted} ${rank.name}`;
+                          if (/\$\d[\d,.]*/.test(rank.rewardTitle)) {
+                            return rank.rewardTitle.replace(/\$\d[\d,.]*/g, bonusFormatted);
+                          }
+                          return `${bonusFormatted} ${rank.rewardTitle}`;
+                        })()}
                       </span>
                     </div>
 
