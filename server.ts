@@ -2915,6 +2915,17 @@ async function startServer() {
   // Wallets are masked for privacy; queue position and aggregate amounts are public.
   app.get("/api/presale/fifo-global", async (_req, res) => {
     try {
+      // 1. One-time or per-request database cleanup: mark orders with 0 remaining tokens as completed
+      try {
+        await db.execute(sql`UPDATE sell_orders SET status = 'completed' WHERE (remaining_tokens <= 0 OR remaining_tokens IS NULL) AND status IN ('open','partially_filled')`);
+        await db.execute(sql`UPDATE sell_orders SET token_price = 0.10 WHERE phase_number = 2 AND ABS(token_price - 0.10) > 0.001`);
+        await db.execute(sql`UPDATE sell_orders SET token_price = 1.00 WHERE phase_number = 3 AND ABS(token_price - 1.00) > 0.001`);
+        await db.execute(sql`UPDATE sell_orders SET token_price = 10.00 WHERE phase_number = 4 AND ABS(token_price - 10.00) > 0.001`);
+        await db.execute(sql`UPDATE sell_orders SET token_price = 100.00 WHERE phase_number = 5 AND ABS(token_price - 100.00) > 0.001`);
+      } catch (err) {
+        console.warn('DB cleanup warning for sell_orders:', err);
+      }
+
       const activeOrders = await db.select({
         id: sellOrders.id,
         userId: sellOrders.userId,
@@ -2930,11 +2941,13 @@ async function startServer() {
       })
       .from(sellOrders)
       .leftJoin(users, eq(sellOrders.userId, users.id))
-      .where(inArray(sellOrders.status, ['open', 'partially_filled']))
+      .where(and(inArray(sellOrders.status, ['open', 'partially_filled']), gt(sellOrders.remainingTokens, 0)))
       .orderBy(asc(sellOrders.phaseNumber), asc(sellOrders.priority), asc(sellOrders.createdAt), asc(sellOrders.id));
 
       const byPhase: Record<number, any[]> = {};
       for (const row of activeOrders) {
+        const remaining = Number(row.remainingTokens || 0);
+        if (remaining <= 0) continue; // Safety filter: omit any sold-out order
         const phase = Number(row.phaseNumber);
         if (!byPhase[phase]) byPhase[phase] = [];
         byPhase[phase].push(row);
@@ -2946,10 +2959,20 @@ async function startServer() {
         return `${w.slice(0, 6)}...${w.slice(-4)}`;
       };
 
+      const getCanonicalPrice = (phaseNumber: number, dbPrice: number) => {
+        if (phaseNumber === 2) return 0.10;
+        if (phaseNumber === 3) return 1.00;
+        if (phaseNumber === 4) return 10.00;
+        if (phaseNumber === 5) return 100.00;
+        if (phaseNumber === 1) return 0.05;
+        return dbPrice > 0 ? dbPrice : 0.10;
+      };
+
       const phases = Object.keys(byPhase).map(Number).sort((a, b) => a - b).map((phaseNumber) => {
         let aheadTokens = 0;
         const phaseOrders = byPhase[phaseNumber].map((row, index) => {
           const remaining = Math.max(0, Number(row.remainingTokens || 0));
+          const canonicalPrice = getCanonicalPrice(phaseNumber, Number(row.tokenPrice || 0));
           const position = index + 1;
           const order = {
             id: Number(row.id),
@@ -2958,13 +2981,13 @@ async function startServer() {
             phaseNumber,
             amountTokens: Number(row.amountTokens || 0),
             remainingTokens: remaining,
-            tokenPrice: Number(row.tokenPrice || 0),
+            tokenPrice: canonicalPrice,
             status: row.status,
             priority: Number(row.priority || 0),
             fifoNumber: Number(row.fifoNumber || row.priority || 0),
             position,
             aheadTokens,
-            expectedRemainingUsdt: remaining * Number(row.tokenPrice || 0),
+            expectedRemainingUsdt: remaining * canonicalPrice,
             createdAt: row.createdAt,
           };
           aheadTokens += remaining;
@@ -3821,6 +3844,154 @@ async function startServer() {
       res.json({ configs });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Admin Report: User Web3 Wallet Balances (Earning Wallet + Token Sale Wallet)
+  // Provides date-wise filtering, search, and CSV download export.
+  // -------------------------------------------------------------------------
+  app.get("/api/admin/reports/wallet-balances", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const { startDate, endDate, search, minBalance, format } = req.query;
+
+      // 1. Fetch all users from database
+      const allUsers = await db.select().from(users).orderBy(desc(users.id));
+
+      // 2. Fetch all token sell ledgers to calculate token sale wallet withdrawable balance
+      const ledgers = await db.select().from(tokenSellLedgers);
+
+      // Aggregate token sale balances by normalized wallet address
+      const tokenSaleMap = new Map<string, { available: number; totalGross: number; totalWithdrawn: number; count: number }>();
+      for (const entry of ledgers) {
+        const wallet = String(entry.walletAddress || '').toLowerCase();
+        if (!wallet) continue;
+        const available = Math.max(0, Number(entry.grossUsdt || 0) - Number(entry.withdrawnUsdt || 0));
+        const prev = tokenSaleMap.get(wallet) || { available: 0, totalGross: 0, totalWithdrawn: 0, count: 0 };
+        prev.available += available;
+        prev.totalGross += Number(entry.grossUsdt || 0);
+        prev.totalWithdrawn += Number(entry.withdrawnUsdt || 0);
+        prev.count += 1;
+        tokenSaleMap.set(wallet, prev);
+      }
+
+      // 3. Map user rows with calculated balances
+      let reportRows = allUsers.map((u) => {
+        const normalizedWallet = String(u.walletAddress || '').toLowerCase();
+        const earningBalance = Math.max(0, Number(u.availableUsdt || 0));
+        const tokenSaleData = tokenSaleMap.get(normalizedWallet) || { available: 0, totalGross: 0, totalWithdrawn: 0, count: 0 };
+        const tokenSaleBalance = Number(tokenSaleData.available.toFixed(2));
+        const totalWithdrawable = Number((earningBalance + tokenSaleBalance).toFixed(2));
+
+        return {
+          userId: u.id,
+          walletAddress: u.walletAddress,
+          referralCode: u.referralCode,
+          referredBy: u.referredBy || null,
+          earningWalletBalance: Number(earningBalance.toFixed(2)),
+          tokenSaleWalletBalance: tokenSaleBalance,
+          totalWithdrawableBalance: totalWithdrawable,
+          totalInvestedUsdt: Number(Number(u.totalInvestedUsdt || 0).toFixed(2)),
+          totalEarnedUsdt: Number(Number(u.totalEarnedUsdt || 0).toFixed(2)),
+          totalWithdrawnUsdt: Number(Number(u.totalWithdrawnUsdt || 0).toFixed(2)),
+          tokenSaleTotalGross: Number(tokenSaleData.totalGross.toFixed(2)),
+          tokenSaleTotalWithdrawn: Number(tokenSaleData.totalWithdrawn.toFixed(2)),
+          isMlmQualified: Boolean(u.isMlmQualified),
+          createdAt: u.createdAt ? new Date(u.createdAt).toISOString() : new Date().toISOString(),
+        };
+      });
+
+      // 4. Search Filter
+      if (typeof search === 'string' && search.trim()) {
+        const q = search.trim().toLowerCase();
+        reportRows = reportRows.filter((r) =>
+          r.walletAddress.toLowerCase().includes(q) ||
+          r.referralCode.toLowerCase().includes(q) ||
+          (r.referredBy && r.referredBy.toLowerCase().includes(q))
+        );
+      }
+
+      // 5. Date-Wise Filter (startDate, endDate)
+      if (typeof startDate === 'string' && startDate.trim()) {
+        const start = new Date(startDate.trim()).getTime();
+        if (!isNaN(start)) {
+          reportRows = reportRows.filter((r) => new Date(r.createdAt).getTime() >= start);
+        }
+      }
+
+      if (typeof endDate === 'string' && endDate.trim()) {
+        const end = new Date(endDate.trim());
+        end.setHours(23, 59, 59, 999);
+        const endTime = end.getTime();
+        if (!isNaN(endTime)) {
+          reportRows = reportRows.filter((r) => new Date(r.createdAt).getTime() <= endTime);
+        }
+      }
+
+      // 6. Optional min balance filter
+      if (minBalance === 'true' || minBalance === '1') {
+        reportRows = reportRows.filter((r) => r.totalWithdrawableBalance > 0);
+      }
+
+      // 7. Aggregate Summary Totals
+      const summary = {
+        totalUsers: reportRows.length,
+        totalEarningWalletLiability: Number(reportRows.reduce((sum, r) => sum + r.earningWalletBalance, 0).toFixed(2)),
+        totalTokenSaleWalletLiability: Number(reportRows.reduce((sum, r) => sum + r.tokenSaleWalletBalance, 0).toFixed(2)),
+        totalWithdrawableLiability: Number(reportRows.reduce((sum, r) => sum + r.totalWithdrawableBalance, 0).toFixed(2)),
+        totalInvestedVolume: Number(reportRows.reduce((sum, r) => sum + r.totalInvestedUsdt, 0).toFixed(2)),
+        totalUsersWithBalance: reportRows.filter((r) => r.totalWithdrawableBalance > 0).length,
+      };
+
+      // 8. CSV Download format handler
+      if (format === 'csv') {
+        const filename = `nxbc-wallet-balance-report-${startDate || 'all'}-to-${endDate || 'all'}-${Date.now()}.csv`;
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+        const csvHeaders = [
+          'User ID',
+          'Web3 Wallet Address',
+          'Referral Code',
+          'Earning Wallet Balance (USDT)',
+          'Token Sale Wallet Balance (USDT)',
+          'Total Withdrawable Balance (USDT)',
+          'Total Invested (USDT)',
+          'Lifetime Earnings (USDT)',
+          'Lifetime Withdrawn (USDT)',
+          'Registration Date'
+        ];
+
+        const csvLines = [csvHeaders.join(',')];
+        for (const row of reportRows) {
+          const formattedDate = row.createdAt ? new Date(row.createdAt).toISOString().replace('T', ' ').substring(0, 19) : '';
+          csvLines.push([
+            row.userId,
+            `"${row.walletAddress}"`,
+            `"${row.referralCode}"`,
+            row.earningWalletBalance.toFixed(2),
+            row.tokenSaleWalletBalance.toFixed(2),
+            row.totalWithdrawableBalance.toFixed(2),
+            row.totalInvestedUsdt.toFixed(2),
+            row.totalEarnedUsdt.toFixed(2),
+            row.totalWithdrawnUsdt.toFixed(2),
+            `"${formattedDate}"`
+          ].join(','));
+        }
+
+        return res.send(csvLines.join('\n'));
+      }
+
+      return res.json({
+        success: true,
+        summary,
+        rows: reportRows,
+        filters: { startDate: startDate || null, endDate: endDate || null, search: search || null },
+      });
+    } catch (error: any) {
+      console.error('Error in /api/admin/reports/wallet-balances:', error);
+      res.status(500).json({ success: false, error: error?.message || 'Failed to generate wallet balance report.' });
     }
   });
 
