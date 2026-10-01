@@ -30,6 +30,7 @@ import {
   Plus,
   Trash2,
   FileSpreadsheet,
+  Clock,
 } from 'lucide-react';
 import { AdminWalletReport } from './AdminWalletReport';
 import {
@@ -121,6 +122,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
     targetDirectVolume: number;
     rewardUsdt: number;
     badgeText: string;
+    expiresAt?: string;
   }>({
     active: true,
     title: "DAILY DIRECT SALE CHALLENGE",
@@ -128,6 +130,7 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
     targetDirectVolume: 500,
     rewardUsdt: 50,
     badgeText: "DAILY DIRECT CHALLENGE",
+    expiresAt: "",
   });
 
 
@@ -1256,6 +1259,61 @@ export const SecretAdminPage: React.FC<SecretAdminPageProps> = ({
                     placeholder="e.g. Achieve $500.00 USD in Direct Sales today to unlock an instant $50.00 USDT Cash Bonus!"
                     className="w-full bg-[#06020c] border border-purple-500/40 focus:border-amber-400 rounded-xl p-3 text-xs font-mono-crypto text-slate-200 focus:outline-none"
                   />
+                </div>
+
+                {/* Offer Expiry Date/Time & Live Countdown Timer Setting */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs uppercase text-amber-300 font-rajdhani font-bold flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-amber-400" />
+                      Offer Expiry Date & Time (Live Timer in Popup)
+                    </label>
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const tomorrow = new Date();
+                          tomorrow.setDate(tomorrow.getDate() + 1);
+                          setLocalOffer({ ...localOffer, expiresAt: tomorrow.toISOString() });
+                        }}
+                        className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-[9px] text-amber-300 font-mono-crypto font-bold border border-amber-500/40 cursor-pointer"
+                      >
+                        +24 Hours
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const midnight = new Date();
+                          midnight.setHours(23, 59, 59, 999);
+                          setLocalOffer({ ...localOffer, expiresAt: midnight.toISOString() });
+                        }}
+                        className="px-2 py-0.5 rounded bg-purple-500/20 hover:bg-purple-500/30 text-[9px] text-purple-300 font-mono-crypto font-bold border border-purple-500/40 cursor-pointer"
+                      >
+                        Today Midnight
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    type="datetime-local"
+                    value={
+                      localOffer.expiresAt
+                        ? new Date(new Date(localOffer.expiresAt).getTime() - new Date().getTimezoneOffset() * 60000)
+                            .toISOString()
+                            .slice(0, 16)
+                        : ''
+                    }
+                    onChange={(e) => {
+                      if (!e.target.value) {
+                        setLocalOffer({ ...localOffer, expiresAt: '' });
+                      } else {
+                        setLocalOffer({ ...localOffer, expiresAt: new Date(e.target.value).toISOString() });
+                      }
+                    }}
+                    className="w-full bg-[#06020c] border border-amber-500/50 focus:border-amber-400 rounded-xl py-2 px-3 text-xs font-mono-crypto text-white focus:outline-none"
+                  />
+                  <p className="text-[9px] text-purple-300 font-mono-crypto">
+                    This controls the real-time digital ticking countdown timer on the user's home screen popup!
+                  </p>
                 </div>
 
                 {/* Live Preview Box */}
