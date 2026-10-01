@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Clock, Flame, Info, ShieldCheck, UsersRound, CircleDollarSign, BarChart3, Rocket, WalletCards, Download, UserRound } from 'lucide-react';
+import { Clock, Flame, Info, ShieldCheck, UsersRound, CircleDollarSign, BarChart3, Rocket, WalletCards, Download, UserRound, FileText } from 'lucide-react';
 import { AllocationState, PhaseConfig, QueueEntry, ActiveScreen } from '../types/crypto';
 import { GoldCoinGraphic } from './GoldCoinGraphic';
 import bannerImage from '../assets/images/nxbc-home-banner.png';
@@ -17,6 +17,7 @@ interface ScreenOneAcquisitionProps {
   onResetPhases?: () => void;
   onViewFIFO?: () => void;
   onNavigate?: (screen: ActiveScreen) => void;
+  onOpenPlanPdf?: () => void;
   sellQueue?: QueueEntry[];
   walletConnected: boolean;
   walletAddress: string;
@@ -31,6 +32,7 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
   phases,
   onOpenBuyModal,
   onNavigate,
+  onOpenPlanPdf,
 }) => {
   const [trustStats, setTrustStats] = useState({
     totalTokensSold: 0,
@@ -168,6 +170,32 @@ export const ScreenOneAcquisition: React.FC<ScreenOneAcquisitionProps> = ({
           <button onClick={onOpenBuyModal} className="w-full py-3 sm:py-3.5 rounded-[16px] bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:from-amber-300 hover:to-yellow-200 text-slate-950 font-black text-[13px] sm:text-[15px] uppercase font-rajdhani tracking-widest transition-all shadow-[0_0_22px_rgba(251,191,36,0.25)] flex items-center justify-center gap-2.5"><Rocket className="w-5 h-5" fill="currentColor" /> BUY NXBC NOW <span className="text-lg">›</span></button>
         </div>
       </section>
+
+      {/* OFFICIAL BUSINESS PLAN & WHITEPAPER PDF BANNER */}
+      {onOpenPlanPdf && (
+        <div
+          onClick={onOpenPlanPdf}
+          className="cursor-pointer rounded-[20px] border border-amber-400/40 bg-gradient-to-r from-amber-500/20 via-[#180b2e] to-yellow-500/15 p-3 sm:p-3.5 flex items-center justify-between hover:border-amber-300 transition-all shadow-[0_0_20px_rgba(245,158,11,0.15)] active:scale-[0.99] group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/50 flex items-center justify-center text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.3)] group-hover:scale-105 transition-transform">
+              <FileText className="w-5 h-5 text-amber-300" />
+            </div>
+            <div>
+              <div className="text-xs sm:text-sm font-bold text-amber-300 font-rajdhani uppercase tracking-wider flex items-center gap-1.5">
+                <span>Official Business Plan & Whitepaper</span>
+                <span className="px-1.5 py-0.5 rounded text-[8px] bg-amber-400/20 text-amber-300 font-mono-crypto">8 Pages</span>
+              </div>
+              <p className="text-[8.5px] sm:text-[9.5px] text-purple-200/80 font-mono-crypto">
+                Complete tokenomics, 10 referral levels & 5 rank rewards PDF
+              </p>
+            </div>
+          </div>
+          <span className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-bold font-mono-crypto text-[10px] uppercase shadow-[0_0_10px_rgba(245,158,11,0.3)] shrink-0">
+            Download PDF
+          </span>
+        </div>
+      )}
 
       {/* FOUR WORKING SHORTCUTS */}
       <div className="grid grid-cols-4 gap-2">

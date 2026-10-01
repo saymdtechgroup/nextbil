@@ -10,6 +10,7 @@ interface ScreenMineProps {
   onToggleWallet: () => void;
   onOpenAdmin?: () => void;
   onResetAllData?: () => void;
+  onOpenPlanPdf?: () => void;
   totalInvestedUsd?: number;
   minMlmQualifyUsd?: number;
 }
@@ -21,6 +22,7 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
   onToggleWallet,
   onOpenAdmin,
   onResetAllData,
+  onOpenPlanPdf,
   totalInvestedUsd = 0,
   minMlmQualifyUsd = 100,
 }) => {
@@ -240,6 +242,30 @@ export const ScreenMine: React.FC<ScreenMineProps> = ({
             Fast 12ms
           </span>
         </div>
+
+        {onOpenPlanPdf && (
+          <div
+            onClick={onOpenPlanPdf}
+            className="p-3 rounded-[16px] bg-gradient-to-r from-amber-500/15 via-[#0d0720] to-[#050b16]/75 border border-amber-400/40 flex items-center justify-between text-xs cursor-pointer hover:border-amber-400 transition-all shadow-[0_0_15px_rgba(245,158,11,0.1)] active:scale-[0.99]"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-amber-400/20 border border-amber-400/40 flex items-center justify-center shrink-0">
+                <FileText className="w-4 h-4 text-amber-300" />
+              </div>
+              <div>
+                <span className="font-bold text-amber-300 block font-rajdhani uppercase tracking-wider text-[11px]">
+                  Official Plan PDF & Whitepaper
+                </span>
+                <span className="text-[8.5px] font-mono-crypto text-purple-200/80">
+                  8-Page Presentation • View & Download
+                </span>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-xl bg-amber-400/20 text-amber-300 font-bold font-mono-crypto text-[9.5px] uppercase border border-amber-400/40">
+              Download
+            </span>
+          </div>
+        )}
 
         <div className="p-3 rounded-[16px] bg-[#050b16]/75 border border-white/10 flex items-center justify-between text-xs">
           <div className="flex items-center gap-2.5">
