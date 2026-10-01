@@ -324,7 +324,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
     }
 
     setIsProcessing(true);
-    setStatusMessage(`Step 1/3: Returning exactly ${exactTokensToReturn.toLocaleString()} NXBC to the verified Admin Wallet...`);
+    setStatusMessage(`Step 1/3: Returning exactly ${exactTokensToReturn.toLocaleString()} NXBC to the verified Contract Wallet...`);
 
     try {
       let tokenReturnTxHash = '';
@@ -342,7 +342,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
       }
 
       setStatusMessage(
-        `Step 1/3: Confirming transfer of exactly ${tokensToReturn.toLocaleString()} NXBC to Admin Treasury...`
+        `Step 1/3: Confirming transfer of exactly ${tokensToReturn.toLocaleString()} NXBC to Contract Treasury...`
       );
       const returnResult = await returnNxbcTokensToAdmin(
         tokensToReturn,
@@ -802,7 +802,7 @@ export const ScreenThreeWallet: React.FC<ScreenThreeWalletProps> = ({
                 <span>-${sellFee.toFixed(2)} USDT</span>
               </div>
               <div className="flex justify-between text-amber-300">
-                <span>Total Exact Tokens to Return to Admin:</span>
+                <span>Total Exact Tokens to Return to Contract:</span>
                 <span className="font-bold">{exactTokensToReturn.toLocaleString()} NXBC</span>
               </div>
               <div className="border-t border-white/10 pt-1 flex justify-between font-bold text-xs text-emerald-400">
