@@ -40,14 +40,19 @@ export const TodayOfferModal: React.FC<TodayOfferModalProps> = ({ walletAddress,
         if (data && data.success && data.offer && data.offer.active) {
           const offerData: SpecialOfferData = data.offer;
           
-          // Check if user already dismissed or accepted this specific offer in this session
-          const sessionDismissed = sessionStorage.getItem(`nxbc_offer_dismissed_${offerData.id || 'current'}`);
+          // Check if user already dismissed or accepted this specific offer in this dashboard session
+          const sessionDismissed = sessionStorage.getItem(`nxbc_offer_dashboard_dismissed_${offerData.id || 'current'}`);
           if (sessionDismissed === 'true') {
             return;
           }
 
           setOffer(offerData);
-          setIsOpen(true);
+          // Show with a smooth short delay so dashboard home page is fully visible first
+          setTimeout(() => {
+            if (isMounted) {
+              setIsOpen(true);
+            }
+          }, 600);
         }
       } catch (err) {
         console.error('Failed to load today offer popup:', err);
@@ -97,7 +102,7 @@ export const TodayOfferModal: React.FC<TodayOfferModalProps> = ({ walletAddress,
 
   const handleClose = () => {
     if (offer) {
-      sessionStorage.setItem(`nxbc_offer_dismissed_${offer.id || 'current'}`, 'true');
+      sessionStorage.setItem(`nxbc_offer_dashboard_dismissed_${offer.id || 'current'}`, 'true');
     }
     setIsOpen(false);
   };
@@ -105,7 +110,7 @@ export const TodayOfferModal: React.FC<TodayOfferModalProps> = ({ walletAddress,
   const handleAcceptOffer = () => {
     setIsAccepted(true);
     if (offer) {
-      sessionStorage.setItem(`nxbc_offer_dismissed_${offer.id || 'current'}`, 'true');
+      sessionStorage.setItem(`nxbc_offer_dashboard_dismissed_${offer.id || 'current'}`, 'true');
       localStorage.setItem(`nxbc_offer_accepted_${offer.id || 'current'}`, 'true');
     }
     setTimeout(() => {
