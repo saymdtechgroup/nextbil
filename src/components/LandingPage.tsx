@@ -29,7 +29,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
             <GoldCoinGraphic />
           </div>
           <span className="text-xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-400 to-amber-200 font-rajdhani uppercase">
-            NXBC Network
+            NXBC Tech
           </span>
         </div>
         <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-cyan-200/80">
