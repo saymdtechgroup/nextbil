@@ -4,7 +4,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { db } from "./src/db/index.ts";
 import { users, matrixNodes, levelEarnings, transactions, sellOrders, systemConfigs, tokenSellLedgers, rankAchievements } from "./src/db/schema.ts";
-import { eq, desc, asc, and, or, inArray, sql } from "drizzle-orm";
+import { eq, desc, asc, and, or, inArray, sql, gt, gte, lt, lte } from "drizzle-orm";
 import { ethers } from "ethers";
 import { scryptSync, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
 
@@ -2941,7 +2941,7 @@ async function startServer() {
       })
       .from(sellOrders)
       .leftJoin(users, eq(sellOrders.userId, users.id))
-      .where(and(inArray(sellOrders.status, ['open', 'partially_filled']), gt(sellOrders.remainingTokens, 0)))
+      .where(and(or(inArray(sellOrders.status, ['open', 'partially_filled']), inArray(sellOrders.status, ['OPEN', 'PARTIALLY_FILLED'])), gt(sellOrders.remainingTokens, 0)))
       .orderBy(asc(sellOrders.phaseNumber), asc(sellOrders.priority), asc(sellOrders.createdAt), asc(sellOrders.id));
 
       const byPhase: Record<number, any[]> = {};
@@ -2968,9 +2968,11 @@ async function startServer() {
         return dbPrice > 0 ? dbPrice : 0.10;
       };
 
-      const phases = Object.keys(byPhase).map(Number).sort((a, b) => a - b).map((phaseNumber) => {
+      const targetPhases = [2, 3, 4, 5];
+      const phases = targetPhases.map((phaseNumber) => {
         let aheadTokens = 0;
-        const phaseOrders = byPhase[phaseNumber].map((row, index) => {
+        const phaseRows = byPhase[phaseNumber] || [];
+        const phaseOrders = phaseRows.map((row, index) => {
           const remaining = Math.max(0, Number(row.remainingTokens || 0));
           const canonicalPrice = getCanonicalPrice(phaseNumber, Number(row.tokenPrice || 0));
           const position = index + 1;
@@ -3120,6 +3122,8 @@ async function startServer() {
             status: o.status,
             // Real persisted FIFO number only. Never expose priority/demo values as FIFO.
             fifoNumber: Number(o.fifoNumber || 0),
+            currentRunningFifoNumber: runningByPhase.get(Number(o.phaseNumber)) || null,
+            positionsAhead: positionMap.get(Number(o.id)) ?? 0,
             createdAt: o.createdAt,
           };
         }),
