@@ -602,11 +602,11 @@ async function finalizeConfirmedPurchase(
           // Parse live Rank Rewards from system configs or fallback to defaults
           const sysConfRows = await db.select().from(systemConfigs).where(eq(systemConfigs.key, 'rankRewards'));
           let activeRanks = [
-            { rankNumber: 1, requiredDirectVolume: 1000, requiredTeamVolume: 5000, requiredDirects: 3, oneTimeBonusUsd: 50 },
-            { rankNumber: 2, requiredDirectVolume: 5000, requiredTeamVolume: 20000, requiredDirects: 5, oneTimeBonusUsd: 200 },
-            { rankNumber: 3, requiredDirectVolume: 10000, requiredTeamVolume: 100000, requiredDirects: 10, oneTimeBonusUsd: 1500 },
-            { rankNumber: 4, requiredDirectVolume: 100000, requiredTeamVolume: 2000000, requiredDirects: 0, oneTimeBonusUsd: 50000 },
-            { rankNumber: 5, requiredDirectVolume: 100000, requiredTeamVolume: 5000000, requiredDirects: 0, oneTimeBonusUsd: 100000 },
+            { rankNumber: 1, name: 'Team Development Fund', requiredDirectVolume: 1000, requiredTeamVolume: 3000, requiredDirects: 0, oneTimeBonusUsd: 100 },
+            { rankNumber: 2, name: 'Charity Fund', requiredDirectVolume: 5000, requiredTeamVolume: 50000, requiredDirects: 0, oneTimeBonusUsd: 500 },
+            { rankNumber: 3, name: 'Travel Tour Fund', requiredDirectVolume: 20000, requiredTeamVolume: 150000, requiredDirects: 0, oneTimeBonusUsd: 1000 },
+            { rankNumber: 4, name: 'Dream Car Fund', requiredDirectVolume: 250000, requiredTeamVolume: 2000000, requiredDirects: 0, oneTimeBonusUsd: 40000 },
+            { rankNumber: 5, name: 'Luxury House Fund', requiredDirectVolume: 500000, requiredTeamVolume: 3000000, requiredDirects: 0, oneTimeBonusUsd: 100000 },
           ];
           if (sysConfRows.length > 0) {
             try {
