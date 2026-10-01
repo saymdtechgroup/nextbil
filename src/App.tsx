@@ -18,6 +18,7 @@ import {
   Users,
   ArrowDownToLine,
   UserCheck,
+  FileText,
 } from 'lucide-react';
 import {
   AllocationState,
@@ -48,6 +49,7 @@ import { AdminPanelModal } from './components/AdminPanelModal';
 import { SecretAdminPage } from './components/SecretAdminPage';
 import { GoldCoinGraphic } from './components/GoldCoinGraphic';
 import { TodayOfferModal } from './components/TodayOfferModal';
+import { PlanPdfModal } from './components/PlanPdfModal';
 import {
   fetchOnChainTokenBalance,
   USDT_CONTRACT,
@@ -69,6 +71,7 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('single');
   const [activeSingleScreen, setActiveSingleScreen] = useState<ActiveScreen>('home');
   const [showSecretAdminPage, setShowSecretAdminPage] = useState<boolean>(false);
+  const [planPdfModalOpen, setPlanPdfModalOpen] = useState<boolean>(false);
 
   // Core State: 6-Phase Sequential Roadmap & Live Status (Admin Managed & Persisted)
   const [phases, setPhases] = useState<PhaseConfig[]>(INITIAL_PHASES);
@@ -533,11 +536,11 @@ export default function App() {
       id: 'rank-1',
       rankNumber: 1,
       name: 'Team Development Fund',
-      requiredDirectVolume: 2000,
+      requiredDirectVolume: 1000,
       requiredTeamVolume: 3000,
       requiredDirects: 0,
       rewardType: 'fund',
-      rewardTitle: '$100 Team Development Fund',
+      rewardTitle: '$100 Team Development',
       oneTimeBonusUsd: 100,
       rewardTokens: 0,
       monthlyRoyaltyPercent: 0,
@@ -548,7 +551,7 @@ export default function App() {
       id: 'rank-2',
       rankNumber: 2,
       name: 'Charity Fund',
-      requiredDirectVolume: 50000,
+      requiredDirectVolume: 5000,
       requiredTeamVolume: 50000,
       requiredDirects: 0,
       rewardType: 'fund',
@@ -563,12 +566,12 @@ export default function App() {
       id: 'rank-3',
       rankNumber: 3,
       name: 'Travel Tour Fund',
-      requiredDirectVolume: 100000,
+      requiredDirectVolume: 20000,
       requiredTeamVolume: 150000,
       requiredDirects: 0,
       rewardType: 'fund',
-      rewardTitle: '$500 International Travel Fund',
-      oneTimeBonusUsd: 500,
+      rewardTitle: '$1,000 International Travel Tour',
+      oneTimeBonusUsd: 1000,
       rewardTokens: 0,
       monthlyRoyaltyPercent: 0,
       currentQualifiedCount: 0,
@@ -578,12 +581,12 @@ export default function App() {
       id: 'rank-4',
       rankNumber: 4,
       name: 'Dream Car Fund',
-      requiredDirectVolume: 100000,
+      requiredDirectVolume: 250000,
       requiredTeamVolume: 2000000,
       requiredDirects: 0,
       rewardType: 'fund',
-      rewardTitle: 'Dream Car Fund ($50,000 USD Value)',
-      oneTimeBonusUsd: 50000,
+      rewardTitle: 'Dream Car Fund ($40,000 USD)',
+      oneTimeBonusUsd: 40000,
       rewardTokens: 0,
       monthlyRoyaltyPercent: 0,
       currentQualifiedCount: 0,
@@ -593,11 +596,11 @@ export default function App() {
       id: 'rank-5',
       rankNumber: 5,
       name: 'Luxury House Fund',
-      requiredDirectVolume: 100000,
-      requiredTeamVolume: 5000000,
+      requiredDirectVolume: 500000,
+      requiredTeamVolume: 3000000,
       requiredDirects: 0,
       rewardType: 'fund',
-      rewardTitle: 'Luxury House Fund ($100,000 USD Value)',
+      rewardTitle: 'Luxury House Fund ($100,000 USD)',
       oneTimeBonusUsd: 100000,
       rewardTokens: 0,
       monthlyRoyaltyPercent: 0,
@@ -1763,18 +1766,7 @@ export default function App() {
 
   // Show Landing Page if user hasn't entered dashboard yet
   if (!isAppLaunched) {
-    return (
-      <>
-        <LandingPage onLaunch={() => setIsAppLaunched(true)} />
-        <TodayOfferModal
-          walletAddress={walletAddress}
-          onAccept={() => {
-            setIsAppLaunched(true);
-            setActiveSingleScreen('team');
-          }}
-        />
-      </>
-    );
+    return <LandingPage onLaunch={() => setIsAppLaunched(true)} />;
   }
 
   return (
@@ -1807,6 +1799,15 @@ export default function App() {
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
                   <span>PRESALE PLATFORM</span>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setPlanPdfModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400 text-amber-300 font-mono-crypto tracking-wider uppercase transition-all shadow-[0_0_12px_rgba(245,158,11,0.25)] cursor-pointer active:scale-95"
+                >
+                  <FileText className="w-3 h-3 text-amber-400" />
+                  <span>PLAN PDF</span>
+                </button>
 
                 {systemConfig.presalePaused && (
                   <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-600/90 border border-rose-400 text-white animate-pulse shadow-[0_0_10px_rgba(225,29,72,0.5)]">
@@ -1912,6 +1913,7 @@ export default function App() {
                   directSponsorPercent={systemConfig.directSponsorPercent}
                   onOpenTeamModal={() => setTeamModalOpen(true)}
                   onOpenMatrixModal={() => setMatrixModalOpen(true)}
+                  onOpenPlanPdf={() => setPlanPdfModalOpen(true)}
                   levelIncomeUsd={levelIncomeUsd}
                   totalInvestedUsd={totalInvestedUsd}
                   minMlmQualifyUsd={systemConfig.minMlmQualifyUsd || 100}
@@ -1991,7 +1993,7 @@ export default function App() {
                 screenTitle="Screen 1: Coin Acquisition"
                 badgeText="Plan Sell-Through"
                 badgeColor="gold"
-                url="nxbc.network"
+                url="nxbc.tech"
                 isHero={false}
               >
                 <ScreenOneAcquisition
@@ -2031,7 +2033,7 @@ export default function App() {
                 screenTitle="Screen 2: Assets & 6-Box Grid"
                 badgeText="6 Phase Vectors"
                 badgeColor="magenta"
-                url="nxbc.network/assets"
+                url="nxbc.tech/assets"
                 isHero={true}
               >
                 <ScreenTwoAssets
@@ -2061,7 +2063,7 @@ export default function App() {
                 screenTitle="Screen 3: Instant Withdrawal"
                 badgeText="Hot Multi-Sig"
                 badgeColor="purple"
-                url="nxbc.network/wallet"
+                url="nxbc.tech/wallet"
                 isHero={false}
               >
                 <ScreenThreeWallet
@@ -2178,12 +2180,22 @@ export default function App() {
         }}
       />
 
-      {/* TODAY'S SPECIAL OFFER POPUP MODAL */}
+      {/* TODAY'S SPECIAL OFFER POPUP MODAL (Appears on User Dashboard Home Screen) */}
       <TodayOfferModal
         walletAddress={walletAddress}
         onAccept={() => {
+          setViewMode('single');
           setActiveSingleScreen('team');
         }}
+      />
+
+      {/* OFFICIAL BUSINESS PLAN & WHITEPAPER PDF MODAL */}
+      <PlanPdfModal
+        isOpen={planPdfModalOpen}
+        onClose={() => setPlanPdfModalOpen(false)}
+        levels={referralLevels}
+        rankRewards={rankRewards}
+        directSponsorPercent={systemConfig.directSponsorPercent}
       />
     </div>
   );
