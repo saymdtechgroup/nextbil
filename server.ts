@@ -1349,18 +1349,18 @@ async function startServer() {
 
   // Public Endpoint: Get Active Special Offer Challenge
   app.get("/api/public/special-offer", async (req, res) => {
+    let offerData = {
+      id: "offer_daily_500",
+      active: true,
+      title: "DAILY DIRECT SALE CHALLENGE",
+      subtitle: "Achieve $500 Direct Sales Today & Get $50 Instant USDT Cash Bonus!",
+      targetDirectVolume: 500,
+      rewardUsdt: 50,
+      badgeText: "LIMITED TIME PROMO",
+      expiresAt: "2026-10-15T23:59:59Z"
+    };
     try {
       const offerConf = await db.query.systemConfigs.findFirst({ where: eq(systemConfigs.key, 'specialOffer') });
-      let offerData = {
-        id: "offer_daily_500",
-        active: true,
-        title: "🔥 DAILY DIRECT SALE CHALLENGE",
-        subtitle: "Achieve $500 Direct Sales Today & Get $50 Instant USDT Cash Bonus!",
-        targetDirectVolume: 500,
-        rewardUsdt: 50,
-        badgeText: "LIMITED TIME PROMO",
-        expiresAt: "2026-10-15T23:59:59Z"
-      };
       if (offerConf && offerConf.value) {
         try {
           const parsed = JSON.parse(offerConf.value);
@@ -1369,7 +1369,7 @@ async function startServer() {
       }
       res.json({ success: true, offer: offerData });
     } catch (err: any) {
-      res.json({ success: false, error: err.message });
+      res.json({ success: true, offer: offerData, fallback: true });
     }
   });
 
