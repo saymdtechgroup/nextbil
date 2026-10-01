@@ -47,6 +47,7 @@ import { MatrixPlanModal } from './components/MatrixPlanModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
 import { SecretAdminPage } from './components/SecretAdminPage';
 import { GoldCoinGraphic } from './components/GoldCoinGraphic';
+import { TodayOfferModal } from './components/TodayOfferModal';
 import {
   fetchOnChainTokenBalance,
   USDT_CONTRACT,
@@ -198,6 +199,12 @@ export default function App() {
       if (stored) return parseFloat(stored) || 0;
     }
     return 0;
+  });
+  const [userReferralCode, setUserReferralCode] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('nxbc_user_referral_code') || '';
+    }
+    return '';
   });
 
   // Auto-detect injected Web3 (MetaMask / Trust Wallet / Binance Web3 / OKX)
@@ -711,6 +718,12 @@ export default function App() {
         const res = await fetch(`/api/users/${walletAddress}`);
         const data = await res.json();
         if (data && data.user) {
+          if (data.user.referralCode) {
+            setUserReferralCode(data.user.referralCode);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('nxbc_user_referral_code', data.user.referralCode);
+            }
+          }
           setTotalInvestedUsd(Number(data.user.totalInvestedUsdt || 0));
           setClaimableBalanceUsd(Number(data.user.availableUsdt || 0));
           setLevelIncomeUsd(Number(data.levelIncomeUsdt || 0));
@@ -1750,7 +1763,18 @@ export default function App() {
 
   // Show Landing Page if user hasn't entered dashboard yet
   if (!isAppLaunched) {
-    return <LandingPage onLaunch={() => setIsAppLaunched(true)} />;
+    return (
+      <>
+        <LandingPage onLaunch={() => setIsAppLaunched(true)} />
+        <TodayOfferModal
+          walletAddress={walletAddress}
+          onAccept={() => {
+            setIsAppLaunched(true);
+            setActiveSingleScreen('team');
+          }}
+        />
+      </>
+    );
   }
 
   return (
@@ -1922,6 +1946,7 @@ export default function App() {
                 <ScreenMine
                   walletAddress={walletAddress}
                   walletConnected={walletConnected}
+                  referralCode={userReferralCode}
                   onToggleWallet={() => setWalletConnected(!walletConnected)}
                   totalInvestedUsd={totalInvestedUsd}
                   minMlmQualifyUsd={systemConfig.minMlmQualifyUsd || 100}
@@ -2150,6 +2175,14 @@ export default function App() {
         onOpenSecretPage={() => {
           setAdminModalOpen(false);
           setShowSecretAdminPage(true);
+        }}
+      />
+
+      {/* TODAY'S SPECIAL OFFER POPUP MODAL */}
+      <TodayOfferModal
+        walletAddress={walletAddress}
+        onAccept={() => {
+          setActiveSingleScreen('team');
         }}
       />
     </div>
